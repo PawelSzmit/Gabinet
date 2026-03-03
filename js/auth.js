@@ -3,7 +3,7 @@
    =========================================== */
 
 const Auth = (() => {
-  const GOOGLE_CLIENT_ID = 'T554823778989-760krqf91lrhq288s5l61oaa0fe2pekp.apps.googleusercontent.com';
+  const GOOGLE_CLIENT_ID = '554823778989-760krqf91lrhq288s5l61oaa0fe2pekp.apps.googleusercontent.com';
   const GOOGLE_API_KEY = 'AIzaSyDDvMkVBAYKdLZnovxmtYTFfHUfVUG8MNM';
   const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 
