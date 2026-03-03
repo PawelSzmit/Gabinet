@@ -1,49 +1,5 @@
 'use strict';
 
-// ─── AutoLock ─────────────────────────────────────────────────────────────────
-const AutoLock = {
-  timer:   null,
-  timeout: 120_000, // 2 minutes
-
-  start() {
-    clearTimeout(this.timer);
-    this.timer = setTimeout(() => this.lock(), this.timeout);
-  },
-
-  reset() {
-    this.start();
-  },
-
-  lock() {
-    clearTimeout(this.timer);
-    this.timer = null;
-    // Re-use a dedicated lock screen element if available; otherwise fall
-    // back to showing the auth screen (token stays in memory).
-    const lockScreen = document.getElementById('lock-screen');
-    if (lockScreen) {
-      lockScreen.hidden = false;
-      const pinInput = document.getElementById('lock-pin-input');
-      if (pinInput) pinInput.focus();
-    } else {
-      App.hideApp();
-      App.showAuth(true /* isLock */);
-    }
-  },
-
-  unlock() {
-    const lockScreen = document.getElementById('lock-screen');
-    if (lockScreen) lockScreen.hidden = true;
-    this.start();
-  },
-
-  init() {
-    const events = ['click', 'keydown', 'touchstart', 'mousemove', 'scroll'];
-    events.forEach(evt =>
-      document.addEventListener(evt, () => this.reset(), { passive: true })
-    );
-    this.start();
-  },
-};
 
 // ─── Router ───────────────────────────────────────────────────────────────────
 const Router = {
