@@ -211,13 +211,16 @@
 .week-cell {
   border: 1px solid var(--border-light);
   height: 50px;
-  padding: 2px;
+  padding: 4px;
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .week-session-block {
   font-size: 0.7rem;
-  padding: 3px 5px;
+  padding: 4px 6px;
   border-radius: 4px;
   cursor: pointer;
   font-weight: 500;
@@ -225,6 +228,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   transition: opacity var(--transition);
+  width: 100%;
+  text-align: center;
 }
 
 .week-session-block:hover {
