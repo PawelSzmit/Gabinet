@@ -40,6 +40,7 @@ const Patients = (() => {
       document.getElementById('pf-pseudonym').value = patient.pseudonym;
       document.getElementById('pf-startDate').value = patient.therapyStartDate;
       document.getElementById('pf-rate').value = patient.sessionRate;
+      document.getElementById('pf-startSessionNumber').value = patient.sessionNumberOffset ? patient.sessionNumberOffset + 1 : 1;
 
       document.querySelectorAll('input[name="sessionDay"]').forEach(cb => {
         cb.checked = patient.sessionDays.includes(cb.value);
@@ -224,10 +225,16 @@ const Patients = (() => {
         patient.sessionTimes = sessionTimes;
         patient.sessionsPerWeek = sessionsPerWeek;
         patient.sessionRate = parseFloat(document.getElementById('pf-rate').value);
+        const editStartNum = parseInt(document.getElementById('pf-startSessionNumber').value) || 1;
+        patient.sessionNumberOffset = Math.max(0, editStartNum - 1);
         patient.vacationPeriods = vacationPeriods;
+        Sessions.recalculateAllSessionNumbers(editingPatientId);
         Utils.showToast('Pacjent zaktualizowany', 'success');
       }
     } else {
+      const startSessionNum = parseInt(document.getElementById('pf-startSessionNumber').value) || 1;
+      const sessionNumberOffset = Math.max(0, startSessionNum - 1);
+
       const newPatient = {
         id: Utils.generateUUID(),
         firstName: document.getElementById('pf-firstName').value.trim(),
@@ -238,6 +245,7 @@ const Patients = (() => {
         sessionTimes,
         sessionsPerWeek,
         sessionRate: parseFloat(document.getElementById('pf-rate').value),
+        sessionNumberOffset,
         vacationPeriods,
         isArchived: false,
         archivedDate: null,

@@ -116,13 +116,15 @@ const Sessions = (() => {
       )
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    session.globalSessionNumber = numbered.length + 1;
+    const offset = patient.sessionNumberOffset || 0;
+
+    session.globalSessionNumber = numbered.length + 1 + offset;
 
     const currentCycle = patient.therapyCycles.find(c => c.endDate === null);
     const cycleStart = currentCycle ? currentCycle.startDate : patient.therapyStartDate;
 
     const cycleNumbered = numbered.filter(s => s.date >= cycleStart);
-    session.cycleSessionNumber = cycleNumbered.length + 1;
+    session.cycleSessionNumber = cycleNumbered.length + 1 + offset;
     session.sessionNumber = session.cycleSessionNumber;
   }
 
