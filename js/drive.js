@@ -81,7 +81,7 @@ const DriveService = {
 
       this._tokenResolve = resolve;
       this._tokenReject  = reject;
-      this._tokenClient.requestAccessToken({ prompt: '' });
+      this._tokenClient.requestAccessToken({ prompt: 'select_account' });
     });
   },
 
