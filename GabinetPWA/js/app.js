@@ -144,7 +144,7 @@ const App = {
     this.hideAuth();
     this.showApp();
     this._generateSessionsIfNeeded();
-    AutoLock.init();
+    // AutoLock.init(); //wyłączone
     Router.navigate('calendar');
   },
 
