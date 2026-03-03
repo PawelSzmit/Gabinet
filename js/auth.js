@@ -3,7 +3,7 @@
    =========================================== */
 
 const Auth = (() => {
-  const GOOGLE_CLIENT_ID = 'TREDACTED_CLIENT_ID';
+  const GOOGLE_CLIENT_ID = 'REDACTED_CLIENT_ID';
   const GOOGLE_API_KEY = 'REDACTED_API_KEY';
   const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 
