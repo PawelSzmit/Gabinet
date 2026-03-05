@@ -216,41 +216,142 @@ body {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Bottom Navigation */
+/* ========================
+   Magnification Dock
+   ======================== */
+
+/* --- Shared dock item --- */
+.dock-item {
+  --dock-scale: 1;
+  --dock-y: 0px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  -webkit-tap-highlight-color: transparent;
+  transform: translateY(var(--dock-y)) scale(var(--dock-scale));
+  transition: transform 0.25s cubic-bezier(0.25, 1, 0.5, 1),
+              color var(--transition);
+  will-change: transform;
+}
+
+.dock-item.active { color: var(--primary); }
+.dock-item.active .dock-icon {
+  background: rgba(74, 144, 217, 0.12);
+}
+
+.dock-icon {
+  font-size: 1.6rem;
+  line-height: 1;
+  padding: 8px;
+  border-radius: var(--radius-md);
+  transition: background var(--transition);
+}
+
+.dock-item:hover .dock-icon,
+.dock-item:focus-visible .dock-icon {
+  background: var(--border-light);
+}
+
+/* Tooltip (appears on hover above/beside the icon) */
+.dock-tooltip {
+  position: absolute;
+  white-space: nowrap;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 6px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s, transform 0.2s;
+  z-index: 200;
+}
+.dock-tooltip::after {
+  content: '';
+  position: absolute;
+  border: 5px solid transparent;
+}
+
+/* Active dot indicator */
+.dock-item.active::after {
+  content: '';
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--primary);
+}
+
+/* --- Horizontal dock (mobile bottom nav) --- */
 #bottom-nav {
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
   height: var(--bottom-nav-height);
-  background: var(--card);
-  border-top: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: space-around;
   z-index: 100;
   padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
-.nav-item {
+.dock-h {
   display: flex;
-  flex-direction: column;
-  align-items: center;
+  align-items: flex-end;
+  justify-content: center;
   gap: 2px;
-  flex: 1;
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--text-secondary);
-  padding: 6px 4px;
-  font-size: 0.68rem;
-  transition: color var(--transition);
-  -webkit-tap-highlight-color: transparent;
+  padding: 0 8px 4px;
+  background: var(--card);
+  border-top: 1px solid var(--border);
 }
-.nav-item.active { color: var(--primary); }
-.nav-icon { font-size: 1.3rem; }
 
-/* Sidebar Navigation (Desktop) */
+.dock-h .dock-item {
+  flex: 1;
+  padding: 4px 0 2px;
+  gap: 1px;
+}
+
+.dock-h .dock-icon { font-size: 1.35rem; padding: 6px; }
+
+.dock-h .dock-label {
+  font-size: 0.62rem;
+  font-weight: 500;
+  transition: opacity 0.2s;
+}
+
+/* Hide labels when magnifying to avoid crowding */
+.dock-h.dock-hovering .dock-label {
+  opacity: 0;
+}
+
+.dock-h .dock-tooltip {
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(6px);
+}
+.dock-h .dock-tooltip::after {
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-top-color: var(--text);
+}
+.dock-h.dock-hovering .dock-item:hover .dock-tooltip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.dock-h .dock-item.active::after {
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* --- Vertical dock (desktop sidebar) --- */
 #sidebar-nav {
   position: fixed;
   top: 0;
@@ -280,35 +381,53 @@ body {
   color: var(--primary);
 }
 
-.sidebar-menu {
+.sidebar-dock {
   display: flex;
   flex-direction: column;
-  padding: 12px 8px;
-  gap: 4px;
+  align-items: center;
+  padding: 20px 0;
+  gap: 6px;
 }
 
-.sidebar-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 0.95rem;
-  color: var(--text-secondary);
+.dock-v .dock-item {
+  --dock-y: 0px; /* not used vertically */
+  transform: scale(var(--dock-scale));
+  padding: 2px;
+}
+
+.dock-v .dock-icon {
+  font-size: 1.7rem;
+  padding: 10px;
   border-radius: var(--radius-md);
-  transition: all var(--transition);
-  text-align: left;
-  width: 100%;
 }
-.sidebar-item:hover { background: var(--border-light); color: var(--text); }
-.sidebar-item.active {
-  background: rgba(74, 144, 217, 0.1);
-  color: var(--primary);
-  font-weight: 600;
+
+.dock-v .dock-tooltip {
+  left: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%) translateX(-6px);
 }
-.sidebar-icon { font-size: 1.2rem; }
+.dock-v .dock-tooltip::after {
+  right: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  border-right-color: var(--text);
+}
+.dock-v.dock-hovering .dock-item:hover .dock-tooltip {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+}
+
+.dock-v .dock-item.active::after {
+  left: -2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 16px;
+  border-radius: 2px;
+}
+
+/* Hide labels in vertical dock (tooltip is enough) */
+.dock-v .dock-label { display: none; }
 
 /* Responsive */
 @media (min-width: 768px) {
