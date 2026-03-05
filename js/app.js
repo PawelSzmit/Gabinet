@@ -72,17 +72,20 @@ const App = (() => {
   }
 
   function setupNavigation() {
-    document.querySelectorAll('#bottom-nav .nav-item').forEach(item => {
+    document.querySelectorAll('#bottom-nav .dock-item').forEach(item => {
       item.addEventListener('click', () => {
         navigate(item.dataset.route);
       });
     });
 
-    document.querySelectorAll('#sidebar-nav .sidebar-item').forEach(item => {
+    document.querySelectorAll('#sidebar-nav .dock-item').forEach(item => {
       item.addEventListener('click', () => {
         navigate(item.dataset.route);
       });
     });
+
+    // Dock magnification effect
+    initDockMagnification();
 
     document.getElementById('btn-back').addEventListener('click', () => {
       window.history.back();
@@ -93,6 +96,42 @@ const App = (() => {
     });
 
     window.addEventListener('hashchange', handleRoute);
+  }
+
+  function initDockMagnification() {
+    document.querySelectorAll('.dock').forEach(dock => {
+      const isVertical = dock.classList.contains('dock-v');
+
+      dock.addEventListener('mousemove', (e) => {
+        const items = dock.querySelectorAll('.dock-item');
+        items.forEach(item => {
+          const rect = item.getBoundingClientRect();
+          let center, mouse;
+          if (isVertical) {
+            center = rect.top + rect.height / 2;
+            mouse = e.clientY;
+          } else {
+            center = rect.left + rect.width / 2;
+            mouse = e.clientX;
+          }
+          const distance = Math.abs(mouse - center);
+          const maxDist = isVertical ? 120 : 100;
+          const scale = Math.max(0, 1 - distance / maxDist);
+          const boost = scale * scale;
+          item.style.setProperty('--dock-scale', (1 + boost * 0.55).toFixed(3));
+          item.style.setProperty('--dock-y', (-boost * 14).toFixed(1) + 'px');
+        });
+        dock.classList.add('dock-hovering');
+      });
+
+      dock.addEventListener('mouseleave', () => {
+        dock.classList.remove('dock-hovering');
+        dock.querySelectorAll('.dock-item').forEach(item => {
+          item.style.removeProperty('--dock-scale');
+          item.style.removeProperty('--dock-y');
+        });
+      });
+    });
   }
 
   function setupSettings() {
@@ -241,11 +280,11 @@ const App = (() => {
   function updateActiveNav(route) {
     const mainRoute = route.split('/')[0];
 
-    document.querySelectorAll('#bottom-nav .nav-item').forEach(item => {
+    document.querySelectorAll('#bottom-nav .dock-item').forEach(item => {
       item.classList.toggle('active', item.dataset.route === mainRoute);
     });
 
-    document.querySelectorAll('#sidebar-nav .sidebar-item').forEach(item => {
+    document.querySelectorAll('#sidebar-nav .dock-item').forEach(item => {
       item.classList.toggle('active', item.dataset.route === mainRoute);
     });
   }
