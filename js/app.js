@@ -268,7 +268,10 @@ const App = (() => {
       }
     });
 
-    document.getElementById('set-google-email').textContent = Auth.getUserEmail() || 'Zalogowano';
+    const email = Auth.getUserEmail();
+    document.getElementById('set-google-email').textContent = email
+      ? `Zalogowano do konta Google: ${email}`
+      : 'Zalogowano';
     renderBlockedPeriods();
   }
 
