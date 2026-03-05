@@ -51,8 +51,10 @@ const Finance = (() => {
 
     const yearPayments = data.payments.filter(p => p.date.startsWith(currentYear.toString()));
     const yearlyRevenue = yearPayments.reduce((sum, p) => sum + p.amount, 0);
-    const monthsElapsed = now.getMonth() + 1;
-    const monthlyAvg = monthsElapsed > 0 ? yearlyRevenue / monthsElapsed : 0;
+    const pastMonthsPayments = yearPayments.filter(p => Utils.getMonthKey(new Date(p.date + 'T00:00:00')) !== currentMonthKey);
+    const pastMonthsRevenue = pastMonthsPayments.reduce((sum, p) => sum + p.amount, 0);
+    const pastMonthsCount = now.getMonth(); // 0 = styczeń (0 minionych), 1 = luty (1 miniony), itd.
+    const monthlyAvg = pastMonthsCount > 0 ? pastMonthsRevenue / pastMonthsCount : null;
 
     const statsHtml = `
       <div class="stat-card">
@@ -99,7 +101,7 @@ const Finance = (() => {
         <div class="stat-label">Roczny przychód</div>
       </div>
       <div class="stat-card">
-        <div class="stat-value">${Utils.formatCurrency(Math.round(monthlyAvg))}</div>
+        <div class="stat-value">${monthlyAvg !== null ? Utils.formatCurrency(Math.round(monthlyAvg)) : '—'}</div>
         <div class="stat-label">Średnia miesięczna</div>
       </div>
       <div class="stat-card">
