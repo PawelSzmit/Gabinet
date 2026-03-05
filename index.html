@@ -209,11 +209,10 @@
       <!-- Finance View -->
       <section id="view-finance" class="view">
         <div class="tabs">
-          <button class="tab active" data-tab="fin-dashboard">Dashboard</button>
+          <button class="tab active" data-tab="fin-chart">Przychody</button>
           <button class="tab" data-tab="fin-payments">Płatności</button>
         </div>
-        <div id="fin-dashboard" class="tab-content active">
-          <div class="stats-grid" id="finance-stats"></div>
+        <div id="fin-chart" class="tab-content active">
           <div class="chart-container">
             <div class="chart-header">
               <h3>Przychody</h3>
@@ -225,7 +224,6 @@
             </div>
             <canvas id="revenue-chart"></canvas>
           </div>
-          <div class="stats-grid" id="finance-extra-stats"></div>
         </div>
         <div id="fin-payments" class="tab-content">
           <div class="payments-header">
@@ -243,6 +241,31 @@
           </div>
           <div id="payments-list" class="list-container"></div>
           <button id="btn-add-payment" class="fab" aria-label="Zarejestruj płatność">+</button>
+        </div>
+      </section>
+
+      <!-- Stats View -->
+      <section id="view-stats" class="view">
+        <div class="stats-period-bar">
+          <div class="stats-presets">
+            <button class="btn btn-sm stats-period-btn" data-months="3">3 mies.</button>
+            <button class="btn btn-sm stats-period-btn active" data-months="6">6 mies.</button>
+            <button class="btn btn-sm stats-period-btn" data-months="12">12 mies.</button>
+          </div>
+          <div class="stats-custom-range">
+            <input type="date" id="stats-date-from" aria-label="Od daty">
+            <span>—</span>
+            <input type="date" id="stats-date-to" aria-label="Do daty">
+          </div>
+        </div>
+        <div id="stats-cards"></div>
+        <div class="chart-container">
+          <h3 class="stats-section-title">Sesje w czasie</h3>
+          <canvas id="stats-sessions-chart"></canvas>
+        </div>
+        <div class="chart-container">
+          <h3 class="stats-section-title">Wpłaty w czasie</h3>
+          <canvas id="stats-payments-chart"></canvas>
         </div>
       </section>
 
@@ -340,6 +363,10 @@
         <span class="nav-icon">&#128176;</span>
         <span class="nav-label">Finanse</span>
       </button>
+      <button class="nav-item" data-route="stats" aria-label="Statystyki">
+        <span class="nav-icon">&#128202;</span>
+        <span class="nav-label">Statystyki</span>
+      </button>
       <button class="nav-item" data-route="settings" aria-label="Więcej">
         <span class="nav-icon">&#9881;</span>
         <span class="nav-label">Więcej</span>
@@ -361,6 +388,9 @@
         </button>
         <button class="sidebar-item" data-route="finance">
           <span class="sidebar-icon">&#128176;</span> Finanse
+        </button>
+        <button class="sidebar-item" data-route="stats">
+          <span class="sidebar-icon">&#128202;</span> Statystyki
         </button>
         <button class="sidebar-item" data-route="settings">
           <span class="sidebar-icon">&#9881;</span> Ustawienia
@@ -658,6 +688,7 @@
   <script src="js/calendar.js"></script>
   <script src="js/payments.js"></script>
   <script src="js/finance.js"></script>
+  <script src="js/stats.js"></script>
   <script src="js/notes.js"></script>
   <script src="js/archive.js"></script>
   <script src="js/app.js"></script>
