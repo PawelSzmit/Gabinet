@@ -267,14 +267,27 @@
           </div>
           <div class="settings-section">
             <h3>Godziny pracy</h3>
-            <div class="form-row">
-              <div class="form-group">
-                <label for="set-hours-start">Od</label>
-                <input type="time" id="set-hours-start" value="08:00">
+            <p class="info-text" style="margin-bottom:12px">Zaznacz dni w których gabinet jest otwarty i ustaw godziny pracy.</p>
+            <div id="working-hours-list">
+              <div class="working-day-row" data-day="monday">
+                <label class="checkbox-label"><input type="checkbox" class="wh-enabled"> Poniedziałek</label>
+                <div class="wh-times"><input type="time" class="wh-start" value="08:00"> - <input type="time" class="wh-end" value="16:00"></div>
               </div>
-              <div class="form-group">
-                <label for="set-hours-end">Do</label>
-                <input type="time" id="set-hours-end" value="20:00">
+              <div class="working-day-row" data-day="tuesday">
+                <label class="checkbox-label"><input type="checkbox" class="wh-enabled" checked> Wtorek</label>
+                <div class="wh-times"><input type="time" class="wh-start" value="08:00"> - <input type="time" class="wh-end" value="20:00"></div>
+              </div>
+              <div class="working-day-row" data-day="wednesday">
+                <label class="checkbox-label"><input type="checkbox" class="wh-enabled" checked> Środa</label>
+                <div class="wh-times"><input type="time" class="wh-start" value="08:00"> - <input type="time" class="wh-end" value="20:00"></div>
+              </div>
+              <div class="working-day-row" data-day="thursday">
+                <label class="checkbox-label"><input type="checkbox" class="wh-enabled" checked> Czwartek</label>
+                <div class="wh-times"><input type="time" class="wh-start" value="08:00"> - <input type="time" class="wh-end" value="20:00"></div>
+              </div>
+              <div class="working-day-row" data-day="friday">
+                <label class="checkbox-label"><input type="checkbox" class="wh-enabled"> Piątek</label>
+                <div class="wh-times"><input type="time" class="wh-start" value="08:00"> - <input type="time" class="wh-end" value="16:00"></div>
               </div>
             </div>
           </div>
