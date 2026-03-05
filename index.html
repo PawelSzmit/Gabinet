@@ -349,51 +349,61 @@
       </section>
     </main>
 
-    <!-- Bottom Navigation (Mobile) -->
-    <nav id="bottom-nav">
-      <button class="nav-item active" data-route="calendar" aria-label="Kalendarz">
-        <span class="nav-icon">&#128197;</span>
-        <span class="nav-label">Kalendarz</span>
+    <!-- Bottom Navigation (Mobile) — Magnification Dock -->
+    <nav id="bottom-nav" class="dock dock-h">
+      <button class="dock-item active" data-route="calendar" aria-label="Kalendarz">
+        <span class="dock-icon">&#128197;</span>
+        <span class="dock-label">Kalendarz</span>
+        <span class="dock-tooltip">Kalendarz</span>
       </button>
-      <button class="nav-item" data-route="patients" aria-label="Pacjenci">
-        <span class="nav-icon">&#128101;</span>
-        <span class="nav-label">Pacjenci</span>
+      <button class="dock-item" data-route="patients" aria-label="Pacjenci">
+        <span class="dock-icon">&#128101;</span>
+        <span class="dock-label">Pacjenci</span>
+        <span class="dock-tooltip">Pacjenci</span>
       </button>
-      <button class="nav-item" data-route="finance" aria-label="Finanse">
-        <span class="nav-icon">&#128176;</span>
-        <span class="nav-label">Finanse</span>
+      <button class="dock-item" data-route="finance" aria-label="Finanse">
+        <span class="dock-icon">&#128176;</span>
+        <span class="dock-label">Finanse</span>
+        <span class="dock-tooltip">Finanse</span>
       </button>
-      <button class="nav-item" data-route="stats" aria-label="Statystyki">
-        <span class="nav-icon">&#128202;</span>
-        <span class="nav-label">Statystyki</span>
+      <button class="dock-item" data-route="stats" aria-label="Statystyki">
+        <span class="dock-icon">&#128202;</span>
+        <span class="dock-label">Statystyki</span>
+        <span class="dock-tooltip">Statystyki</span>
       </button>
-      <button class="nav-item" data-route="settings" aria-label="Więcej">
-        <span class="nav-icon">&#9881;</span>
-        <span class="nav-label">Więcej</span>
+      <button class="dock-item" data-route="settings" aria-label="Więcej">
+        <span class="dock-icon">&#9881;</span>
+        <span class="dock-label">Więcej</span>
+        <span class="dock-tooltip">Więcej</span>
       </button>
     </nav>
 
-    <!-- Sidebar Navigation (Desktop) -->
+    <!-- Sidebar Navigation (Desktop) — Magnification Dock -->
     <aside id="sidebar-nav" class="hidden">
       <div class="sidebar-header">
         <span class="sidebar-logo">&#128203;</span>
         <span class="sidebar-title">Gabinet</span>
       </div>
-      <nav class="sidebar-menu">
-        <button class="sidebar-item active" data-route="calendar">
-          <span class="sidebar-icon">&#128197;</span> Kalendarz
+      <nav class="dock dock-v sidebar-dock">
+        <button class="dock-item active" data-route="calendar" aria-label="Kalendarz">
+          <span class="dock-icon">&#128197;</span>
+          <span class="dock-tooltip">Kalendarz</span>
         </button>
-        <button class="sidebar-item" data-route="patients">
-          <span class="sidebar-icon">&#128101;</span> Pacjenci
+        <button class="dock-item" data-route="patients" aria-label="Pacjenci">
+          <span class="dock-icon">&#128101;</span>
+          <span class="dock-tooltip">Pacjenci</span>
         </button>
-        <button class="sidebar-item" data-route="finance">
-          <span class="sidebar-icon">&#128176;</span> Finanse
+        <button class="dock-item" data-route="finance" aria-label="Finanse">
+          <span class="dock-icon">&#128176;</span>
+          <span class="dock-tooltip">Finanse</span>
         </button>
-        <button class="sidebar-item" data-route="stats">
-          <span class="sidebar-icon">&#128202;</span> Statystyki
+        <button class="dock-item" data-route="stats" aria-label="Statystyki">
+          <span class="dock-icon">&#128202;</span>
+          <span class="dock-tooltip">Statystyki</span>
         </button>
-        <button class="sidebar-item" data-route="settings">
-          <span class="sidebar-icon">&#9881;</span> Ustawienia
+        <button class="dock-item" data-route="settings" aria-label="Ustawienia">
+          <span class="dock-icon">&#9881;</span>
+          <span class="dock-tooltip">Ustawienia</span>
         </button>
       </nav>
     </aside>
