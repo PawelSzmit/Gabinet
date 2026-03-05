@@ -264,22 +264,26 @@ const Stats = (() => {
           {
             label: 'Odbyte',
             data: completedData,
-            borderColor: '#27AE60',
-            backgroundColor: 'rgba(39, 174, 96, 0.1)',
+            borderColor: '#34C759',
+            backgroundColor: 'rgba(52, 199, 89, 0.1)',
             fill: true,
-            tension: 0.3,
+            tension: 0.4,
             pointRadius: 4,
-            pointHoverRadius: 6
+            pointHoverRadius: 7,
+            pointBackgroundColor: '#34C759',
+            borderWidth: 2.5
           },
           {
             label: 'Odwołane',
             data: cancelledData,
-            borderColor: '#E74C3C',
-            backgroundColor: 'rgba(231, 76, 60, 0.1)',
+            borderColor: '#FF3B30',
+            backgroundColor: 'rgba(255, 59, 48, 0.08)',
             fill: true,
-            tension: 0.3,
+            tension: 0.4,
             pointRadius: 4,
-            pointHoverRadius: 6
+            pointHoverRadius: 7,
+            pointBackgroundColor: '#FF3B30',
+            borderWidth: 2.5
           }
         ]
       },
@@ -329,19 +333,20 @@ const Stats = (() => {
           {
             label: 'Razem',
             data: totalData,
-            borderColor: '#4A90D9',
-            backgroundColor: 'rgba(74, 144, 217, 0.1)',
+            borderColor: '#007AFF',
+            backgroundColor: 'rgba(0, 122, 255, 0.08)',
             fill: true,
-            tension: 0.3,
+            tension: 0.4,
             borderWidth: 2.5,
             pointRadius: 4,
-            pointHoverRadius: 6
+            pointHoverRadius: 7,
+            pointBackgroundColor: '#007AFF'
           },
           {
             label: 'Alior Bank',
             data: aliorData,
             borderColor: 'rgba(204, 0, 0, 0.7)',
-            tension: 0.3,
+            tension: 0.4,
             borderWidth: 1.5,
             pointRadius: 3,
             borderDash: [4, 4]
@@ -350,7 +355,7 @@ const Stats = (() => {
             label: 'ING Bank',
             data: ingData,
             borderColor: 'rgba(255, 102, 0, 0.7)',
-            tension: 0.3,
+            tension: 0.4,
             borderWidth: 1.5,
             pointRadius: 3,
             borderDash: [4, 4]
@@ -358,8 +363,8 @@ const Stats = (() => {
           {
             label: 'Gotówka',
             data: cashData,
-            borderColor: 'rgba(39, 174, 96, 0.7)',
-            tension: 0.3,
+            borderColor: 'rgba(52, 199, 89, 0.7)',
+            tension: 0.4,
             borderWidth: 1.5,
             pointRadius: 3,
             borderDash: [4, 4]

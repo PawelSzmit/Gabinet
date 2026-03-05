@@ -68,23 +68,26 @@ const Finance = (() => {
           {
             label: 'Alior Bank',
             data: aliorData,
-            backgroundColor: 'rgba(204, 0, 0, 0.7)',
+            backgroundColor: 'rgba(204, 0, 0, 0.65)',
             borderColor: '#CC0000',
-            borderWidth: 1
+            borderWidth: 1,
+            borderRadius: 6
           },
           {
             label: 'ING Bank',
             data: ingData,
-            backgroundColor: 'rgba(255, 102, 0, 0.7)',
+            backgroundColor: 'rgba(255, 102, 0, 0.65)',
             borderColor: '#FF6600',
-            borderWidth: 1
+            borderWidth: 1,
+            borderRadius: 6
           },
           {
             label: 'Gotówka',
             data: cashData,
-            backgroundColor: 'rgba(39, 174, 96, 0.7)',
-            borderColor: '#27AE60',
-            borderWidth: 1
+            backgroundColor: 'rgba(52, 199, 89, 0.65)',
+            borderColor: '#34C759',
+            borderWidth: 1,
+            borderRadius: 6
           }
         ]
       },
