@@ -93,45 +93,15 @@ const Sessions = (() => {
   }
 
   function assignSessionNumber(session, allSessions, patient) {
-    if (session.status === 'scheduled') {
-      session.sessionNumber = null;
-      session.globalSessionNumber = null;
-      session.cycleSessionNumber = null;
-      return;
-    }
-
-    if (session.status === 'cancelled' && !session.isPaymentRequired) {
-      session.sessionNumber = null;
-      session.globalSessionNumber = null;
-      session.cycleSessionNumber = null;
-      return;
-    }
-
-    const numbered = allSessions
-      .filter(s =>
-        s.patientId === patient.id &&
-        (s.status === 'completed' || (s.status === 'cancelled' && s.isPaymentRequired)) &&
-        s.globalSessionNumber !== null &&
-        s.date < session.date
-      )
-      .sort((a, b) => a.date.localeCompare(b.date));
-
-    const offset = patient.sessionNumberOffset || 0;
-
-    session.globalSessionNumber = numbered.length + 1 + offset;
-
-    const currentCycle = patient.therapyCycles.find(c => c.endDate === null);
-    const cycleStart = currentCycle ? currentCycle.startDate : patient.therapyStartDate;
-
-    const cycleNumbered = numbered.filter(s => s.date >= cycleStart);
-    session.cycleSessionNumber = cycleNumbered.length + 1 + offset;
-    session.sessionNumber = session.cycleSessionNumber;
+    recalculateAllSessionNumbers(patient.id);
   }
 
   function recalculateAllSessionNumbers(patientId) {
     const data = App.getData();
     const patient = data.patients.find(p => p.id === patientId);
     if (!patient) return;
+
+    const offset = patient.sessionNumberOffset || 0;
 
     const patientSessions = data.sessions
       .filter(s => s.patientId === patientId)
@@ -143,8 +113,29 @@ const Sessions = (() => {
       s.cycleSessionNumber = null;
     });
 
+    const currentCycle = patient.therapyCycles.find(c => c.endDate === null);
+    const cycleStart = currentCycle ? currentCycle.startDate : patient.therapyStartDate;
+
+    let globalCount = 0;
+    let cycleCount = 0;
+
     patientSessions.forEach(session => {
-      assignSessionNumber(session, data.sessions, patient);
+      const isNumbered = session.status === 'completed' ||
+        (session.status === 'cancelled' && session.isPaymentRequired);
+
+      if (!isNumbered) return;
+
+      globalCount++;
+      session.globalSessionNumber = globalCount + offset;
+
+      if (session.date >= cycleStart) {
+        cycleCount++;
+        session.cycleSessionNumber = cycleCount + offset;
+      } else {
+        session.cycleSessionNumber = globalCount + offset;
+      }
+
+      session.sessionNumber = session.cycleSessionNumber;
     });
   }
 
