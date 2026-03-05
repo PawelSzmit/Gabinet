@@ -119,6 +119,21 @@ const Drive = (() => {
         }
       );
 
+      if (response.status === 401) {
+        // Token expired mid-request — force refresh and retry once
+        await Auth.ensureValidToken();
+        const retry = await fetch(
+          `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+          { headers: { Authorization: `Bearer ${Auth.getToken()}` } }
+        );
+        if (!retry.ok) throw new Error('Failed to load file after token refresh');
+        const data = await retry.json();
+        setSyncStatus('synced');
+        updateLastSync();
+        retryCount = 0;
+        return data;
+      }
+
       if (!response.ok) throw new Error('Failed to load file');
       const data = await response.json();
       setSyncStatus('synced');
@@ -182,7 +197,22 @@ const Drive = (() => {
           }
         );
 
-        if (!response.ok) {
+        if (response.status === 401) {
+          // Token expired mid-request — force refresh and retry once
+          await Auth.ensureValidToken();
+          const retry = await fetch(
+            `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`,
+            {
+              method: 'PATCH',
+              headers: {
+                Authorization: `Bearer ${Auth.getToken()}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(data, null, 2)
+            }
+          );
+          if (!retry.ok) throw new Error('Failed to save file after token refresh');
+        } else if (!response.ok) {
           throw new Error('Failed to save file');
         }
       }
