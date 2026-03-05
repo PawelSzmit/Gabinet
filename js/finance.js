@@ -87,8 +87,7 @@ const Finance = (() => {
     const ingMonth = monthPayments.filter(p => p.method === 'ingBank').reduce((s, p) => s + p.amount, 0);
     const cashMonth = monthPayments.filter(p => p.method === 'cash').reduce((s, p) => s + p.amount, 0);
 
-    const activePatients = data.patients.filter(p => !p.isArchived);
-    const totalSlots = calculateTotalSlots(activePatients);
+    const totalSlots = calculateTotalSlots();
     const usedSlots = completedThisMonth + scheduledThisMonth;
     const utilization = totalSlots > 0 ? Math.round((usedSlots / totalSlots) * 100) : 0;
 
@@ -129,39 +128,104 @@ const Finance = (() => {
     renderRevenueChart(activePeriod);
   }
 
-  function calculateTotalSlots(patients) {
-    let total = 0;
-    const now = new Date();
-    const daysInMonth = Utils.getDaysInMonth(now.getFullYear(), now.getMonth());
+  function getWorkingHours() {
+    const data = App.getData();
+    const defaults = {
+      monday:    { enabled: false, start: '08:00', end: '16:00' },
+      tuesday:   { enabled: true,  start: '08:00', end: '20:00' },
+      wednesday: { enabled: true,  start: '08:00', end: '20:00' },
+      thursday:  { enabled: true,  start: '08:00', end: '20:00' },
+      friday:    { enabled: false, start: '08:00', end: '16:00' }
+    };
+    return (data && data.settings && data.settings.workingHours) ? data.settings.workingHours : defaults;
+  }
 
-    patients.forEach(p => {
-      const weeklySlots = p.sessionDays.length;
-      total += Math.floor(daysInMonth / 7) * weeklySlots;
-    });
+  function getSlotsForDay(dayConfig) {
+    if (!dayConfig || !dayConfig.enabled) return 0;
+    const [sh, sm] = dayConfig.start.split(':').map(Number);
+    const [eh, em] = dayConfig.end.split(':').map(Number);
+    const startMinutes = sh * 60 + sm;
+    const endMinutes = eh * 60 + em;
+    return Math.max(0, Math.floor((endMinutes - startMinutes) / 60));
+  }
+
+  function calculateTotalSlots() {
+    const wh = getWorkingHours();
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const daysInMonth = Utils.getDaysInMonth(year, month);
+    const data = App.getData();
+
+    let total = 0;
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = Utils.formatDateISO(new Date(year, month, day));
+      const dow = Utils.getDayOfWeek(dateStr);
+      const cfg = wh[dow];
+      if (!cfg || !cfg.enabled) continue;
+
+      const isBlocked = data.blockedPeriods && data.blockedPeriods.some(bp =>
+        Utils.isDateInRange(dateStr, bp.startDate, bp.endDate)
+      );
+      if (isBlocked) continue;
+
+      total += getSlotsForDay(cfg);
+    }
     return total || 1;
   }
 
   function calculateDayBreakdown(data, monthKey) {
-    const dayNames = { tuesday: 'Wt', wednesday: 'Śr', thursday: 'Cz' };
-    const counts = { tuesday: 0, wednesday: 0, thursday: 0 };
-    const totals = { tuesday: 0, wednesday: 0, thursday: 0 };
+    const wh = getWorkingHours();
+    const dayLabels = {
+      monday: 'Pn', tuesday: 'Wt', wednesday: 'Śr',
+      thursday: 'Cz', friday: 'Pt'
+    };
+
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const daysInMonth = Utils.getDaysInMonth(year, month);
+
+    const daySlotsTotal = {};
+    const daySessionsCount = {};
+
+    Object.keys(dayLabels).forEach(d => {
+      daySlotsTotal[d] = 0;
+      daySessionsCount[d] = 0;
+    });
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = Utils.formatDateISO(new Date(year, month, day));
+      const dow = Utils.getDayOfWeek(dateStr);
+      const cfg = wh[dow];
+      if (!cfg || !cfg.enabled) continue;
+
+      const isBlocked = data.blockedPeriods && data.blockedPeriods.some(bp =>
+        Utils.isDateInRange(dateStr, bp.startDate, bp.endDate)
+      );
+      if (isBlocked) continue;
+
+      daySlotsTotal[dow] = (daySlotsTotal[dow] || 0) + getSlotsForDay(cfg);
+    }
 
     data.sessions
       .filter(s => Utils.getMonthKey(new Date(s.date + 'T00:00:00')) === monthKey)
+      .filter(s => s.status === 'completed' || s.status === 'scheduled')
       .forEach(s => {
         const dow = Utils.getDayOfWeek(s.date);
-        if (counts[dow] !== undefined) {
-          totals[dow]++;
-          if (s.status === 'completed' || s.status === 'scheduled') {
-            counts[dow]++;
-          }
+        if (daySessionsCount[dow] !== undefined) {
+          daySessionsCount[dow]++;
         }
       });
 
-    return Object.entries(dayNames).map(([key, label]) => {
-      const pct = totals[key] > 0 ? Math.round((counts[key] / totals[key]) * 100) : 0;
-      return `<span>${label}: ${pct}%</span>`;
-    }).join('');
+    return Object.entries(dayLabels)
+      .filter(([key]) => wh[key] && wh[key].enabled)
+      .map(([key, label]) => {
+        const slots = daySlotsTotal[key] || 0;
+        const sessions = daySessionsCount[key] || 0;
+        const pct = slots > 0 ? Math.round((sessions / slots) * 100) : 0;
+        return `<span>${label}: ${sessions}/${slots} (${pct}%)</span>`;
+      }).join('');
   }
 
   function renderRevenueChart(months) {

@@ -794,6 +794,49 @@
   border-color: rgba(231,76,60,0.3);
 }
 
+/* Working Hours per day */
+.working-day-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-light);
+  gap: 12px;
+}
+
+.working-day-row:last-child {
+  border-bottom: none;
+}
+
+.working-day-row .checkbox-label {
+  min-width: 120px;
+  font-size: 0.9rem;
+}
+
+.working-day-row .wh-times {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.working-day-row .wh-times input {
+  padding: 5px 8px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  background: var(--card);
+  color: var(--text);
+  width: 100px;
+}
+
+.working-day-row .wh-enabled:not(:checked) ~ .wh-times,
+.working-day-row:has(.wh-enabled:not(:checked)) .wh-times {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
 /* Chart */
 .chart-container {
   background: var(--card);

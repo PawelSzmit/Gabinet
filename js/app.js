@@ -248,8 +248,26 @@ const App = (() => {
     document.getElementById('set-name').value = s.therapistName || '';
     document.getElementById('set-address').value = s.therapistAddress || '';
     document.getElementById('set-nip').value = s.therapistNIP || '';
-    document.getElementById('set-hours-start').value = s.workingHoursStart || '08:00';
-    document.getElementById('set-hours-end').value = s.workingHoursEnd || '20:00';
+
+    const defaultHours = {
+      monday:    { enabled: false, start: '08:00', end: '16:00' },
+      tuesday:   { enabled: true,  start: '08:00', end: '20:00' },
+      wednesday: { enabled: true,  start: '08:00', end: '20:00' },
+      thursday:  { enabled: true,  start: '08:00', end: '20:00' },
+      friday:    { enabled: false, start: '08:00', end: '16:00' }
+    };
+    const wh = s.workingHours || defaultHours;
+
+    document.querySelectorAll('#working-hours-list .working-day-row').forEach(row => {
+      const day = row.dataset.day;
+      const cfg = wh[day] || defaultHours[day];
+      if (cfg) {
+        row.querySelector('.wh-enabled').checked = cfg.enabled;
+        row.querySelector('.wh-start').value = cfg.start || '08:00';
+        row.querySelector('.wh-end').value = cfg.end || '20:00';
+      }
+    });
+
     document.getElementById('set-google-email').textContent = Auth.getUserEmail() || 'Zalogowano';
     renderBlockedPeriods();
   }
@@ -259,8 +277,17 @@ const App = (() => {
     appData.settings.therapistName = document.getElementById('set-name').value.trim();
     appData.settings.therapistAddress = document.getElementById('set-address').value.trim();
     appData.settings.therapistNIP = document.getElementById('set-nip').value.trim();
-    appData.settings.workingHoursStart = document.getElementById('set-hours-start').value;
-    appData.settings.workingHoursEnd = document.getElementById('set-hours-end').value;
+
+    const workingHours = {};
+    document.querySelectorAll('#working-hours-list .working-day-row').forEach(row => {
+      const day = row.dataset.day;
+      workingHours[day] = {
+        enabled: row.querySelector('.wh-enabled').checked,
+        start: row.querySelector('.wh-start').value || '08:00',
+        end: row.querySelector('.wh-end').value || '20:00'
+      };
+    });
+    appData.settings.workingHours = workingHours;
 
     const blockedPeriods = Array.from(document.querySelectorAll('.blocked-item')).map(item => ({
       id: item.dataset.id || Utils.generateUUID(),
