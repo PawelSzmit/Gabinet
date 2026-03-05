@@ -17,6 +17,9 @@ const Auth = (() => {
     onLoginCallback = onLogin;
     onLogoutCallback = onLogout;
 
+    // Always initialize tokenClient so token refresh works after page reload
+    initTokenClient();
+
     const savedToken = localStorage.getItem('gabinet_access_token');
     const savedEmail = localStorage.getItem('gabinet_user_email');
     const tokenExpiry = localStorage.getItem('gabinet_token_expiry');
@@ -157,22 +160,38 @@ const Auth = (() => {
   async function ensureValidToken() {
     const expiry = localStorage.getItem('gabinet_token_expiry');
     if (expiry && Date.now() >= parseInt(expiry, 10) - 60000) {
-      return new Promise((resolve) => {
-        const originalCallback = tokenClient ? tokenClient.callback : null;
-        if (tokenClient) {
-          const wrappedCallback = async (response) => {
-            await handleTokenResponse(response);
-            resolve();
-          };
-          tokenClient = google.accounts.oauth2.initTokenClient({
-            client_id: GOOGLE_CLIENT_ID,
-            scope: SCOPES,
-            callback: wrappedCallback,
-          });
-          tokenClient.requestAccessToken({ prompt: '' });
-        } else {
-          resolve();
-        }
+      // Token expired or about to expire — refresh it
+      if (!tokenClient) {
+        initTokenClient();
+      }
+      if (!tokenClient) {
+        // Google Identity Services not loaded yet — can't refresh
+        return;
+      }
+
+      return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          resolve(); // don't block forever, proceed with current token
+        }, 10000);
+
+        tokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: GOOGLE_CLIENT_ID,
+          scope: SCOPES,
+          callback: async (response) => {
+            clearTimeout(timeout);
+            if (response.error) {
+              reject(new Error('Token refresh failed: ' + response.error));
+            } else {
+              await handleTokenResponse(response);
+              resolve();
+            }
+          },
+          error_callback: (err) => {
+            clearTimeout(timeout);
+            resolve(); // proceed with current token
+          }
+        });
+        tokenClient.requestAccessToken({ prompt: '' });
       });
     }
   }
