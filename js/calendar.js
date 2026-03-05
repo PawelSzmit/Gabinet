@@ -64,7 +64,7 @@ const Calendar = (() => {
     } else if (currentView === 'week') {
       const weekDates = Utils.getWeekDates(currentDate);
       const start = weekDates[0];
-      const end = weekDates[6];
+      const end = weekDates[4]; // Friday
       label.textContent = `${start.getDate()}-${end.getDate()} ${Utils.POLISH_MONTHS[start.getMonth()]} ${start.getFullYear()}`;
     } else {
       label.textContent = `${currentDate.getDate()} ${Utils.POLISH_MONTHS_GENITIVE[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
@@ -185,17 +185,53 @@ const Calendar = (() => {
   function renderWeek() {
     const container = document.getElementById('calendar-container');
     const weekDates = Utils.getWeekDates(currentDate);
+    const weekdayDates = weekDates.slice(0, 5); // Mon-Fri only
     const today = Utils.todayISO();
     const data = App.getData();
     const settings = data.settings || {};
-    const startHour = parseInt((settings.workingHoursStart || '08:00').split(':')[0]);
-    const endHour = parseInt((settings.workingHoursEnd || '20:00').split(':')[0]);
 
-    const dayLabels = ['Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'So', 'Nd'];
+    const defaultWH = {
+      monday:    { enabled: false, start: '08:00', end: '16:00' },
+      tuesday:   { enabled: true,  start: '08:00', end: '20:00' },
+      wednesday: { enabled: true,  start: '08:00', end: '20:00' },
+      thursday:  { enabled: true,  start: '08:00', end: '20:00' },
+      friday:    { enabled: false, start: '08:00', end: '16:00' }
+    };
+    const wh = settings.workingHours || defaultWH;
+
+    const dayKeys = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+    const dayLabels = ['Pn', 'Wt', 'Śr', 'Cz', 'Pt'];
+
+    // Determine global hour range from all enabled days
+    let globalStart = 23, globalEnd = 0;
+    dayKeys.forEach(key => {
+      const cfg = wh[key];
+      if (cfg && cfg.enabled) {
+        const s = parseInt(cfg.start.split(':')[0]);
+        const e = parseInt(cfg.end.split(':')[0]);
+        if (s < globalStart) globalStart = s;
+        if (e > globalEnd) globalEnd = e;
+      }
+    });
+    if (globalStart >= globalEnd) { globalStart = 8; globalEnd = 20; }
+
+    // Build per-day start/end hours for shading
+    const dayHours = {};
+    dayKeys.forEach(key => {
+      const cfg = wh[key];
+      if (cfg && cfg.enabled) {
+        dayHours[key] = {
+          start: parseInt(cfg.start.split(':')[0]),
+          end: parseInt(cfg.end.split(':')[0])
+        };
+      } else {
+        dayHours[key] = null; // day disabled
+      }
+    });
 
     let html = '<div class="calendar-week">';
     html += '<div class="week-header"><div class="week-header-cell"></div>';
-    weekDates.forEach((d, i) => {
+    weekdayDates.forEach((d, i) => {
       const dateStr = Utils.formatDateISO(d);
       const isToday = dateStr === today;
       html += `<div class="week-header-cell${isToday ? ' today' : ''}">
@@ -206,19 +242,23 @@ const Calendar = (() => {
     html += '</div>';
 
     html += '<div class="week-body">';
-    for (let h = startHour; h < endHour; h++) {
+    for (let h = globalStart; h < globalEnd; h++) {
       const timeLabel = `${h.toString().padStart(2, '0')}:00`;
       html += `<div class="week-time-label">${timeLabel}</div>`;
 
-      weekDates.forEach(d => {
+      weekdayDates.forEach((d, i) => {
         const dateStr = Utils.formatDateISO(d);
+        const dayKey = dayKeys[i];
+        const dh = dayHours[dayKey];
+        const isOutside = !dh || h < dh.start || h >= dh.end;
+
         const sessions = Sessions.getSessionsForDate(dateStr);
         const hourSessions = sessions.filter(s => {
           const sHour = parseInt(s.time.split(':')[0]);
           return sHour === h;
         });
 
-        html += '<div class="week-cell">';
+        html += `<div class="week-cell${isOutside ? ' outside-hours' : ''}">`;
         hourSessions.forEach(s => {
           const patient = data.patients.find(p => p.id === s.patientId);
           const name = patient ? patient.pseudonym : '?';

@@ -157,7 +157,7 @@
 
 .week-header {
   display: grid;
-  grid-template-columns: 60px repeat(7, 1fr);
+  grid-template-columns: 60px repeat(5, 1fr);
   background: var(--border-light);
   position: sticky;
   top: 0;
@@ -190,7 +190,7 @@
 
 .week-body {
   display: grid;
-  grid-template-columns: 60px repeat(7, 1fr);
+  grid-template-columns: 60px repeat(5, 1fr);
   max-height: 600px;
   overflow-y: auto;
 }
@@ -230,6 +230,11 @@
   transition: opacity var(--transition);
   width: 100%;
   text-align: center;
+}
+
+.week-cell.outside-hours {
+  background: var(--border-light);
+  opacity: 0.5;
 }
 
 .week-session-block:hover {
