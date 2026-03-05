@@ -130,7 +130,12 @@ const App = (() => {
   }
 
   function navigate(route) {
-    window.location.hash = '#/' + route;
+    const newHash = '#/' + route;
+    if (window.location.hash === newHash) {
+      handleRoute();
+    } else {
+      window.location.hash = newHash;
+    }
   }
 
   function handleRoute() {
