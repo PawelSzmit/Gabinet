@@ -1,3 +1,7 @@
+/* ============================================
+   Calendar — Liquid Glass Design System
+   ============================================ */
+
 /* Calendar Controls */
 .calendar-controls {
   display: flex;
@@ -23,23 +27,34 @@
 .calendar-view-switcher {
   display: flex;
   gap: 4px;
-  background: var(--border-light);
-  border-radius: 8px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
   padding: 3px;
 }
 
 /* Monthly Calendar Grid */
 .calendar-month {
-  background: var(--card);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   border-radius: var(--radius-md);
   overflow: hidden;
-  border: 1px solid var(--border-light);
+  border: 1px solid var(--glass-border);
 }
 
 .calendar-weekdays {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  background: var(--border-light);
+  background: rgba(0, 122, 255, 0.04);
+}
+
+@media (prefers-color-scheme: dark) {
+  .calendar-weekdays {
+    background: rgba(255, 255, 255, 0.04);
+  }
 }
 
 .calendar-weekday {
@@ -60,14 +75,14 @@
 .calendar-day {
   min-height: 80px;
   padding: 4px;
-  border: 1px solid var(--border-light);
+  border: 1px solid var(--border);
   cursor: pointer;
-  transition: background var(--transition);
+  transition: all var(--transition);
   position: relative;
 }
 
 .calendar-day:hover {
-  background: rgba(74,144,217,0.04);
+  background: rgba(0, 122, 255, 0.04);
 }
 
 .calendar-day.other-month {
@@ -75,11 +90,11 @@
 }
 
 .calendar-day.today {
-  background: rgba(74,144,217,0.06);
+  background: rgba(0, 122, 255, 0.06);
 }
 
 .calendar-day.today .day-number {
-  background: var(--primary);
+  background: linear-gradient(135deg, #007AFF, #5AC8FA);
   color: #fff;
   border-radius: 50%;
   width: 26px;
@@ -90,7 +105,7 @@
 }
 
 .calendar-day.session-day {
-  background: rgba(74,144,217,0.03);
+  background: rgba(0, 122, 255, 0.03);
 }
 
 .day-number {
@@ -114,7 +129,7 @@
 .day-session-chip {
   font-size: 0.68rem;
   padding: 2px 4px;
-  border-radius: 3px;
+  border-radius: 4px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -128,40 +143,55 @@
 }
 
 .day-session-chip.status-scheduled {
-  background: rgba(74,144,217,0.15);
-  color: var(--primary-dark);
+  background: rgba(0, 122, 255, 0.15);
+  color: #0056CC;
 }
 
 .day-session-chip.status-completed {
-  background: rgba(39,174,96,0.15);
-  color: #1e8449;
+  background: rgba(52, 199, 89, 0.15);
+  color: #1B8C3A;
 }
 
 .day-session-chip.status-cancelled-paid {
-  background: rgba(243,156,18,0.15);
-  color: #b7850b;
+  background: rgba(255, 159, 10, 0.15);
+  color: #B36D00;
 }
 
 .day-session-chip.status-cancelled-unpaid {
-  background: rgba(231,76,60,0.15);
-  color: #c0392b;
+  background: rgba(255, 59, 48, 0.15);
+  color: #CC2F26;
+}
+
+@media (prefers-color-scheme: dark) {
+  .day-session-chip.status-scheduled { color: #5AC8FA; }
+  .day-session-chip.status-completed { color: #4CD964; }
+  .day-session-chip.status-cancelled-paid { color: #FFB340; }
+  .day-session-chip.status-cancelled-unpaid { color: #FF6961; }
 }
 
 /* Weekly View */
 .calendar-week {
-  background: var(--card);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   border-radius: var(--radius-md);
-  border: 1px solid var(--border-light);
+  border: 1px solid var(--glass-border);
   overflow-x: auto;
 }
 
 .week-header {
   display: grid;
   grid-template-columns: 60px repeat(5, 1fr);
-  background: var(--border-light);
+  background: rgba(0, 122, 255, 0.04);
   position: sticky;
   top: 0;
   z-index: 5;
+}
+
+@media (prefers-color-scheme: dark) {
+  .week-header {
+    background: rgba(255, 255, 255, 0.04);
+  }
 }
 
 .week-header-cell {
@@ -200,7 +230,7 @@
   font-size: 0.72rem;
   color: var(--text-secondary);
   text-align: right;
-  border-right: 1px solid var(--border-light);
+  border-right: 1px solid var(--border);
   height: 50px;
   display: flex;
   align-items: flex-start;
@@ -209,36 +239,48 @@
 }
 
 .week-cell {
-  border: 1px solid var(--border-light);
+  border: 1px solid var(--border);
   height: 50px;
   padding: 4px;
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: background var(--transition);
+}
+
+.week-cell:hover {
+  background: rgba(0, 122, 255, 0.03);
 }
 
 .week-session-block {
   font-size: 0.7rem;
   padding: 4px 6px;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  transition: opacity var(--transition);
+  transition: all var(--transition);
   width: 100%;
   text-align: center;
 }
 
 .week-cell.outside-hours {
-  background: var(--border-light);
+  background: rgba(142, 142, 147, 0.08);
   opacity: 0.5;
+}
+
+@media (prefers-color-scheme: dark) {
+  .week-cell.outside-hours {
+    background: rgba(255, 255, 255, 0.03);
+  }
 }
 
 .week-session-block:hover {
   opacity: 0.8;
+  transform: scale(1.02);
 }
 
 /* Daily View */
@@ -250,9 +292,11 @@
 
 .day-view-header {
   padding: 12px 16px;
-  background: var(--card);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   border-radius: var(--radius-md);
-  border: 1px solid var(--border-light);
+  border: 1px solid var(--glass-border);
   text-align: center;
 }
 
@@ -267,20 +311,23 @@
 }
 
 .day-session-item {
-  background: var(--card);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   border-radius: var(--radius-md);
   padding: 14px 16px;
   display: flex;
   align-items: center;
   gap: 12px;
-  border: 1px solid var(--border-light);
+  border: 1px solid var(--glass-border);
   cursor: pointer;
-  transition: all var(--transition);
+  transition: all var(--transition-spring);
 }
 
 .day-session-item:hover {
-  box-shadow: var(--shadow-sm);
-  border-color: var(--primary-light);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+  border-color: rgba(0, 122, 255, 0.2);
 }
 
 .day-session-time {
@@ -337,9 +384,11 @@
   padding: 40px 20px;
   color: var(--text-secondary);
   font-size: 0.95rem;
-  background: var(--card);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   border-radius: var(--radius-md);
-  border: 1px solid var(--border-light);
+  border: 1px solid var(--glass-border);
 }
 
 /* Responsive calendar */
