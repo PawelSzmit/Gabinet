@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#4A90D9">
+  <meta name="description" content="Aplikacja do zarządzania gabinetem psychoterapeutycznym">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Gabinet">
+  <title>Gabinet Terapeutyczny</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/calendar.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script async defer src="https://apis.google.com/js/api.js"></script>
+</head>
+<body>
+  <!-- Login Screen -->
+  <div id="login-screen" class="screen active">
+    <div class="login-container">
+      <div class="login-logo">&#128203;</div>
+      <h1>Gabinet Terapeutyczny</h1>
+      <p class="login-subtitle">Zarządzanie gabinetem psychoterapeutycznym</p>
+      <button id="btn-google-login" class="btn btn-primary btn-login">
+        <span class="btn-icon">G</span>
+        Zaloguj przez Google
+      </button>
+      <p class="login-info">Dane przechowywane bezpiecznie na Twoim Google Drive</p>
+    </div>
+  </div>
+
+  <!-- App Shell -->
+  <div id="app-shell" class="hidden">
+    <!-- Header -->
+    <header id="app-header">
+      <div class="header-left">
+        <button id="btn-back" class="header-btn hidden" aria-label="Wstecz">&#8592;</button>
+        <h1 id="header-title">Kalendarz</h1>
+      </div>
+      <div class="header-right">
+        <span id="sync-indicator" class="sync-indicator" title="Status synchronizacji">&#9679;</span>
+        <button id="btn-settings" class="header-btn" aria-label="Ustawienia">&#9881;</button>
+      </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main id="main-content">
+      <!-- Calendar View -->
+      <section id="view-calendar" class="view active">
+        <div class="calendar-controls">
+          <div class="calendar-nav">
+            <button id="cal-prev" class="btn btn-icon-only" aria-label="Poprzedni">&#8249;</button>
+            <h2 id="cal-current-label">Marzec 2026</h2>
+            <button id="cal-next" class="btn btn-icon-only" aria-label="Następny">&#8250;</button>
+          </div>
+          <div class="calendar-view-switcher">
+            <button class="btn btn-switcher active" data-view="month">Miesiąc</button>
+            <button class="btn btn-switcher" data-view="week">Tydzień</button>
+            <button class="btn btn-switcher" data-view="day">Dzień</button>
+          </div>
+          <button id="cal-today" class="btn btn-sm btn-outline">Dziś</button>
+        </div>
+        <div id="calendar-container"></div>
+      </section>
+
+      <!-- Patients View -->
+      <section id="view-patients" class="view">
+        <div class="patients-header">
+          <div class="search-bar">
+            <input type="text" id="patient-search" placeholder="Szukaj pacjenta..." aria-label="Szukaj pacjenta">
+          </div>
+          <div class="patients-actions">
+            <select id="patient-sort" class="select-sm" aria-label="Sortowanie">
+              <option value="alpha">Alfabetycznie</option>
+              <option value="longest">Najdłuższa terapia</option>
+              <option value="shortest">Najkrótsza terapia</option>
+            </select>
+            <button id="btn-archive-list" class="btn btn-sm btn-outline">Archiwum</button>
+          </div>
+        </div>
+        <div id="patients-list" class="list-container"></div>
+        <button id="btn-add-patient" class="fab" aria-label="Dodaj pacjenta">+</button>
+      </section>
+
+      <!-- Patient Form View -->
+      <section id="view-patient-form" class="view">
+        <h2 id="patient-form-title">Nowy pacjent</h2>
+        <form id="patient-form" novalidate>
+          <div class="form-group">
+            <label for="pf-firstName">Imię *</label>
+            <input type="text" id="pf-firstName" required>
+            <span class="form-error"></span>
+          </div>
+          <div class="form-group">
+            <label for="pf-lastName">Nazwisko *</label>
+            <input type="text" id="pf-lastName" required>
+            <span class="form-error"></span>
+          </div>
+          <div class="form-group">
+            <label for="pf-pseudonym">Pseudonim *</label>
+            <input type="text" id="pf-pseudonym" required>
+            <span class="form-error"></span>
+          </div>
+          <div class="form-group">
+            <label for="pf-startDate">Data rozpoczęcia terapii *</label>
+            <input type="date" id="pf-startDate" required>
+            <span class="form-error"></span>
+          </div>
+          <div class="form-group">
+            <label>Dni sesji *</label>
+            <div class="checkbox-group">
+              <label class="checkbox-label">
+                <input type="checkbox" name="sessionDay" value="tuesday"> Wtorek
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" name="sessionDay" value="wednesday"> Środa
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" name="sessionDay" value="thursday"> Czwartek
+              </label>
+            </div>
+            <span class="form-error" id="pf-days-error"></span>
+          </div>
+          <div id="session-times-container" class="form-group hidden">
+            <label>Godziny sesji</label>
+            <div id="session-times-inputs"></div>
+          </div>
+          <div class="form-group">
+            <label>Sesje tygodniowo *</label>
+            <div class="radio-group">
+              <label class="radio-label">
+                <input type="radio" name="sessionsPerWeek" value="1" checked> 1
+              </label>
+              <label class="radio-label">
+                <input type="radio" name="sessionsPerWeek" value="2"> 2
+              </label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="pf-rate">Stawka za sesję (PLN) *</label>
+            <input type="number" id="pf-rate" min="0" step="10" value="200" required>
+            <span class="form-error"></span>
+          </div>
+          <div class="form-group">
+            <label for="pf-startSessionNumber">Numer początkowy sesji</label>
+            <input type="number" id="pf-startSessionNumber" min="1" step="1" value="1">
+            <span class="info-text">Jeśli pacjent miał wcześniej sesje, wpisz numer od którego kontynuować numerację.</span>
+          </div>
+          <div class="form-group">
+            <label>Okresy urlopowe</label>
+            <div id="vacation-periods-list"></div>
+            <button type="button" id="btn-add-vacation" class="btn btn-sm btn-outline">+ Dodaj urlop</button>
+          </div>
+          <div class="form-actions">
+            <button type="button" id="btn-cancel-patient" class="btn btn-outline">Anuluj</button>
+            <button type="submit" id="btn-save-patient" class="btn btn-primary">Zapisz</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- Patient Detail View -->
+      <section id="view-patient-detail" class="view">
+        <div class="patient-detail-header">
+          <h2 id="pd-name"></h2>
+          <span id="pd-pseudonym" class="badge badge-neutral"></span>
+        </div>
+        <div class="tabs">
+          <button class="tab active" data-tab="pd-info">Informacje</button>
+          <button class="tab" data-tab="pd-sessions">Sesje</button>
+          <button class="tab" data-tab="pd-notes">Notatki</button>
+          <button class="tab" data-tab="pd-goals">Cele</button>
+          <button class="tab" data-tab="pd-progress">Postępy</button>
+        </div>
+        <div id="pd-info" class="tab-content active">
+          <div class="info-cards" id="pd-info-content"></div>
+        </div>
+        <div id="pd-sessions" class="tab-content">
+          <div class="filter-bar">
+            <button class="filter-btn active" data-filter="all">Wszystkie</button>
+            <button class="filter-btn" data-filter="completed">Odbyte</button>
+            <button class="filter-btn" data-filter="scheduled">Zaplanowane</button>
+            <button class="filter-btn" data-filter="unpaid">Nieopłacone</button>
+          </div>
+          <div id="pd-sessions-list" class="list-container"></div>
+        </div>
+        <div id="pd-notes" class="tab-content">
+          <button id="btn-add-note" class="btn btn-primary btn-sm">+ Nowa notatka</button>
+          <div id="pd-notes-list" class="list-container"></div>
+        </div>
+        <div id="pd-goals" class="tab-content">
+          <button id="btn-add-goal" class="btn btn-primary btn-sm">+ Nowy cel</button>
+          <div id="pd-goals-list" class="list-container"></div>
+        </div>
+        <div id="pd-progress" class="tab-content">
+          <button id="btn-add-progress" class="btn btn-primary btn-sm">+ Nowy wpis</button>
+          <div id="pd-progress-list" class="timeline-container"></div>
+        </div>
+        <div class="patient-detail-actions">
+          <button id="btn-edit-patient" class="btn btn-outline">Edytuj</button>
+          <button id="btn-archive-patient" class="btn btn-warning">Archiwizuj</button>
+        </div>
+      </section>
+
+      <!-- Finance View -->
+      <section id="view-finance" class="view">
+        <div class="tabs">
+          <button class="tab active" data-tab="fin-dashboard">Dashboard</button>
+          <button class="tab" data-tab="fin-payments">Płatności</button>
+        </div>
+        <div id="fin-dashboard" class="tab-content active">
+          <div class="stats-grid" id="finance-stats"></div>
+          <div class="chart-container">
+            <div class="chart-header">
+              <h3>Przychody</h3>
+              <div class="chart-period-selector">
+                <button class="btn btn-sm btn-switcher" data-period="3">3 mies.</button>
+                <button class="btn btn-sm btn-switcher active" data-period="6">6 mies.</button>
+                <button class="btn btn-sm btn-switcher" data-period="12">12 mies.</button>
+              </div>
+            </div>
+            <canvas id="revenue-chart"></canvas>
+          </div>
+          <div class="stats-grid" id="finance-extra-stats"></div>
+        </div>
+        <div id="fin-payments" class="tab-content">
+          <div class="payments-header">
+            <div class="filter-bar">
+              <button class="filter-btn active" data-filter="all">Wszystkie</button>
+              <button class="filter-btn" data-filter="aliorBank">Alior Bank</button>
+              <button class="filter-btn" data-filter="ingBank">ING Bank</button>
+              <button class="filter-btn" data-filter="cash">Gotówka</button>
+            </div>
+            <div class="date-range-filter">
+              <input type="date" id="payments-date-from" aria-label="Od daty">
+              <span>-</span>
+              <input type="date" id="payments-date-to" aria-label="Do daty">
+            </div>
+          </div>
+          <div id="payments-list" class="list-container"></div>
+          <button id="btn-add-payment" class="fab" aria-label="Zarejestruj płatność">+</button>
+        </div>
+      </section>
+
+      <!-- Settings View -->
+      <section id="view-settings" class="view">
+        <h2>Ustawienia</h2>
+        <form id="settings-form">
+          <div class="settings-section">
+            <h3>Dane terapeuty</h3>
+            <div class="form-group">
+              <label for="set-name">Imię i nazwisko</label>
+              <input type="text" id="set-name">
+            </div>
+            <div class="form-group">
+              <label for="set-address">Adres</label>
+              <textarea id="set-address" rows="2"></textarea>
+            </div>
+            <div class="form-group">
+              <label for="set-nip">NIP</label>
+              <input type="text" id="set-nip" pattern="[0-9]{10}" maxlength="10">
+            </div>
+          </div>
+          <div class="settings-section">
+            <h3>Godziny pracy</h3>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="set-hours-start">Od</label>
+                <input type="time" id="set-hours-start" value="08:00">
+              </div>
+              <div class="form-group">
+                <label for="set-hours-end">Do</label>
+                <input type="time" id="set-hours-end" value="20:00">
+              </div>
+            </div>
+          </div>
+          <div class="settings-section">
+            <h3>Konto Google</h3>
+            <p id="set-google-email" class="settings-info"></p>
+            <button type="button" id="btn-logout" class="btn btn-outline btn-danger-outline">Wyloguj</button>
+          </div>
+          <div class="settings-section">
+            <h3>Dane</h3>
+            <p id="set-last-sync" class="settings-info">Ostatnia synchronizacja: ---</p>
+            <button type="button" id="btn-force-sync" class="btn btn-outline">Synchronizuj teraz</button>
+          </div>
+          <div class="settings-section">
+            <h3>Blocked periods (urlop terapeuty)</h3>
+            <div id="blocked-periods-list"></div>
+            <button type="button" id="btn-add-blocked" class="btn btn-sm btn-outline">+ Dodaj okres</button>
+          </div>
+          <div class="settings-section">
+            <h3>Aplikacja</h3>
+            <p class="settings-info">Gabinet Terapeutyczny v1.0</p>
+            <button type="button" id="btn-save-settings" class="btn btn-primary">Zapisz ustawienia</button>
+          </div>
+          <div class="settings-section settings-danger">
+            <h3>Strefa zagrożenia</h3>
+            <button type="button" id="btn-reset-data" class="btn btn-danger">Resetuj wszystkie dane</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- Archive View -->
+      <section id="view-archive" class="view">
+        <h2>Archiwum pacjentów</h2>
+        <div id="archive-list" class="list-container"></div>
+        <p id="archive-empty" class="empty-state hidden">Brak zarchiwizowanych pacjentów</p>
+      </section>
+    </main>
+
+    <!-- Bottom Navigation (Mobile) -->
+    <nav id="bottom-nav">
+      <button class="nav-item active" data-route="calendar" aria-label="Kalendarz">
+        <span class="nav-icon">&#128197;</span>
+        <span class="nav-label">Kalendarz</span>
+      </button>
+      <button class="nav-item" data-route="patients" aria-label="Pacjenci">
+        <span class="nav-icon">&#128101;</span>
+        <span class="nav-label">Pacjenci</span>
+      </button>
+      <button class="nav-item" data-route="finance" aria-label="Finanse">
+        <span class="nav-icon">&#128176;</span>
+        <span class="nav-label">Finanse</span>
+      </button>
+      <button class="nav-item" data-route="settings" aria-label="Więcej">
+        <span class="nav-icon">&#9881;</span>
+        <span class="nav-label">Więcej</span>
+      </button>
+    </nav>
+
+    <!-- Sidebar Navigation (Desktop) -->
+    <aside id="sidebar-nav" class="hidden">
+      <div class="sidebar-header">
+        <span class="sidebar-logo">&#128203;</span>
+        <span class="sidebar-title">Gabinet</span>
+      </div>
+      <nav class="sidebar-menu">
+        <button class="sidebar-item active" data-route="calendar">
+          <span class="sidebar-icon">&#128197;</span> Kalendarz
+        </button>
+        <button class="sidebar-item" data-route="patients">
+          <span class="sidebar-icon">&#128101;</span> Pacjenci
+        </button>
+        <button class="sidebar-item" data-route="finance">
+          <span class="sidebar-icon">&#128176;</span> Finanse
+        </button>
+        <button class="sidebar-item" data-route="settings">
+          <span class="sidebar-icon">&#9881;</span> Ustawienia
+        </button>
+      </nav>
+    </aside>
+  </div>
+
+  <!-- Modal Overlay -->
+  <div id="modal-overlay" class="modal-overlay hidden">
+    <!-- Session Detail Modal -->
+    <div id="modal-session" class="modal hidden">
+      <div class="modal-header">
+        <h3 id="ms-title">Szczegóły sesji</h3>
+        <button class="modal-close" data-close-modal aria-label="Zamknij">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="session-info">
+          <p><strong>Data:</strong> <span id="ms-date"></span></p>
+          <p><strong>Godzina:</strong> <span id="ms-time"></span></p>
+          <p><strong>Pacjent:</strong> <span id="ms-patient"></span></p>
+          <p id="ms-number-info"><strong>Numer sesji:</strong> <span id="ms-number"></span></p>
+          <p id="ms-rescheduled-info" class="hidden"><em>Przeniesiona z: <span id="ms-original-date"></span></em></p>
+        </div>
+        <div class="form-group">
+          <label><strong>Status sesji:</strong></label>
+          <div class="radio-group">
+            <label class="radio-label">
+              <input type="radio" name="sessionStatus" value="scheduled"> Zaplanowana
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="sessionStatus" value="completed"> Odbyła się
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="sessionStatus" value="cancelled"> Nie odbyła się
+            </label>
+          </div>
+        </div>
+        <div id="ms-cancelled-options" class="hidden">
+          <div class="toggle-group">
+            <label class="toggle-label">
+              <span>Sesja płatna</span>
+              <input type="checkbox" id="ms-payment-required">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <p class="info-text">Włącz, jeśli pacjent nie odwołał sesji z odpowiednim wyprzedzeniem.</p>
+        </div>
+        <div class="session-payment-info">
+          <h4>Płatność</h4>
+          <p id="ms-payment-status"></p>
+          <p id="ms-payment-details" class="hidden"></p>
+          <a href="#" id="ms-payment-link" class="link">Zarejestruj płatność &#8594;</a>
+        </div>
+        <div class="form-group">
+          <button type="button" id="ms-btn-reschedule" class="btn btn-outline btn-sm">Przenieś na inny termin</button>
+        </div>
+        <div id="ms-reschedule-form" class="hidden">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="ms-new-date">Nowa data</label>
+              <input type="date" id="ms-new-date">
+            </div>
+            <div class="form-group">
+              <label for="ms-new-time">Nowa godzina</label>
+              <input type="time" id="ms-new-time">
+            </div>
+          </div>
+          <button type="button" id="ms-btn-confirm-reschedule" class="btn btn-primary btn-sm">Potwierdź przeniesienie</button>
+        </div>
+        <div class="form-group">
+          <label for="ms-notes"><strong>Notatka z sesji:</strong></label>
+          <textarea id="ms-notes" rows="4" placeholder="Zapisz notatki z sesji..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="ms-btn-save" class="btn btn-primary">Zapisz</button>
+      </div>
+    </div>
+
+    <!-- Payment Modal -->
+    <div id="modal-payment" class="modal hidden">
+      <div class="modal-header">
+        <h3 id="mp-title">Zarejestruj płatność</h3>
+        <button class="modal-close" data-close-modal aria-label="Zamknij">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="mp-patient">Pacjent *</label>
+          <select id="mp-patient" required>
+            <option value="">Wybierz pacjenta...</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Sesje do opłacenia *</label>
+          <div id="mp-sessions-list" class="checkbox-list"></div>
+          <p class="info-text" id="mp-no-sessions" class="hidden">Brak sesji do opłacenia</p>
+        </div>
+        <div class="form-group">
+          <label for="mp-date">Data wpłaty *</label>
+          <input type="date" id="mp-date" required>
+        </div>
+        <div class="form-group">
+          <label>Metoda płatności *</label>
+          <div class="radio-group">
+            <label class="radio-label">
+              <input type="radio" name="paymentMethod" value="aliorBank" checked> Alior Bank
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="paymentMethod" value="ingBank"> ING Bank
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="paymentMethod" value="cash"> Gotówka
+            </label>
+          </div>
+        </div>
+        <div class="payment-summary">
+          <p>Wybrano sesji: <strong id="mp-count">0</strong></p>
+          <p>Łączna kwota: <strong id="mp-total">0 zł</strong></p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="mp-btn-cancel" class="btn btn-outline" data-close-modal>Anuluj</button>
+        <button type="button" id="mp-btn-save" class="btn btn-primary">Zapisz</button>
+      </div>
+    </div>
+
+    <!-- Payment Detail Modal -->
+    <div id="modal-payment-detail" class="modal hidden">
+      <div class="modal-header">
+        <h3>Szczegóły płatności</h3>
+        <button class="modal-close" data-close-modal aria-label="Zamknij">&times;</button>
+      </div>
+      <div class="modal-body" id="mpd-content"></div>
+      <div class="modal-footer">
+        <button type="button" id="mpd-btn-delete" class="btn btn-danger">Usuń</button>
+        <button type="button" class="btn btn-outline" data-close-modal>Zamknij</button>
+      </div>
+    </div>
+
+    <!-- Note Modal -->
+    <div id="modal-note" class="modal hidden">
+      <div class="modal-header">
+        <h3 id="mn-title">Nowa notatka</h3>
+        <button class="modal-close" data-close-modal aria-label="Zamknij">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="mn-date">Data</label>
+          <input type="date" id="mn-date">
+        </div>
+        <div class="form-group">
+          <label for="mn-content">Treść</label>
+          <textarea id="mn-content" rows="8" placeholder="Zapisz notatkę..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="mn-btn-delete" class="btn btn-danger hidden">Usuń</button>
+        <button type="button" id="mn-btn-save" class="btn btn-primary">Zapisz</button>
+      </div>
+    </div>
+
+    <!-- Goal Modal -->
+    <div id="modal-goal" class="modal hidden">
+      <div class="modal-header">
+        <h3 id="mg-title">Nowy cel terapeutyczny</h3>
+        <button class="modal-close" data-close-modal aria-label="Zamknij">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="mg-goal-title">Tytuł</label>
+          <input type="text" id="mg-goal-title" required>
+        </div>
+        <div class="form-group">
+          <label for="mg-description">Opis</label>
+          <textarea id="mg-description" rows="4" placeholder="Opis celu..."></textarea>
+        </div>
+        <div class="form-group">
+          <label for="mg-status">Status</label>
+          <select id="mg-status">
+            <option value="inProgress">W toku</option>
+            <option value="achieved">Osiągnięty</option>
+            <option value="abandoned">Nieaktualny</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="mg-btn-delete" class="btn btn-danger hidden">Usuń</button>
+        <button type="button" id="mg-btn-save" class="btn btn-primary">Zapisz</button>
+      </div>
+    </div>
+
+    <!-- Progress Modal -->
+    <div id="modal-progress" class="modal hidden">
+      <div class="modal-header">
+        <h3 id="mpr-title">Nowy wpis postępu</h3>
+        <button class="modal-close" data-close-modal aria-label="Zamknij">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="mpr-date">Data</label>
+          <input type="date" id="mpr-date">
+        </div>
+        <div class="form-group">
+          <label for="mpr-category">Kategoria</label>
+          <select id="mpr-category">
+            <option value="Przełom">Przełom</option>
+            <option value="Obserwacja">Obserwacja</option>
+            <option value="Zmiana">Zmiana</option>
+            <option value="Inne">Inne</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="mpr-progress-title">Tytuł</label>
+          <input type="text" id="mpr-progress-title">
+        </div>
+        <div class="form-group">
+          <label for="mpr-content">Treść</label>
+          <textarea id="mpr-content" rows="6" placeholder="Opisz postęp..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="mpr-btn-delete" class="btn btn-danger hidden">Usuń</button>
+        <button type="button" id="mpr-btn-save" class="btn btn-primary">Zapisz</button>
+      </div>
+    </div>
+
+    <!-- Restore Patient Modal -->
+    <div id="modal-restore" class="modal hidden">
+      <div class="modal-header">
+        <h3>Przywróć pacjenta</h3>
+        <button class="modal-close" data-close-modal aria-label="Zamknij">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="mr-patient-info"></div>
+        <div class="form-group">
+          <label for="mr-start-date">Nowa data rozpoczęcia terapii</label>
+          <input type="date" id="mr-start-date">
+        </div>
+        <div class="form-group">
+          <label>Dni sesji</label>
+          <div class="checkbox-group">
+            <label class="checkbox-label">
+              <input type="checkbox" name="restoreDay" value="tuesday"> Wtorek
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" name="restoreDay" value="wednesday"> Środa
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" name="restoreDay" value="thursday"> Czwartek
+            </label>
+          </div>
+        </div>
+        <div id="mr-times-container" class="form-group hidden">
+          <label>Godziny sesji</label>
+          <div id="mr-times-inputs"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" data-close-modal>Anuluj</button>
+        <button type="button" id="mr-btn-restore" class="btn btn-primary">Przywróć pacjenta</button>
+      </div>
+    </div>
+
+    <!-- Confirm Modal -->
+    <div id="modal-confirm" class="modal modal-sm hidden">
+      <div class="modal-header">
+        <h3 id="mc-title">Potwierdzenie</h3>
+      </div>
+      <div class="modal-body">
+        <p id="mc-message"></p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="mc-btn-cancel" class="btn btn-outline">Anuluj</button>
+        <button type="button" id="mc-btn-confirm" class="btn btn-danger">Potwierdź</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toast-container"></div>
+
+  <!-- Invoice Print Template -->
+  <div id="invoice-print" class="print-only">
+    <div id="invoice-content"></div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="js/utils.js"></script>
+  <script src="js/encryption.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/drive.js"></script>
+  <script src="js/patients.js"></script>
+  <script src="js/sessions.js"></script>
+  <script src="js/calendar.js"></script>
+  <script src="js/payments.js"></script>
+  <script src="js/finance.js"></script>
+  <script src="js/notes.js"></script>
+  <script src="js/archive.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
