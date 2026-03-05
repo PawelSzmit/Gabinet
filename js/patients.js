@@ -217,6 +217,9 @@ const Patients = (() => {
       const idx = data.patients.findIndex(p => p.id === editingPatientId);
       if (idx !== -1) {
         const patient = data.patients[idx];
+        const oldDays = JSON.stringify(patient.sessionDays);
+        const oldTimes = JSON.stringify(patient.sessionTimes);
+
         patient.firstName = document.getElementById('pf-firstName').value.trim();
         patient.lastName = document.getElementById('pf-lastName').value.trim();
         patient.pseudonym = document.getElementById('pf-pseudonym').value.trim();
@@ -228,6 +231,19 @@ const Patients = (() => {
         const editStartNum = parseInt(document.getElementById('pf-startSessionNumber').value) || 1;
         patient.sessionNumberOffset = Math.max(0, editStartNum - 1);
         patient.vacationPeriods = vacationPeriods;
+
+        const daysChanged = oldDays !== JSON.stringify(sessionDays);
+        const timesChanged = oldTimes !== JSON.stringify(sessionTimes);
+        if (daysChanged || timesChanged) {
+          data.sessions = data.sessions.filter(s => {
+            if (s.patientId === editingPatientId && s.status === 'scheduled') {
+              return false;
+            }
+            return true;
+          });
+          Sessions.generateSessionsForMonth(patient, new Date());
+        }
+
         Sessions.recalculateAllSessionNumbers(editingPatientId);
         Utils.showToast('Pacjent zaktualizowany', 'success');
       }
