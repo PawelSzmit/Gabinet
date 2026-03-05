@@ -47,6 +47,7 @@ const App = (() => {
       Calendar.init();
       Payments.init();
       Finance.init();
+      Stats.init();
       Notes.init();
       Archive.init();
       setupNavigation();
@@ -191,10 +192,17 @@ const App = (() => {
         } else {
           document.querySelectorAll('#view-finance .tab').forEach(t => t.classList.remove('active'));
           document.querySelectorAll('#view-finance .tab-content').forEach(tc => tc.classList.remove('active'));
-          document.querySelector('#view-finance .tab[data-tab="fin-dashboard"]').classList.add('active');
-          document.getElementById('fin-dashboard').classList.add('active');
+          document.querySelector('#view-finance .tab[data-tab="fin-chart"]').classList.add('active');
+          document.getElementById('fin-chart').classList.add('active');
           Finance.renderDashboard();
         }
+        break;
+
+      case 'stats':
+        setTitle('Statystyki');
+        showView('view-stats');
+        Stats.setDefaultRange();
+        Stats.render();
         break;
 
       case 'settings':

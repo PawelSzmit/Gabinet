@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gabinet-v1';
+const CACHE_NAME = 'gabinet-v2';
 const CACHED_ASSETS = [
   './',
   './index.html',
@@ -14,6 +14,7 @@ const CACHED_ASSETS = [
   './js/calendar.js',
   './js/payments.js',
   './js/finance.js',
+  './js/stats.js',
   './js/notes.js',
   './js/archive.js',
   './js/utils.js',
