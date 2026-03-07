@@ -610,50 +610,78 @@ body {
 .sidebar-dock {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding: 20px 0;
-  gap: 6px;
+  align-items: stretch;
+  padding: 16px 12px;
+  gap: 4px;
 }
 
 .dock-v .dock-item {
   --dock-y: 0px; /* not used vertically */
+  flex-direction: row;
+  justify-content: flex-start;
   transform: scale(var(--dock-scale));
-  padding: 2px;
+  padding: 6px 10px;
+  gap: 10px;
+  border-radius: var(--radius-md);
+  transition: transform 0.25s cubic-bezier(0.25, 1, 0.5, 1),
+              color var(--transition),
+              background var(--transition);
+}
+
+.dock-v .dock-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+@media (prefers-color-scheme: dark) {
+  .dock-v .dock-item:hover {
+    background: rgba(255, 255, 255, 0.06);
+  }
+}
+
+.dock-v .dock-item.active {
+  background: rgba(0, 122, 255, 0.1);
 }
 
 .dock-v .dock-icon {
-  font-size: 1.7rem;
-  padding: 10px;
-  border-radius: var(--radius-md);
+  font-size: 1.35rem;
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
 }
 
+/* Show labels in vertical dock next to icons */
+.dock-v .dock-label {
+  display: block;
+  font-size: 0.88rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Tooltips hidden when labels are visible */
 .dock-v .dock-tooltip {
-  left: calc(100% + 12px);
-  top: 50%;
-  transform: translateY(-50%) translateX(-6px);
-}
-.dock-v .dock-tooltip::after {
-  right: 100%;
-  top: 50%;
-  transform: translateY(-50%);
-  border-right-color: var(--card-solid);
-}
-.dock-v.dock-hovering .dock-item:hover .dock-tooltip {
-  opacity: 1;
-  transform: translateY(-50%) translateX(0);
+  display: none;
 }
 
+/* Active indicator — left bar */
 .dock-v .dock-item.active::after {
-  left: -2px;
+  left: -12px;
   top: 50%;
   transform: translateY(-50%);
   width: 3px;
-  height: 16px;
+  height: 18px;
   border-radius: 2px;
 }
 
-/* Hide labels in vertical dock (tooltip is enough) */
-.dock-v .dock-label { display: none; }
+/* Override hover icon background (handled by item bg now) */
+.dock-v .dock-item:hover .dock-icon,
+.dock-v .dock-item:focus-visible .dock-icon {
+  background: none;
+}
+.dock-v .dock-item.active .dock-icon {
+  background: none;
+}
 
 /* ========================
    Responsive Layout
