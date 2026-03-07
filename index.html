@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="theme-color" content="#4A90D9">
+  <meta name="theme-color" content="#007AFF">
   <meta name="description" content="Aplikacja do zarządzania gabinetem psychoterapeutycznym">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -12,6 +12,9 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,800;0,900;1,700;1,800;1,900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/main.css">
   <link rel="stylesheet" href="css/components.css">
   <link rel="stylesheet" href="css/calendar.css">
@@ -20,17 +23,25 @@
   <script async defer src="https://apis.google.com/js/api.js"></script>
 </head>
 <body>
-  <!-- Login Screen -->
+  <!-- Login Screen — Bold Editorial -->
   <div id="login-screen" class="screen active">
     <div class="login-container">
-      <div class="login-logo">&#128203;</div>
-      <h1>Gabinet Terapeutyczny</h1>
-      <p class="login-subtitle">Zarządzanie gabinetem psychoterapeutycznym</p>
-      <button id="btn-google-login" class="btn btn-primary btn-login">
-        <span class="btn-icon">G</span>
-        Zaloguj przez Google
-      </button>
-      <p class="login-info">Dane przechowywane bezpiecznie na Twoim Google Drive</p>
+      <div class="login-editorial">
+        <p class="login-tagline">Psychoterapia</p>
+        <h1 class="login-hero-title">Gabinet<br><em>Terapeutyczny</em></h1>
+        <div class="login-divider"></div>
+        <p class="login-description">Zarządzaj sesjami, pacjentami i finansami — wszystko w jednym miejscu, bezpiecznie zsynchronizowane z Twoim kontem Google.</p>
+        <button id="btn-google-login" class="btn-login-editorial">
+          <span class="btn-login-icon">G</span>
+          <span>Zaloguj przez Google</span>
+        </button>
+        <p class="login-footer">Dane przechowywane bezpiecznie na Twoim Google Drive</p>
+      </div>
+      <div class="login-visual">
+        <div class="login-glass-orb login-orb-1"></div>
+        <div class="login-glass-orb login-orb-2"></div>
+        <div class="login-glass-orb login-orb-3"></div>
+      </div>
     </div>
   </div>
 
