@@ -1,5 +1,2 @@
 # OS files
 .DS_Store
-
-# Config with API keys
-js/config.js
