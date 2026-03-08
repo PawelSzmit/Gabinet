@@ -155,6 +155,31 @@ const App = (() => {
       );
     });
     document.getElementById('btn-add-blocked').addEventListener('click', addBlockedPeriod);
+
+    // Regeneration — set default month to current
+    const now = new Date();
+    const regenInput = document.getElementById('regen-month');
+    regenInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+    document.getElementById('btn-regen-month').addEventListener('click', () => {
+      const val = regenInput.value;
+      if (!val) {
+        Utils.showToast('Wybierz miesiąc', 'warning');
+        return;
+      }
+      const [y, m] = val.split('-').map(Number);
+      const monthName = Utils.POLISH_MONTHS[m - 1];
+      Utils.showConfirm(
+        'Regeneracja kalendarza',
+        `Czy na pewno chcesz zregenerować sesje na <strong>${monthName} ${y}</strong>?<br><br>Sesje ze statusem „zaplanowana" zostaną usunięte i wygenerowane na nowo. Sesje odbyte i odwołane pozostaną bez zmian.`,
+        async () => {
+          const result = Sessions.regenerateMonth(y, m - 1);
+          await Drive.saveData(appData);
+          refreshViews();
+          Utils.showToast(`${monthName} ${y}: usunięto ${result.removedCount} → wygenerowano ${result.newCount} sesji`, 'success');
+        }
+      );
+    });
   }
 
   function setupModalCloseHandlers() {
