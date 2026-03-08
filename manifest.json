@@ -4,8 +4,8 @@
   "description": "Zarządzanie gabinetem psychoterapeutycznym",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#F5F7FA",
-  "theme_color": "#4A90D9",
+  "background_color": "#F2F2F7",
+  "theme_color": "#007AFF",
   "orientation": "portrait-primary",
   "icons": [
     {
