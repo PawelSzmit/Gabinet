@@ -81,6 +81,47 @@ const Sessions = (() => {
     });
   }
 
+  function regenerateMonth(year, month) {
+    const data = App.getData();
+    const monthDate = new Date(year, month, 1);
+    const monthStart = Utils.formatDateISO(new Date(year, month, 1));
+    const monthEnd = Utils.formatDateISO(new Date(year, month + 1, 0)); // last day of month
+
+    // Count scheduled sessions that will be removed (for feedback)
+    const removedCount = data.sessions.filter(s =>
+      s.date >= monthStart && s.date <= monthEnd && s.status === 'scheduled'
+    ).length;
+
+    // Remove only SCHEDULED sessions for this month (keep completed/cancelled)
+    data.sessions = data.sessions.filter(s => {
+      if (s.date >= monthStart && s.date <= monthEnd && s.status === 'scheduled') {
+        return false;
+      }
+      return true;
+    });
+
+    // Regenerate for all active patients
+    const activePatients = data.patients.filter(p => !p.isArchived);
+    activePatients.forEach(patient => {
+      generateSessionsForMonth(patient, monthDate);
+    });
+
+    // Count newly generated sessions
+    const newCount = data.sessions.filter(s =>
+      s.date >= monthStart && s.date <= monthEnd && s.status === 'scheduled'
+    ).length;
+
+    // Recalculate session numbers for all affected patients
+    const affectedPatientIds = new Set(
+      data.sessions
+        .filter(s => s.date >= monthStart && s.date <= monthEnd)
+        .map(s => s.patientId)
+    );
+    affectedPatientIds.forEach(pid => recalculateAllSessionNumbers(pid));
+
+    return { removedCount, newCount };
+  }
+
   function checkAndGenerateMonthlySessionsIfNeeded() {
     const currentMonth = Utils.getMonthKey(new Date());
     const lastGenMonth = localStorage.getItem('lastSessionGenMonth');
@@ -338,6 +379,7 @@ const Sessions = (() => {
     generateSessionsForMonth,
     generateSessionsForAllPatients,
     checkAndGenerateMonthlySessionsIfNeeded,
+    regenerateMonth,
     assignSessionNumber,
     recalculateAllSessionNumbers,
     showSessionModal,

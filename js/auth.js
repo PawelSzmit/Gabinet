@@ -3,8 +3,8 @@
    =========================================== */
 
 const Auth = (() => {
-  const GOOGLE_CLIENT_ID = '554823778989-760krqf91lrhq288s5l61oaa0fe2pekp.apps.googleusercontent.com';
-  const GOOGLE_API_KEY = 'AIzaSyDDvMkVBAYKdLZnovxmtYTFfHUfVUG8MNM';
+  const GOOGLE_CLIENT_ID = CONFIG.GOOGLE_CLIENT_ID;
+  const GOOGLE_API_KEY = CONFIG.GOOGLE_API_KEY;
   const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 
   let tokenClient = null;

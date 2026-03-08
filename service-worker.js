@@ -1,10 +1,11 @@
-const CACHE_NAME = 'gabinet-v5';
+const CACHE_NAME = 'gabinet-v6';
 const CACHED_ASSETS = [
   './',
   './index.html',
   './css/main.css',
   './css/calendar.css',
   './css/components.css',
+  './js/config.js',
   './js/app.js',
   './js/auth.js',
   './js/drive.js',
