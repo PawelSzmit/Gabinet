@@ -327,8 +327,8 @@ const Patients = (() => {
       return `
         <div class="list-item" data-patient-id="${patient.id}">
           <div class="list-item-left">
-            <span class="list-item-title">${Utils.escapeHtml(patient.lastName)} ${Utils.escapeHtml(patient.firstName)}</span>
-            <span class="list-item-subtitle">${Utils.escapeHtml(patient.pseudonym)} &middot; ${daysStr}</span>
+            <span class="list-item-title">${Utils.escapeHtml(patient.pseudonym)}</span>
+            <span class="list-item-subtitle">${Utils.escapeHtml(patient.lastName)} ${Utils.escapeHtml(patient.firstName)} &middot; ${daysStr}</span>
           </div>
           <div class="list-item-right">
             ${debtBadge}
