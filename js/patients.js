@@ -452,6 +452,7 @@ const Patients = (() => {
     await renderPatientNotes(patientId);
     await renderPatientGoals(patientId);
     await renderPatientProgress(patientId);
+    renderPreviousTherapies(patientId);
 
     document.getElementById('btn-edit-patient').onclick = () => showPatientForm(patientId);
     document.getElementById('btn-archive-patient').onclick = () => archivePatient(patientId);
@@ -499,10 +500,19 @@ const Patients = (() => {
         return;
       }
 
+      const patient = data.patients.find(p => p.id === patientId);
+      const offset = patient ? (patient.sessionNumberOffset || 0) : 0;
+
       container.innerHTML = sessions.map(session => {
         const statusClass = getSessionStatusClass(session);
         const paidIcon = session.isPaid ? ' &#10003;' : '';
-        const numberStr = session.sessionNumber ? `#${session.sessionNumber}` : '';
+        let numberStr = '';
+        if (session.sessionNumber) {
+          numberStr = `#${session.sessionNumber}`;
+          if (offset > 0 && session.globalSessionNumber) {
+            numberStr += ` (${session.globalSessionNumber})`;
+          }
+        }
 
         return `
           <div class="list-item ${statusClass}" data-session-id="${session.id}">
@@ -550,6 +560,97 @@ const Patients = (() => {
     if (session.status === 'cancelled' && session.isPaymentRequired) return 'session-cancelled-paid';
     if (session.status === 'cancelled') return 'session-cancelled-unpaid';
     return '';
+  }
+
+  function renderPreviousTherapies(patientId) {
+    const data = App.getData();
+    const patient = data.patients.find(p => p.id === patientId);
+    if (!patient) return;
+
+    const prev = patient.previousTherapies || { count: 0, therapies: [], totalSessions: 0, notes: '' };
+    const countSelect = document.getElementById('pt-count');
+    const listContainer = document.getElementById('pt-therapies-list');
+    const totalGroup = document.getElementById('pt-total-sessions-group');
+    const notesGroup = document.getElementById('pt-notes-group');
+    const saveBtn = document.getElementById('btn-save-prev-therapies');
+    const totalInput = document.getElementById('pt-total-sessions');
+    const notesInput = document.getElementById('pt-notes');
+
+    countSelect.value = prev.count;
+    totalInput.value = prev.totalSessions || 0;
+    notesInput.value = prev.notes || '';
+
+    function renderTherapyFields(count) {
+      const show = count > 0;
+      totalGroup.style.display = show ? '' : 'none';
+      notesGroup.style.display = show ? '' : 'none';
+      saveBtn.style.display = show ? '' : 'none';
+
+      if (count === 0) {
+        listContainer.innerHTML = '';
+        return;
+      }
+
+      listContainer.innerHTML = Array.from({ length: count }, (_, i) => {
+        const t = (prev.therapies && prev.therapies[i]) || { startDate: '', endDate: '' };
+        return `
+          <div class="form-row" style="margin-bottom:12px">
+            <div class="form-group">
+              <label>Terapia ${i + 1} — start</label>
+              <input type="date" class="pt-start" data-idx="${i}" value="${t.startDate || ''}">
+            </div>
+            <div class="form-group">
+              <label>Terapia ${i + 1} — koniec</label>
+              <input type="date" class="pt-end" data-idx="${i}" value="${t.endDate || ''}">
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    renderTherapyFields(prev.count);
+
+    countSelect.onchange = () => {
+      const newCount = parseInt(countSelect.value);
+      // If increasing count, keep existing data
+      prev.count = newCount;
+      renderTherapyFields(newCount);
+      // Show save button even for 0 if previously had data
+      if (newCount === 0) {
+        saveBtn.style.display = '';
+      }
+    };
+
+    saveBtn.onclick = async () => {
+      const count = parseInt(countSelect.value);
+      const therapies = [];
+      for (let i = 0; i < count; i++) {
+        const startEl = listContainer.querySelector(`.pt-start[data-idx="${i}"]`);
+        const endEl = listContainer.querySelector(`.pt-end[data-idx="${i}"]`);
+        therapies.push({
+          startDate: startEl ? startEl.value : '',
+          endDate: endEl ? endEl.value : ''
+        });
+      }
+
+      patient.previousTherapies = {
+        count,
+        therapies,
+        totalSessions: parseInt(totalInput.value) || 0,
+        notes: notesInput.value
+      };
+
+      // Update sessionNumberOffset based on previous therapies
+      if (count > 0 && patient.previousTherapies.totalSessions > 0) {
+        patient.sessionNumberOffset = patient.previousTherapies.totalSessions;
+      } else {
+        patient.sessionNumberOffset = 0;
+      }
+
+      Sessions.recalculateAllSessionNumbers(patientId);
+      App.saveAndRefresh();
+      Utils.showToast('Poprzednie terapie zapisane', 'success');
+    };
   }
 
   function getActivePatients() {

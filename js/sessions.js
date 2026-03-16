@@ -154,11 +154,7 @@ const Sessions = (() => {
       s.cycleSessionNumber = null;
     });
 
-    const currentCycle = patient.therapyCycles.find(c => c.endDate === null);
-    const cycleStart = currentCycle ? currentCycle.startDate : patient.therapyStartDate;
-
-    let globalCount = 0;
-    let cycleCount = 0;
+    let currentCount = 0;
 
     patientSessions.forEach(session => {
       const isNumbered = session.status === 'completed' ||
@@ -166,17 +162,10 @@ const Sessions = (() => {
 
       if (!isNumbered) return;
 
-      globalCount++;
-      session.globalSessionNumber = globalCount + offset;
-
-      if (session.date >= cycleStart) {
-        cycleCount++;
-        session.cycleSessionNumber = cycleCount + offset;
-      } else {
-        session.cycleSessionNumber = globalCount + offset;
-      }
-
-      session.sessionNumber = session.cycleSessionNumber;
+      currentCount++;
+      session.cycleSessionNumber = currentCount;
+      session.globalSessionNumber = currentCount + offset;
+      session.sessionNumber = currentCount;
     });
   }
 
@@ -195,9 +184,10 @@ const Sessions = (() => {
 
     if (session.sessionNumber) {
       document.getElementById('ms-number-info').classList.remove('hidden');
+      const offset = patient ? (patient.sessionNumberOffset || 0) : 0;
       let numberStr = `Sesja nr ${session.cycleSessionNumber}`;
-      if (patient && patient.therapyCycles && patient.therapyCycles.length > 1 && session.globalSessionNumber) {
-        numberStr += ` (#${session.globalSessionNumber})`;
+      if (offset > 0 && session.globalSessionNumber) {
+        numberStr += ` (${session.globalSessionNumber})`;
       }
       document.getElementById('ms-number').textContent = numberStr;
     } else {
