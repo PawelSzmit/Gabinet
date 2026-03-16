@@ -186,6 +186,7 @@
           <button class="tab" data-tab="pd-notes">Notatki</button>
           <button class="tab" data-tab="pd-goals">Cele</button>
           <button class="tab" data-tab="pd-progress">Postępy</button>
+          <button class="tab" data-tab="pd-prev-therapies">Poprzednie terapie</button>
         </div>
         <div id="pd-info" class="tab-content active">
           <div class="info-cards" id="pd-info-content"></div>
@@ -210,6 +211,32 @@
         <div id="pd-progress" class="tab-content">
           <button id="btn-add-progress" class="btn btn-primary btn-sm">+ Nowy wpis</button>
           <div id="pd-progress-list" class="timeline-container"></div>
+        </div>
+        <div id="pd-prev-therapies" class="tab-content">
+          <div class="settings-section">
+            <div class="form-group">
+              <label for="pt-count">Ilość poprzednich terapii</label>
+              <select id="pt-count" class="select-sm">
+                <option value="0">0 (brak)</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+              </select>
+            </div>
+            <div id="pt-therapies-list"></div>
+            <div class="form-group" id="pt-total-sessions-group" style="display:none">
+              <label for="pt-total-sessions">Łączna liczba sesji z poprzednich terapii</label>
+              <input type="number" id="pt-total-sessions" min="0" step="1" value="0">
+              <span class="info-text">Aktualna numeracja sesji będzie kontynuowana od tego numeru, np. wpisanie 35 oznacza, że pierwsza sesja bieżącej terapii to nr 1 (36).</span>
+            </div>
+            <div class="form-group" id="pt-notes-group" style="display:none">
+              <label for="pt-notes">Notatki o poprzednich terapiach</label>
+              <textarea id="pt-notes" rows="4" placeholder="Informacje o poprzednich terapiach..."></textarea>
+            </div>
+            <button type="button" id="btn-save-prev-therapies" class="btn btn-primary" style="display:none">Zapisz</button>
+          </div>
         </div>
         <div class="patient-detail-actions">
           <button id="btn-edit-patient" class="btn btn-outline">Edytuj</button>
