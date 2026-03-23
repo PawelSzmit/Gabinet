@@ -204,11 +204,21 @@ const Sessions = (() => {
     document.querySelectorAll('input[name="sessionStatus"]').forEach(rb => {
       rb.checked = rb.value === session.status;
     });
+    document.querySelectorAll('input[name="cancellationReason"]').forEach(rb => {
+      rb.checked = false;
+    });
 
     handleStatusChange();
 
     if (session.status === 'cancelled') {
       document.getElementById('ms-payment-required').checked = session.isPaymentRequired;
+      if (!session.isPaymentRequired) {
+        document.getElementById('ms-cancellation-reason').classList.remove('hidden');
+        if (session.cancellationReason) {
+          const rb = document.querySelector(`input[name="cancellationReason"][value="${session.cancellationReason}"]`);
+          if (rb) rb.checked = true;
+        }
+      }
     }
 
     updatePaymentInfo(session);
@@ -239,13 +249,21 @@ const Sessions = (() => {
 
     if (selected.value === 'cancelled') {
       document.getElementById('ms-cancelled-options').classList.remove('hidden');
+      handlePaymentRequiredChange();
     } else {
       document.getElementById('ms-cancelled-options').classList.add('hidden');
+      document.getElementById('ms-cancellation-reason').classList.add('hidden');
     }
   }
 
   function handlePaymentRequiredChange() {
-    // No additional UI update needed
+    const isPaid = document.getElementById('ms-payment-required').checked;
+    const reasonEl = document.getElementById('ms-cancellation-reason');
+    if (!isPaid) {
+      reasonEl.classList.remove('hidden');
+    } else {
+      reasonEl.classList.add('hidden');
+    }
   }
 
   function updatePaymentInfo(session) {
@@ -317,6 +335,10 @@ const Sessions = (() => {
       if (!session.isPaymentRequired) {
         session.isPaid = false;
         session.paymentId = null;
+        const reasonRb = document.querySelector('input[name="cancellationReason"]:checked');
+        session.cancellationReason = reasonRb ? reasonRb.value : null;
+      } else {
+        session.cancellationReason = null;
       }
     } else if (newStatus === 'completed') {
       session.isPaymentRequired = true;

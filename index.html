@@ -187,6 +187,7 @@
           <button class="tab" data-tab="pd-goals">Cele</button>
           <button class="tab" data-tab="pd-progress">Postępy</button>
           <button class="tab" data-tab="pd-prev-therapies">Poprzednie terapie</button>
+          <button class="tab" data-tab="pd-cancelled">Sesje odwołane</button>
         </div>
         <div id="pd-info" class="tab-content active">
           <div class="info-cards" id="pd-info-content"></div>
@@ -237,6 +238,10 @@
             </div>
             <button type="button" id="btn-save-prev-therapies" class="btn btn-primary" style="display:none">Zapisz</button>
           </div>
+        </div>
+        <div id="pd-cancelled" class="tab-content">
+          <div id="pd-cancelled-list"></div>
+          <p id="pd-cancelled-empty" class="empty-state hidden">Brak odwołanych sesji</p>
         </div>
         <div class="patient-detail-actions">
           <button id="btn-edit-patient" class="btn btn-outline">Edytuj</button>
@@ -504,6 +509,20 @@
             </label>
           </div>
           <p class="info-text">Włącz, jeśli pacjent nie odwołał sesji z odpowiednim wyprzedzeniem.</p>
+          <div id="ms-cancellation-reason" class="hidden" style="margin-top:12px">
+            <label><strong>Powód odwołania:</strong></label>
+            <div class="radio-group">
+              <label class="radio-label">
+                <input type="radio" name="cancellationReason" value="patient"> Odwołana przez pacjenta
+              </label>
+              <label class="radio-label">
+                <input type="radio" name="cancellationReason" value="therapist"> Odwołana przez terapeutę
+              </label>
+              <label class="radio-label">
+                <input type="radio" name="cancellationReason" value="patient_vacation"> Urlop pacjenta
+              </label>
+            </div>
+          </div>
         </div>
         <div class="session-payment-info">
           <h4>Płatność</h4>
