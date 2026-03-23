@@ -453,6 +453,7 @@ const Patients = (() => {
     await renderPatientGoals(patientId);
     await renderPatientProgress(patientId);
     renderPreviousTherapies(patientId);
+    renderCancelledSessions(patientId);
 
     document.getElementById('btn-edit-patient').onclick = () => showPatientForm(patientId);
     document.getElementById('btn-archive-patient').onclick = () => archivePatient(patientId);
@@ -651,6 +652,46 @@ const Patients = (() => {
       App.saveAndRefresh();
       Utils.showToast('Poprzednie terapie zapisane', 'success');
     };
+  }
+
+  function renderCancelledSessions(patientId) {
+    const data = App.getData();
+    const cancelled = data.sessions
+      .filter(s => s.patientId === patientId && s.status === 'cancelled')
+      .sort((a, b) => b.date.localeCompare(a.date));
+
+    const listEl = document.getElementById('pd-cancelled-list');
+    const emptyEl = document.getElementById('pd-cancelled-empty');
+
+    if (cancelled.length === 0) {
+      listEl.innerHTML = '';
+      emptyEl.classList.remove('hidden');
+      return;
+    }
+
+    emptyEl.classList.add('hidden');
+
+    const reasonLabels = {
+      therapist: 'Odwołana przez terapeutę',
+      patient_vacation: 'Urlop pacjenta',
+      patient: 'Odwołana przez pacjenta'
+    };
+
+    listEl.innerHTML = cancelled.map(s => {
+      let reason;
+      if (s.isPaymentRequired) {
+        reason = 'Odwołana w ostatniej chwili (płatna)';
+      } else {
+        reason = reasonLabels[s.cancellationReason] || 'Odwołana przez pacjenta';
+      }
+      return `
+        <div class="list-item" style="cursor:default">
+          <div>
+            <div class="list-item-title">${Utils.formatDatePL(s.date)}</div>
+            <div class="list-item-subtitle">${reason}</div>
+          </div>
+        </div>`;
+    }).join('');
   }
 
   function getActivePatients() {
