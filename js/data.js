@@ -519,6 +519,61 @@ function serializeAppData() {
 }
 
 /**
+ * Migrates a patient object from old format (v1) to new format (v2).
+ * Old format used sessionDays[] + sessionTimes{} instead of sessionDayConfigs[].
+ *
+ * @param {object} raw — raw patient object from JSON
+ * @returns {object} — patient with sessionDayConfigs
+ */
+function _migratePatient(raw) {
+  if (!raw) return raw;
+
+  // Already new format or no old-format fields
+  if (Array.isArray(raw.sessionDayConfigs) && raw.sessionDayConfigs.length > 0) return raw;
+  if (!Array.isArray(raw.sessionDays) || raw.sessionDays.length === 0) return raw;
+
+  const dayToISO = {
+    monday: 1, tuesday: 2, wednesday: 3, thursday: 4,
+    friday: 5, saturday: 6, sunday: 7,
+  };
+
+  const times = raw.sessionTimes || {};
+  raw.sessionDayConfigs = raw.sessionDays
+    .filter(d => dayToISO[d] !== undefined)
+    .map(d => ({
+      weekday: dayToISO[d],
+      sessionTime: times[d] || '10:00',
+    }));
+
+  return raw;
+}
+
+/**
+ * Migrates a session object from old format (v1) to new format (v2).
+ * Old format stored date as "YYYY-MM-DD" + separate time field "HH:MM".
+ * New format stores date as a full ISO datetime string.
+ *
+ * @param {object} raw — raw session object from JSON
+ * @returns {object} — session with merged date+time
+ */
+function _migrateSession(raw) {
+  if (!raw) return raw;
+
+  // If old format: date is "YYYY-MM-DD" (10 chars) and time is a separate field
+  if (raw.time && typeof raw.date === 'string' && raw.date.length === 10) {
+    raw.date = new Date(raw.date + 'T' + raw.time + ':00').toISOString();
+    delete raw.time;
+  }
+
+  // If date is date-only without time info, try to preserve as noon to avoid TZ drift
+  if (typeof raw.date === 'string' && raw.date.length === 10 && !raw.time) {
+    raw.date = new Date(raw.date + 'T12:00:00').toISOString();
+  }
+
+  return raw;
+}
+
+/**
  * Loads a serialised JSON string into AppState, replacing all current data.
  * Applies factory functions to ensure all objects have the correct shape.
  *
@@ -537,8 +592,8 @@ function deserializeAppData(json) {
     throw new Error('Dane są puste lub nieprawidłowe.');
   }
 
-  AppState.patients       = (data.patients       || []).map(createPatient);
-  AppState.sessions       = (data.sessions       || []).map(createSession);
+  AppState.patients       = (data.patients       || []).map(_migratePatient).map(createPatient);
+  AppState.sessions       = (data.sessions       || []).map(_migrateSession).map(createSession);
   AppState.payments       = (data.payments       || []).map(createPayment);
   AppState.blockedPeriods = (data.blockedPeriods || []).map(createBlockedPeriod);
   AppState.settings       = createAppSettings(data.settings || {});
