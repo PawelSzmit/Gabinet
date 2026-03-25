@@ -198,7 +198,13 @@ const FinanceViews = (() => {
     const totals = { aliorBank: 0, ingBank: 0, cash: 0 };
     periodSessions.forEach((session) => {
       if (!session.isPaid) return;
-      const method = session.paymentMethod || 'cash';
+      // Prefer session.paymentMethod; fall back to linked payment record's method
+      let method = session.paymentMethod;
+      if (!method && session.paymentId) {
+        const payment = AppState.payments.find(p => p.id === session.paymentId);
+        if (payment) method = payment.method;
+      }
+      method = method || 'cash';
       totals[method] = (totals[method] || 0) + sessionAmount(session);
     });
     return totals;
