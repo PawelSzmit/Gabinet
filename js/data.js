@@ -559,15 +559,15 @@ function _migratePatient(raw) {
 function _migrateSession(raw) {
   if (!raw) return raw;
 
-  // If old format: date is "YYYY-MM-DD" (10 chars) and time is a separate field
-  if (raw.time && typeof raw.date === 'string' && raw.date.length === 10) {
-    raw.date = new Date(raw.date + 'T' + raw.time + ':00').toISOString();
+  // Old format has a separate `time` field (e.g. "10:00").
+  // `date` can be either "YYYY-MM-DD" (10 chars) or a full ISO string
+  // like "2026-03-25T00:00:00.000Z". In both cases we need to merge
+  // the separate time into the date.
+  if (raw.time && typeof raw.date === 'string') {
+    // Extract just the date portion (first 10 chars of any format)
+    var datePart = raw.date.substring(0, 10); // "YYYY-MM-DD"
+    raw.date = new Date(datePart + 'T' + raw.time + ':00').toISOString();
     delete raw.time;
-  }
-
-  // If date is date-only without time info, try to preserve as noon to avoid TZ drift
-  if (typeof raw.date === 'string' && raw.date.length === 10 && !raw.time) {
-    raw.date = new Date(raw.date + 'T12:00:00').toISOString();
   }
 
   return raw;
