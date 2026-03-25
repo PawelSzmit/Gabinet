@@ -36,7 +36,7 @@ const Payments = (() => {
     document.getElementById('mp-date').value = Utils.todayISO();
     document.getElementById('mp-sessions-list').innerHTML = '';
     document.getElementById('mp-count').textContent = '0';
-    document.getElementById('mp-total').textContent = '0 zł';
+    document.getElementById('mp-amount').value = '0';
 
     document.querySelectorAll('input[name="paymentMethod"]').forEach(rb => {
       rb.checked = rb.value === 'aliorBank';
@@ -58,6 +58,8 @@ const Payments = (() => {
             if (cb) cb.checked = true;
           });
           updatePaymentSummary();
+          // Przywróć zapisaną kwotę (może być inna niż wyliczona ze stawki)
+          document.getElementById('mp-amount').value = payment.amount;
         }, 100);
       }
     } else {
@@ -114,7 +116,7 @@ const Payments = (() => {
       total += parseFloat(cb.dataset.rate || 0);
     });
     document.getElementById('mp-count').textContent = checked.length;
-    document.getElementById('mp-total').textContent = Utils.formatCurrency(total);
+    document.getElementById('mp-amount').value = total;
   }
 
   function savePayment() {
@@ -137,9 +139,8 @@ const Payments = (() => {
     }
 
     const data = App.getData();
-    const patient = data.patients.find(p => p.id === patientId);
     const sessionIds = checkedSessions.map(cb => cb.value);
-    const totalAmount = sessionIds.length * (patient ? patient.sessionRate : 0);
+    const totalAmount = parseFloat(document.getElementById('mp-amount').value) || 0;
 
     if (editingPaymentId) {
       const oldPayment = data.payments.find(p => p.id === editingPaymentId);
