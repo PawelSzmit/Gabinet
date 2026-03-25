@@ -92,9 +92,9 @@ const Sessions = (() => {
       s.date >= monthStart && s.date <= monthEnd && s.status === 'scheduled'
     ).length;
 
-    // Remove only SCHEDULED sessions for this month (keep completed/cancelled)
+    // Remove only SCHEDULED and UNPAID sessions for this month (keep completed/cancelled/paid)
     data.sessions = data.sessions.filter(s => {
-      if (s.date >= monthStart && s.date <= monthEnd && s.status === 'scheduled') {
+      if (s.date >= monthStart && s.date <= monthEnd && s.status === 'scheduled' && !s.isPaid) {
         return false;
       }
       return true;
@@ -344,8 +344,7 @@ const Sessions = (() => {
       session.isPaymentRequired = true;
     } else {
       session.isPaymentRequired = true;
-      session.isPaid = false;
-      session.paymentId = null;
+      // Nie resetuj isPaid/paymentId — statusem płatności zarządza moduł płatności
     }
 
     const noteText = document.getElementById('ms-notes').value;
