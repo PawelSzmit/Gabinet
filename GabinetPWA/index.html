@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#1a73e8" />
+  <meta name="description" content="Gabinet – aplikacja do zarządzania gabinetem psychoterapeutycznym" />
+
+  <!-- PWA / iOS -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Gabinet" />
+  <meta name="mobile-web-app-capable" content="yes" />
+
+  <title>Gabinet</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="styles.css" />
+
+  <!-- Google Identity Services -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════════
+       SPLASH SCREEN
+       Shown while app boots / checks auth state
+  ════════════════════════════════════════════════ -->
+  <div id="splash-screen" class="splash-screen">
+    <div class="splash-screen__icon" aria-hidden="true">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+           width="48" height="48" fill="none" stroke="#ffffff"
+           stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2L3 6v6c0 5.25 3.75 10.15 9 11.25C17.25 22.15 21 17.25 21 12V6L12 2z"/>
+        <rect x="9" y="11" width="6" height="5" rx="1"/>
+        <path d="M10 11V9a2 2 0 1 1 4 0v2"/>
+      </svg>
+    </div>
+    <h1 class="splash-screen__title">Gabinet</h1>
+    <p class="splash-screen__subtitle">Psychoterapia</p>
+    <div class="splash-screen__spinner" aria-label="Ładowanie…"></div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════
+       AUTH SCREEN
+       Shown when user is not authenticated
+  ════════════════════════════════════════════════ -->
+  <div id="auth-screen" class="auth-screen hidden" hidden>
+    <div class="auth-orb auth-orb--sage" aria-hidden="true"></div>
+    <div class="auth-orb auth-orb--peach" aria-hidden="true"></div>
+    <div class="auth-orb auth-orb--mist" aria-hidden="true"></div>
+
+    <header class="auth-nav">
+      <a href="#auth-hero" class="auth-brand" aria-label="Gabinet">
+        <span class="auth-brand__mark" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+               width="24" height="24" fill="none" stroke="currentColor"
+               stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2L3 6v6c0 5.25 3.75 10.15 9 11.25C17.25 22.15 21 17.25 21 12V6L12 2z"/>
+            <rect x="9" y="11" width="6" height="5" rx="1"/>
+            <path d="M10 11V9a2 2 0 1 1 4 0v2"/>
+          </svg>
+        </span>
+        <span class="auth-brand__text">Gabinet</span>
+      </a>
+
+      <nav class="auth-nav__links" aria-label="Sekcje strony">
+        <a href="#auth-benefits">Korzyści</a>
+        <a href="#auth-privacy">Prywatność</a>
+        <a href="#auth-preview">Podgląd</a>
+        <a href="#auth-faq">FAQ</a>
+      </nav>
+
+      <button id="btn-google-signin" class="auth-nav__cta" type="button">
+        Zaloguj się
+      </button>
+    </header>
+
+    <main class="auth-landing">
+      <section class="auth-hero" id="auth-hero">
+        <div class="auth-hero__copy">
+          <p class="auth-kicker">Spokój pracy. Porządek dnia. Pełna dyskrecja.</p>
+          <h1 class="auth-screen__title">Cyfrowy porządek dla gabinetu psychoterapeutycznego.</h1>
+          <p class="auth-screen__subtitle">
+            Prowadź pacjentów, sesje, płatności i szyfrowane notatki w jednym spokojnym narzędziu.
+            Bez własnego serwera, bez chaosu, z danymi po Twojej stronie.
+          </p>
+
+          <p id="auth-error" class="auth-screen__error hidden" hidden></p>
+
+          <div class="auth-usp-strip">
+            <div class="auth-usp-pill">Szyfrowane notatki kliniczne</div>
+            <div class="auth-usp-pill">Dane na Twoim Google Drive</div>
+            <div class="auth-usp-pill">Automatyczny kalendarz sesji</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="auth-section auth-section--benefits" id="auth-benefits">
+        <div class="auth-section__header">
+          <p class="auth-section__eyebrow">Trzy filary produktu</p>
+          <h2>Gabinet wspiera codzienną pracę terapeuty, zamiast ją komplikować.</h2>
+        </div>
+        <div class="auth-card-grid auth-card-grid--3">
+          <article class="auth-feature-card">
+            <h3>Prywatność w praktyce</h3>
+            <p>Szyfruje notatki kliniczne, eksponuje pseudonimy i przechowuje dane na Twoim Drive, a nie na obcej bazie.</p>
+          </article>
+          <article class="auth-feature-card">
+            <h3>Automatyzacja terapii</h3>
+            <p>Buduje kalendarz sesji na podstawie harmonogramu, urlopów i historii terapii, żeby oszczędzać Twój czas.</p>
+          </article>
+          <article class="auth-feature-card">
+            <h3>Finanse bez Excela</h3>
+            <p>Łączy płatności z konkretnymi sesjami, pokazuje zaległości i porządkuje przychody bez dodatkowych arkuszy.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="auth-section auth-section--steps">
+        <div class="auth-section__header">
+          <p class="auth-section__eyebrow">Jak to działa</p>
+          <h2>Od pierwszego logowania do spokojnego planu dnia.</h2>
+        </div>
+        <div class="auth-steps">
+          <article class="auth-step-card">
+            <span class="auth-step-card__index">01</span>
+            <h3>Logujesz się kontem Google</h3>
+            <p>Aplikacja automatycznie się synchronizuje pomiędzy urządzeniami, więc możesz zacząć dzień pracą przy komputerze, a zakończyć korzystając z telefonu lub tabletu.</p>
+          </article>
+          <article class="auth-step-card">
+            <span class="auth-step-card__index">02</span>
+            <h3>Dodajesz pacjentów i harmonogram</h3>
+            <p>Pseudonimy, dni sesji, stawki i przerwy terapii układają się w gotowy plan pracy.</p>
+          </article>
+          <article class="auth-step-card">
+            <span class="auth-step-card__index">03</span>
+            <h3>Prowadzisz gabinet z jednego miejsca</h3>
+            <p>Sesje, notatki, cele, płatności i kondycja finansowa gabinetu są zawsze pod ręką.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="auth-section auth-section--privacy" id="auth-privacy">
+        <div class="auth-section__header">
+          <p class="auth-section__eyebrow">Prywatność i bezpieczeństwo</p>
+          <h2>Spokojna technologia dla wrażliwej pracy.</h2>
+        </div>
+        <div class="auth-privacy-grid">
+          <article class="auth-privacy-card auth-privacy-card--highlight">
+            <h3>Aplikacja od początku została zbudowana dla psychoterapeuty.</h3>
+            <p>Dlatego prywatność nie jest dodatkiem marketingowym, tylko osią całego doświadczenia.</p>
+          </article>
+          <article class="auth-privacy-card auth-privacy-card--lower-copy">
+            <h3>Szyfrowanie treści klinicznych</h3>
+            <p>Notatki z sesji, wpisy kliniczne i cele terapeutyczne są szyfrowane przed zapisem.</p>
+          </article>
+          <article class="auth-privacy-card auth-privacy-card--lower-copy">
+            <h3>Pseudonimy zamiast nazwisk</h3>
+            <p>Interfejs priorytetyzuje pseudonim pacjenta, a pełne dane osobowe pozostają drugoplanowe.</p>
+          </article>
+          <article class="auth-privacy-card auth-privacy-card--lower-copy">
+            <h3>Dane po Twojej stronie</h3>
+            <p>Brak własnej bazy danych oznacza większą prostotę i większą kontrolę nad miejscem przechowywania danych.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="auth-section auth-section--preview" id="auth-preview">
+        <div class="auth-section__header">
+          <p class="auth-section__eyebrow">Podgląd produktu</p>
+          <h2>Interfejs zbudowany pod rytm dnia terapeuty.</h2>
+        </div>
+        <div class="auth-preview-grid">
+          <article class="auth-preview-card auth-preview-card--day">
+            <span class="auth-preview-card__badge">Tryb dzienny</span>
+            <h3>Dzisiaj</h3>
+            <ul>
+              <li>najbliższe sesje</li>
+              <li>szybkie statusy i notatki</li>
+              <li>zaległe płatności i ważne sygnały</li>
+            </ul>
+          </article>
+          <article class="auth-preview-card auth-preview-card--dark">
+            <span class="auth-preview-card__badge">Dark mode</span>
+            <h3>Pacjenci i historia terapii</h3>
+            <ul>
+              <li>pseudonim na pierwszym planie</li>
+              <li>spokojny widok kliniczny</li>
+              <li>intymny, wieczorny charakter pracy</li>
+            </ul>
+          </article>
+          <article class="auth-preview-card auth-preview-card--finance">
+            <span class="auth-preview-card__badge">Finanse</span>
+            <h3>Porządek przychodów</h3>
+            <ul>
+              <li>bieżący przychód</li>
+              <li>należności do rozliczenia</li>
+              <li>metody płatności i trendy</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="auth-section auth-section--faq" id="auth-faq">
+        <div class="auth-section__header">
+          <p class="auth-section__eyebrow">FAQ</p>
+          <h2>Najważniejsze pytania przed wejściem do produktu.</h2>
+        </div>
+        <div class="auth-faq-list">
+          <details class="auth-faq-item">
+            <summary>Czy potrzebuję własnego serwera lub bazy danych?</summary>
+            <p>Nie. Aplikacja działa po stronie klienta i synchronizuje dane przez Google Drive użytkownika.</p>
+          </details>
+          <details class="auth-faq-item">
+            <summary>Czy notatki kliniczne są chronione?</summary>
+            <p>Tak. Wrażliwe treści są szyfrowane przed zapisem, a interfejs dodatkowo opiera się na pseudonimizacji.</p>
+          </details>
+          <details class="auth-faq-item">
+            <summary>Czy mogę korzystać z aplikacji na telefonie?</summary>
+            <p>Tak, to jest strona internetowa, którą możesz noramlnie otworzyć na przegląarce w telefonie.</p>
+          </details>
+        </div>
+      </section>
+
+      <section class="auth-section auth-section--closing">
+        <div class="auth-closing-card">
+          <p class="auth-section__eyebrow">Gotowe do wejścia</p>
+          <h2>Produkt dla psychoterapeuty, który chce mniej chaosu i więcej spokoju w pracy.</h2>
+          <p>Zaloguj się kontem Google, aby wejść do aplikacji i zacząć pracę ze swoim gabinetem.</p>
+        </div>
+      </section>
+
+      <p class="auth-screen__footer">
+        Dane przechowywane wyłącznie na Twoim Google Drive.
+      </p>
+    </main>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════
+       MAIN APP
+       Hidden until authenticated
+  ════════════════════════════════════════════════ -->
+  <div id="app-shell" class="hidden" hidden>
+
+    <!-- ─── View container (calendar / patients / finance / settings) ─── -->
+    <main id="view-container" role="main" aria-live="polite">
+      <!-- Views are rendered here dynamically by JS -->
+    </main>
+
+    <!-- ─── Bottom tab bar ─── -->
+    <nav class="tab-bar" role="tablist" aria-label="Nawigacja główna">
+
+      <button class="tab-btn tab-btn--active" role="tab"
+              data-view="calendar" aria-selected="true" aria-controls="view-container">
+        <span class="tab-icon" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"
+               fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+            <line x1="16" y1="2" x2="16" y2="6"/>
+            <line x1="8" y1="2" x2="8" y2="6"/>
+            <line x1="3" y1="10" x2="21" y2="10"/>
+          </svg>
+        </span>
+        <span class="tab-label">Dzisiaj</span>
+      </button>
+
+      <button class="tab-btn" role="tab"
+              data-view="patients" aria-selected="false" aria-controls="view-container">
+        <span class="tab-icon" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"
+               fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+        </span>
+        <span class="tab-label">Pacjenci</span>
+      </button>
+
+      <button class="tab-btn" role="tab"
+              data-view="finance" aria-selected="false" aria-controls="view-container">
+        <span class="tab-icon" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"
+               fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="20" x2="18" y2="10"/>
+            <line x1="12" y1="20" x2="12" y2="4"/>
+            <line x1="6"  y1="20" x2="6"  y2="14"/>
+            <line x1="2"  y1="20" x2="22" y2="20"/>
+          </svg>
+        </span>
+        <span class="tab-label">Finanse</span>
+      </button>
+
+      <button class="tab-btn" role="tab"
+              data-view="settings" aria-selected="false" aria-controls="view-container">
+        <span class="tab-icon" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"
+               fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06
+                     a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09
+                     A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83
+                     l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09
+                     A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83
+                     l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09
+                     a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83
+                     l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09
+                     a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </span>
+        <span class="tab-label">Ustawienia</span>
+      </button>
+
+    </nav>
+    <!-- /tab-bar -->
+
+  </div>
+  <!-- /app -->
+
+  <!-- ═══════════════════════════════════════════════
+       MODALS & BOTTOM SHEETS
+       Empty containers – JS populates them at runtime
+  ════════════════════════════════════════════════ -->
+
+  <!-- Generic overlay backdrop -->
+  <div id="modal-backdrop" class="modal-backdrop hidden" hidden aria-hidden="true"></div>
+
+  <!-- Session / appointment detail sheet -->
+  <div id="sheet-session" class="bottom-sheet hidden" hidden role="dialog"
+       aria-modal="true" aria-label="Szczegóły wizyty">
+    <div class="sheet-handle" aria-hidden="true"></div>
+    <div class="sheet-content" id="sheet-session-content"></div>
+  </div>
+
+  <!-- Patient detail / edit sheet -->
+  <div id="sheet-patient" class="bottom-sheet hidden" hidden role="dialog"
+       aria-modal="true" aria-label="Karta pacjenta">
+    <div class="sheet-handle" aria-hidden="true"></div>
+    <div class="sheet-content" id="sheet-patient-content"></div>
+  </div>
+
+  <!-- Finance / invoice sheet -->
+  <div id="sheet-finance" class="bottom-sheet hidden" hidden role="dialog"
+       aria-modal="true" aria-label="Szczegóły płatności">
+    <div class="sheet-handle" aria-hidden="true"></div>
+    <div class="sheet-content" id="sheet-finance-content"></div>
+  </div>
+
+  <!-- Confirmation modal -->
+  <div id="modal-confirm" class="modal hidden" hidden role="alertdialog"
+       aria-modal="true" aria-label="Potwierdzenie">
+    <div class="modal-box">
+      <h3 class="modal__title"></h3>
+      <p  class="modal__message"></p>
+      <div class="modal__actions">
+        <button id="modal-confirm-btn" class="btn btn--primary">Potwierdź</button>
+        <button id="modal-cancel-btn"  class="btn btn--ghost">Anuluj</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast / snackbar notifications -->
+  <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="false"></div>
+
+  <!-- Drive status indicators -->
+  <div id="drive-loading-indicator" class="drive-loading hidden" hidden aria-live="polite">
+    <span class="drive-loading__spinner" aria-hidden="true"></span>
+    <span>Synchronizacja…</span>
+  </div>
+  <div id="drive-error-toast" class="drive-error hidden" hidden role="alert"></div>
+
+  <!-- Offline banner -->
+  <div id="offline-banner" class="offline-banner hidden" hidden role="status">
+    Brak połączenia z internetem – tryb offline
+  </div>
+
+  <!-- ═══════════════════════════════════════════════
+       APP SCRIPTS (loaded in dependency order)
+  ════════════════════════════════════════════════ -->
+  <script src="js/utils.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/drive.js"></script>
+  <script src="js/views/calendar.js"></script>
+  <script src="js/views/patients.js"></script>
+  <script src="js/views/finance.js"></script>
+  <script src="js/views/settings.js"></script>
+  <script src="js/app.js"></script>
+
+  <!-- ═══════════════════════════════════════════════
+       SERVICE WORKER REGISTRATION
+  ════════════════════════════════════════════════ -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' })
+          .then(function (registration) {
+            console.log('[SW] Registered, scope:', registration.scope);
+
+            // Listen for updates
+            registration.addEventListener('updatefound', function () {
+              var newWorker = registration.installing;
+              newWorker.addEventListener('statechange', function () {
+                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                  // New content available – app.js can show an update prompt
+                  document.dispatchEvent(new CustomEvent('sw:update-available'));
+                }
+              });
+            });
+          })
+          .catch(function (err) {
+            console.warn('[SW] Registration failed:', err);
+          });
+
+        // Reload once the new service worker takes over
+        var refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', function () {
+          if (!refreshing) {
+            refreshing = true;
+            window.location.reload();
+          }
+        });
+      });
+    }
+  </script>
+
+</body>
+</html>
