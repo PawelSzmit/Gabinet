@@ -79,6 +79,14 @@ const App = {
   async init() {
     this.showSplash();
 
+    // One-time migration: clear stale tokens/fileId from the appdata-scope era.
+    if (!localStorage.getItem('gabinet_scope_v2_migrated')) {
+      localStorage.removeItem('gabinet_access_token');
+      localStorage.removeItem('gabinet_token_expiry');
+      localStorage.removeItem('gabinet_drive_file_id');
+      localStorage.setItem('gabinet_scope_v2_migrated', '1');
+    }
+
     // Initialise encryption key (generates or loads from localStorage).
     await Encryption.init();
 
