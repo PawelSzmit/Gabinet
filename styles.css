@@ -3228,3 +3228,114 @@ h1, h2, h3, .display-title {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ============================================================
+   DESKTOP LAYOUT FIX
+   The 1024px+ breakpoint references BEM classes (.tab-bar__item)
+   that don't exist in the HTML (which uses .tab-btn).
+   These rules fix the sidebar + content layout on wide screens.
+   ============================================================ */
+
+/* ── Tablet (768px+): centred floating pill bar ─────────────── */
+@media (min-width: 768px) {
+  #view-container {
+    padding-bottom: calc(90px + var(--space-2xl));
+  }
+
+  /* Constrain view content width */
+  .cal-wrapper,
+  .pv-page,
+  .fin-page,
+  .settings-page {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+}
+
+/* ── Desktop (1024px+): left sidebar ────────────────────────── */
+@media (min-width: 1024px) {
+  #app-shell {
+    flex-direction: row;
+  }
+
+  /* Sidebar tab bar — override the floating pill & forced row */
+  nav.tab-bar,
+  .tab-bar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    right: auto;
+    bottom: 0;
+    width: 80px;
+    height: 100dvh;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: var(--space-2xl) var(--space-xs);
+    gap: var(--space-xs);
+    border-radius: 0;
+    border: none;
+    border-right: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    box-shadow: none;
+    transform: none;
+  }
+
+  /* Tab buttons — vertical stack */
+  .tab-btn {
+    width: 64px;
+    min-height: 56px;
+    border-radius: var(--radius-md);
+    padding: var(--space-sm) var(--space-xs);
+    flex: 0 0 auto;
+  }
+
+  .tab-btn.active,
+  .tab-btn.tab-btn--active {
+    border-radius: var(--radius-md);
+  }
+
+  /* View container — offset for sidebar */
+  #view-container,
+  .view-container {
+    padding-left: 80px;
+    padding-bottom: var(--space-2xl);
+  }
+
+  /* Content max-width for readability */
+  .cal-wrapper,
+  .pv-page,
+  .fin-page,
+  .settings-page {
+    max-width: 960px;
+    margin: 0 auto;
+    padding-left: var(--space-xl);
+    padding-right: var(--space-xl);
+  }
+
+  /* Modals/sheets constrain on desktop */
+  .bottom-sheet,
+  .modal-dialog {
+    max-width: 540px;
+  }
+}
+
+/* ── Wide desktop (1440px+) ─────────────────────────────────── */
+@media (min-width: 1440px) {
+  .cal-wrapper,
+  .pv-page,
+  .fin-page,
+  .settings-page {
+    max-width: 1080px;
+  }
+}
+
+/* Dark mode sidebar */
+@media (min-width: 1024px) and (prefers-color-scheme: dark) {
+  nav.tab-bar,
+  .tab-bar {
+    background: rgba(28, 28, 30, 0.92);
+  }
+}
