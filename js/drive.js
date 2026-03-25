@@ -3,11 +3,11 @@
 // ─── Constants ────────────────────────────────────────────────────────────────
 const GOOGLE_CLIENT_ID = '554823778989-760krqf91lrhq288s5l61oaa0fe2pekp.apps.googleusercontent.com';
 const DRIVE_FILE_NAME  = 'gabinet-data.json';
-const SCOPES           = 'https://www.googleapis.com/auth/drive.appdata';
+const SCOPES           = 'https://www.googleapis.com/auth/drive.file';
 
 const LS_TOKEN_KEY   = 'gabinet_access_token';
 const LS_EXPIRY_KEY  = 'gabinet_token_expiry';
-const LS_FILEID_KEY  = 'gabinet_drive_file_id';
+const LS_FILEID_KEY  = 'gabinet_drive_file_id_v2';
 
 // ─── Utility: simple debounce ─────────────────────────────────────────────────
 function debounce(fn, delay) {
@@ -122,7 +122,7 @@ const DriveService = {
   },
 
   // ── findOrCreateFile ──────────────────────────────────────────────────────
-  // Returns the Drive file-id of gabinet-data.json in appDataFolder.
+  // Returns the Drive file-id of gabinet-data.json on the user's Drive.
   // Creates the file with an empty data structure if it does not exist yet.
   async findOrCreateFile() {
     if (this.fileId) return this.fileId;
@@ -131,7 +131,7 @@ const DriveService = {
       `name = '${DRIVE_FILE_NAME}' and trashed = false`
     );
     const url   = `https://www.googleapis.com/drive/v3/files` +
-                  `?spaces=appDataFolder&q=${query}&fields=files(id,name)`;
+                  `?q=${query}&fields=files(id,name)`;
 
     const resp = await this.apiFetch(url);
     const json = await resp.json();
@@ -201,7 +201,6 @@ const DriveService = {
   async createFile(content) {
     const metadata = {
       name:    DRIVE_FILE_NAME,
-      parents: ['appDataFolder'],
     };
 
     const form = new FormData();
