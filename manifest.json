@@ -1,10 +1,10 @@
 {
-  "name": "Gabinet Terapeutyczny",
+  "name": "Gabinet - Gabinet Psychoterapeutyczny",
   "short_name": "Gabinet",
-  "description": "Zarządzanie gabinetem psychoterapeutycznym",
-  "start_url": "./index.html",
+  "description": "Aplikacja do zarządzania gabinetem psychoterapeutycznym",
+  "start_url": "/",
   "display": "standalone",
-  "background_color": "#F2F2F7",
+  "background_color": "#ffffff",
   "theme_color": "#007AFF",
   "orientation": "portrait-primary",
   "icons": [
@@ -20,5 +20,7 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
-  ]
+  ],
+  "categories": ["medical", "productivity"],
+  "lang": "pl"
 }
