@@ -167,7 +167,7 @@ const App = {
     this.showApp();
     this._generateSessionsIfNeeded();
     AutoLock.init();
-    Router.navigate('calendar', { viewMode: 'daily', focusDate: new Date().toISOString() });
+    Router.navigate('calendar', { viewMode: 'monthly', focusDate: new Date().toISOString() });
   },
 
   // ── onSignIn ──────────────────────────────────────────────────────────────
@@ -362,7 +362,7 @@ function renderCalendar(params) {
     if (params.viewMode) {
       CalendarViews.viewMode = params.viewMode;
     } else if (!CalendarViews.viewMode) {
-      CalendarViews.viewMode = 'daily';
+      CalendarViews.viewMode = 'monthly';
     }
     CalendarViews.render();
     return;
