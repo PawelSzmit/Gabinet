@@ -536,12 +536,12 @@ const FinanceViews = (() => {
     }, 0);
   }
 
-  function renderPaymentSheet(payment) {
+  function renderPaymentSheet(payment, prefill) {
     const isEdit = Boolean(payment);
     const patients = AppState.activePatients.slice().sort((a, b) => displayPatientName(a).localeCompare(displayPatientName(b), 'pl'));
     const selectedMethod = payment ? payment.method : 'cash';
-    const patientId = payment ? payment.patientId : '';
-    const selectedIds = payment ? (payment.sessionIds || []) : [];
+    const patientId = payment ? payment.patientId : (prefill ? (prefill.patientId || '') : '');
+    const selectedIds = payment ? (payment.sessionIds || []) : (prefill ? (prefill.sessionIds || []) : []);
     return (
       '<div class="fin-sheet-overlay" id="fin-payment-sheet">' +
         '<div class="fin-sheet-panel">' +
@@ -598,14 +598,19 @@ const FinanceViews = (() => {
     );
   }
 
-  function openPaymentSheet(payment) {
+  function openPaymentSheet(payment, prefill) {
     const existing = document.getElementById('fin-payment-sheet');
     if (existing) existing.remove();
-    document.body.insertAdjacentHTML('beforeend', renderPaymentSheet(payment));
-    bindPaymentSheetEvents(payment);
+    document.body.insertAdjacentHTML('beforeend', renderPaymentSheet(payment, prefill));
+    bindPaymentSheetEvents(payment, prefill);
   }
 
-  function bindPaymentSheetEvents(payment) {
+  // Opens a new-payment sheet pre-filled for a specific session (called from calendar detail).
+  function openAddPaymentForSession(session) {
+    openPaymentSheet(null, { patientId: session.patientId, sessionIds: [session.id] });
+  }
+
+  function bindPaymentSheetEvents(payment, prefill) {
     const sheet = document.getElementById('fin-payment-sheet');
     if (!sheet) return;
     const patientSelect = sheet.querySelector('#fin-sheet-patient');
@@ -613,7 +618,7 @@ const FinanceViews = (() => {
     const amountInput = sheet.querySelector('#fin-sheet-amount');
     const balanceInfo = sheet.querySelector('#fin-sheet-balance-info');
     const methodInput = sheet.querySelector('#fin-sheet-method');
-    const selectedIds = payment ? (payment.sessionIds || []) : [];
+    const selectedIds = payment ? (payment.sessionIds || []) : (prefill ? (prefill.sessionIds || []) : []);
 
     function updateBalanceInfo() {
       const expected = selectedTotal(sheet);
@@ -820,6 +825,10 @@ const FinanceViews = (() => {
     persistData();
     closePaymentSheet();
     if (containerRef) render(containerRef);
+    // Refresh calendar view if it is currently visible (opened from session detail)
+    if (typeof CalendarViews !== 'undefined' && typeof CalendarViews._refresh === 'function') {
+      CalendarViews._refresh();
+    }
     toast(existingId ? 'Płatność zaktualizowana.' : 'Płatność zapisana.', 'success');
   }
 
@@ -907,6 +916,7 @@ const FinanceViews = (() => {
   return {
     render,
     openAddPayment,
+    openAddPaymentForSession,
     openEditPayment,
     savePayment,
     closePaymentSheet,
