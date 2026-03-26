@@ -101,9 +101,9 @@ const FinanceViews = (() => {
       '.fin-session-check input{margin-top:4px;accent-color:var(--blue,#49664f)}',
       '.fin-session-check-label{display:flex;flex-direction:column;gap:4px;color:var(--text,#243126);font-weight:700}',
       '.fin-session-check-label small{font-size:.8rem;color:var(--text-secondary,rgba(36,49,38,.68));font-weight:600}',
-      '.fin-total-box{padding:16px;border-radius:22px;background:rgba(255,255,255,.68);border:1px solid var(--border,rgba(73,102,79,.1))}',
-      '.fin-total-box strong{display:block;font-size:1.3rem;color:var(--text,#243126)}',
-      '.fin-total-box span{color:var(--text-secondary,rgba(36,49,38,.68));font-size:.84rem}',
+      '.fin-balance-info{margin-top:8px;padding:10px 14px;border-radius:14px;font-size:.84rem;line-height:1.55}',
+      '.fin-balance-info--over{background:rgba(107,144,115,.12);color:#3a5c42}',
+      '.fin-balance-info--under{background:rgba(204,139,86,.14);color:#8a5a1a}',
       '.fin-sheet-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}',
       '.fin-detail-stack{display:grid;gap:12px}',
       '.fin-detail-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-radius:20px;background:rgba(255,255,255,.62);border:1px solid var(--border,rgba(73,102,79,.1))}',
@@ -570,8 +570,9 @@ const FinanceViews = (() => {
               '</div>' +
             '</div>' +
             '<div class="fin-form-group">' +
-              '<label>Kwota łączna</label>' +
-              '<div class="fin-total-box"><strong id="fin-sheet-total">' + escHtml(formatCurrency((payment && payment.amount) || 0)) + '</strong><span>Wyliczana na podstawie zaznaczonych sesji</span></div>' +
+              '<label for="fin-sheet-amount">Wpłacona kwota (zł)</label>' +
+              '<input class="fin-input" type="number" id="fin-sheet-amount" min="0" step="0.01" value="' + escHtml(String((payment && payment.amount) || '0')) + '" placeholder="0.00">' +
+              '<div id="fin-sheet-balance-info" class="fin-balance-info" style="display:none"></div>' +
             '</div>' +
             '<div class="fin-form-group">' +
               '<label for="fin-sheet-note">Notatka</label>' +
@@ -599,12 +600,60 @@ const FinanceViews = (() => {
     if (!sheet) return;
     const patientSelect = sheet.querySelector('#fin-sheet-patient');
     const sessionsWrap = sheet.querySelector('#fin-sheet-sessions');
-    const totalEl = sheet.querySelector('#fin-sheet-total');
+    const amountInput = sheet.querySelector('#fin-sheet-amount');
+    const balanceInfo = sheet.querySelector('#fin-sheet-balance-info');
     const methodInput = sheet.querySelector('#fin-sheet-method');
     const selectedIds = payment ? (payment.sessionIds || []) : [];
 
+    function updateBalanceInfo() {
+      const expected = selectedTotal(sheet);
+      const paid = parseFloat(amountInput.value) || 0;
+      const diff = paid - expected;
+      if (!expected || paid === expected) {
+        balanceInfo.style.display = 'none';
+        return;
+      }
+      balanceInfo.style.display = '';
+      if (diff > 0) {
+        balanceInfo.className = 'fin-balance-info fin-balance-info--over';
+        balanceInfo.textContent = 'Nadpłata: ' + formatCurrency(diff) + '. Różnica pozostaje nieprzypisana.';
+      } else {
+        // underpayment — figure out which sessions are fully/partially covered
+        const sessionIds = selectedSessionIds(sheet);
+        const sessions = sessionIds
+          .map(id => getSessions().find(s => s.id === id))
+          .filter(Boolean)
+          .sort((a, b) => new Date(a.date) - new Date(b.date));
+        let remaining = paid;
+        let fullyCovered = 0;
+        let partialSession = null;
+        let partialPaid = 0;
+        for (const s of sessions) {
+          const rate = sessionAmount(s);
+          if (remaining >= rate) { remaining -= rate; fullyCovered++; }
+          else if (remaining > 0) { partialSession = s; partialPaid = remaining; remaining = 0; }
+          else break;
+        }
+        const unpaidCount = sessions.length - fullyCovered - (partialSession ? 1 : 0);
+        let msg = '';
+        if (fullyCovered > 0) msg += fullyCovered + ' ' + (fullyCovered === 1 ? 'sesja opłacona w całości' : 'sesje opłacone w całości') + '. ';
+        if (partialSession) {
+          const rate = sessionAmount(partialSession);
+          msg += 'Sesja ' + formatDateMedium(partialSession.date) + ' opłacona częściowo (' + formatCurrency(partialPaid) + ' z ' + formatCurrency(rate) + '). ';
+        }
+        if (unpaidCount > 0) msg += unpaidCount + ' ' + (unpaidCount === 1 ? 'sesja pozostaje nieopłacona' : 'sesje pozostają nieopłacone') + '.';
+        balanceInfo.className = 'fin-balance-info fin-balance-info--under';
+        balanceInfo.textContent = msg.trim();
+      }
+    }
+
     function refreshTotal() {
-      if (totalEl) totalEl.textContent = formatCurrency(selectedTotal(sheet));
+      const expected = selectedTotal(sheet);
+      // Only auto-fill if user hasn't manually changed the amount
+      if (!amountInput.dataset.userEdited) {
+        amountInput.value = expected > 0 ? expected.toFixed(2) : '0.00';
+      }
+      updateBalanceInfo();
     }
 
     function bindCheckboxes() {
@@ -630,6 +679,13 @@ const FinanceViews = (() => {
         methodInput.value = button.dataset.method;
       });
     });
+
+    if (amountInput) {
+      amountInput.addEventListener('input', () => {
+        amountInput.dataset.userEdited = '1';
+        updateBalanceInfo();
+      });
+    }
 
     bindCheckboxes();
     if (!payment && selectedIds.length === 0) refreshTotal();
@@ -679,7 +735,7 @@ const FinanceViews = (() => {
       return;
     }
 
-    const amount = selectedTotal(sheet);
+    const amount = parseFloat(sheet.querySelector('#fin-sheet-amount').value) || selectedTotal(sheet);
     const previous = existingId ? getPayments().find((payment) => payment.id === existingId) : null;
 
     if (previous) {
@@ -715,13 +771,40 @@ const FinanceViews = (() => {
       paymentRecord.note = note;
     }
 
-    sessionIds.forEach((sessionId) => {
-      const session = getSessions().find((item) => item.id === sessionId);
-      if (!session) return;
-      session.isPaid = true;
+    // Sort sessions by date so we pay oldest first
+    const expectedTotal = sessionIds.reduce((sum, id) => {
+      const s = getSessions().find(item => item.id === id);
+      return sum + (s ? sessionAmount(s) : 0);
+    }, 0);
+    const sortedSessions = sessionIds
+      .map(id => getSessions().find(item => item.id === id))
+      .filter(Boolean)
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    let remaining = amount;
+    sortedSessions.forEach((session) => {
+      const rate = sessionAmount(session);
       session.paymentId = paymentRecord.id;
       session.paymentMethod = method;
       session.paymentDate = date;
+      if (remaining >= rate) {
+        session.isPaid = true;
+        session.isPartiallyPaid = false;
+        session.partialPaymentAmount = null;
+        remaining -= rate;
+      } else if (remaining > 0) {
+        session.isPaid = false;
+        session.isPartiallyPaid = true;
+        session.partialPaymentAmount = remaining;
+        remaining = 0;
+      } else {
+        session.isPaid = false;
+        session.isPartiallyPaid = false;
+        session.partialPaymentAmount = null;
+        session.paymentId = null;
+        session.paymentMethod = null;
+        session.paymentDate = null;
+      }
     });
 
     persistData();
@@ -739,9 +822,12 @@ const FinanceViews = (() => {
     const payment = getPayments().find((item) => item.id === paymentId);
     if (!payment) return;
     (payment.sessionIds || []).forEach((sessionId) => {
+
       const session = getSessions().find((item) => item.id === sessionId);
       if (!session) return;
       session.isPaid = false;
+      session.isPartiallyPaid = false;
+      session.partialPaymentAmount = null;
       session.paymentId = null;
       session.paymentMethod = null;
       session.paymentDate = null;

@@ -606,7 +606,11 @@ const PatientViews = {
     const rows = sessions.map(s => {
       const label  = statusLabels[s.status] || s.status;
       const cls    = 'pv-sess-status--' + (s.status || 'scheduled');
-      const paid   = s.isPaid ? '<span class="pv-sess-paid">&#10003;</span>' : '';
+      const paid   = s.isPaid
+        ? '<span class="pv-sess-paid">&#10003;</span>'
+        : s.isPartiallyPaid
+          ? '<span class="pv-sess-partial" title="Częściowo opłacona: ' + escHtml(formatPLN(s.partialPaymentAmount)) + '">&#189;</span>'
+          : '';
       return (
         '<div class="pv-sess-row">' +
           '<span class="pv-sess-date">' + escHtml(formatDateMedium(s.date)) + ' ' + escHtml(formatTime(s.date)) + '</span>' +
@@ -1728,6 +1732,7 @@ const PatientViews = {
       '.pv-sess-status--completed{background:var(--green-light,#e5f0e4);color:var(--green,#6b9073)}',
       '.pv-sess-status--cancelled{background:var(--orange-light,#f6e4d5);color:var(--orange,#cc8b56)}',
       '.pv-sess-paid{color:var(--green,#6b9073);font-size:.9rem;margin-left:.25rem}',
+      '.pv-sess-partial{color:var(--orange,#cc8b56);font-size:.9rem;margin-left:.25rem;cursor:help}',
       '.pv-detail-actions{display:flex;flex-wrap:wrap;gap:.7rem;margin-top:12px}',
       '.pv-history-footnote{margin-top:12px;font-size:.84rem;color:var(--text-secondary,rgba(36,49,38,.68));line-height:1.6}',
       '.pv-form{padding:.85rem 0 2rem;display:grid;gap:14px}',

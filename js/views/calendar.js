@@ -579,8 +579,8 @@ const CalendarViews = {
           + '</div>'
           + '<div class="cal-detail-row">'
             + '<span class="cal-detail-label">Status</span>'
-            + '<span class="cal-detail-value ' + (session.isPaid ? 'cal-paid' : 'cal-unpaid') + '">'
-              + (session.isPaid ? 'Opłacona' : 'Nieopłacona')
+            + '<span class="cal-detail-value ' + (session.isPaid ? 'cal-paid' : session.isPartiallyPaid ? 'cal-partial' : 'cal-unpaid') + '">'
+              + (session.isPaid ? 'Opłacona' : session.isPartiallyPaid ? 'Częściowo opłacona (' + formatPLN(session.partialPaymentAmount) + ')' : 'Nieopłacona')
             + '</span>'
           + '</div>'
           + (session.isPaid && session.paymentMethod
@@ -996,6 +996,7 @@ const CalendarViews = {
   },
 
   _sessionColor(session) {
+    if (session.status === 'completed' && session.isPartiallyPaid) return '#FF9500';
     if (session.status === 'completed')                   return '#34C759';
     if (session.status === 'cancelled' && session.isPaid) return '#FF9500';
     if (session.status === 'cancelled')                   return '#FF3B30';
@@ -1203,7 +1204,7 @@ const CalendarViews = {
       '.cal-absent-option-body strong{font-size:.9rem;color:#1c1c1e}',
       '.cal-absent-option-body .cal-detail-muted{margin:0;font-size:.8rem}',
       '.cal-detail-notes-text{font-size:.88rem;color:#1c1c1e;line-height:1.55;margin:4px 0 0}',
-      '.cal-paid{color:#34C759!important}.cal-unpaid{color:#FF3B30!important}',
+      '.cal-paid{color:#34C759!important}.cal-unpaid{color:#FF3B30!important}.cal-partial{color:#FF9500!important}',
       '.cal-detail-actions{display:flex;flex-direction:column;gap:8px}',
       '.cal-action-btn{border:none;border-radius:10px;padding:12px;font-size:.9rem;font-weight:600;cursor:pointer;text-align:center;background:#e5e5ea;color:#1c1c1e;transition:opacity .15s}',
       '.cal-action-btn:hover{opacity:.78}',
