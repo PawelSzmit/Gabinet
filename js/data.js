@@ -519,13 +519,14 @@ function recalculateSessionNumbers(patient) {
  */
 function serializeAppData() {
   const data = {
-    version:        2,
-    exportedAt:     new Date().toISOString(),
-    patients:       AppState.patients,
-    sessions:       AppState.sessions,
-    payments:       AppState.payments,
-    blockedPeriods: AppState.blockedPeriods,
-    settings:       AppState.settings,
+    version:         2,
+    exportedAt:      new Date().toISOString(),
+    patients:        AppState.patients,
+    sessions:        AppState.sessions,
+    payments:        AppState.payments,
+    blockedPeriods:  AppState.blockedPeriods,
+    settings:        AppState.settings,
+    generatedMonths: AppState.generatedMonths || [],
   };
   return JSON.stringify(data);
 }
@@ -604,11 +605,12 @@ function deserializeAppData(json) {
     throw new Error('Dane są puste lub nieprawidłowe.');
   }
 
-  AppState.patients       = (data.patients       || []).map(_migratePatient).map(createPatient);
-  AppState.sessions       = (data.sessions       || []).map(_migrateSession).map(createSession);
-  AppState.payments       = (data.payments       || []).map(createPayment);
-  AppState.blockedPeriods = (data.blockedPeriods || []).map(createBlockedPeriod);
-  AppState.settings       = createAppSettings(data.settings || {});
+  AppState.patients        = (data.patients       || []).map(_migratePatient).map(createPatient);
+  AppState.sessions        = (data.sessions       || []).map(_migrateSession).map(createSession);
+  AppState.payments        = (data.payments       || []).map(createPayment);
+  AppState.blockedPeriods  = (data.blockedPeriods || []).map(createBlockedPeriod);
+  AppState.settings        = createAppSettings(data.settings || {});
+  AppState.generatedMonths = Array.isArray(data.generatedMonths) ? data.generatedMonths : [];
 }
 
 /**
