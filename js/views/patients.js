@@ -609,7 +609,7 @@ const PatientViews = {
       const paid   = s.isPaid
         ? '<span class="pv-sess-paid">&#10003;</span>'
         : s.isPartiallyPaid
-          ? '<span class="pv-sess-partial" title="Częściowo opłacona: ' + escHtml(formatPLN(s.partialPaymentAmount)) + '">&#189;</span>'
+          ? '<span class="pv-sess-partial">Częściowo opłacona (' + escHtml(formatPLN(s.partialPaymentAmount)) + ')</span>'
           : '';
       return (
         '<div class="pv-sess-row">' +
