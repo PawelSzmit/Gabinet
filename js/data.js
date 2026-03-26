@@ -559,13 +559,6 @@ function _migratePatient(raw) {
 function _migrateSession(raw) {
   if (!raw) return raw;
 
-  // DEBUG: log first 3 sessions to see actual data format
-  if (!_migrateSession._logged) _migrateSession._logged = 0;
-  if (_migrateSession._logged < 3) {
-    console.log('[MIGRATE] raw session:', JSON.stringify(raw));
-    _migrateSession._logged++;
-  }
-
   // Old format has a separate `time` field (e.g. "10:00").
   // `date` can be either "YYYY-MM-DD" (10 chars) or a full ISO string
   // like "2026-03-25T00:00:00.000Z". In both cases we need to merge

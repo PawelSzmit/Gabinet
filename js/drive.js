@@ -316,6 +316,165 @@ function persistData() {
   DriveService.debouncedSave();
 }
 
+// ─── Data Recovery from Drive Version History ────────────────────────────────
+const DataRecovery = {
+
+  /**
+   * Lists all available revisions of gabinet-data.json on Google Drive.
+   * @returns {Promise<Array<{id: string, modifiedTime: string}>>}
+   */
+  async listRevisions() {
+    const fileId = DriveService.fileId || localStorage.getItem(LS_FILEID_KEY);
+    if (!fileId) throw new Error('Brak pliku na Drive — zaloguj się najpierw.');
+
+    const url = `https://www.googleapis.com/drive/v3/files/${fileId}/revisions?fields=revisions(id,modifiedTime,size)`;
+    const resp = await DriveService.apiFetch(url);
+    if (!resp.ok) {
+      const body = await resp.text();
+      throw new Error('Nie udało się pobrać historii wersji: ' + resp.status + ' ' + body);
+    }
+    const json = await resp.json();
+    return (json.revisions || []).sort((a, b) => new Date(a.modifiedTime) - new Date(b.modifiedTime));
+  },
+
+  /**
+   * Downloads a specific revision's content.
+   * @param {string} revisionId
+   * @returns {Promise<string>} — raw JSON text
+   */
+  async downloadRevision(revisionId) {
+    const fileId = DriveService.fileId || localStorage.getItem(LS_FILEID_KEY);
+    const url = `https://www.googleapis.com/drive/v3/files/${fileId}/revisions/${revisionId}?alt=media`;
+    const resp = await DriveService.apiFetch(url);
+    if (!resp.ok) throw new Error('Nie udało się pobrać rewizji: ' + resp.status);
+    return await resp.text();
+  },
+
+  /**
+   * Attempts to recover session times and patient schedule data from
+   * the oldest available revision that still has `time` fields on sessions
+   * or `sessionDays`/`sessionTimes` on patients.
+   *
+   * @param {function} onProgress — callback(message) for UI updates
+   * @returns {Promise<{sessionsFixed: number, patientsFixed: number}>}
+   */
+  async recoverFromHistory(onProgress) {
+    const log = onProgress || console.log;
+
+    log('Pobieranie listy wersji z Google Drive...');
+    const revisions = await this.listRevisions();
+
+    if (revisions.length < 2) {
+      throw new Error('Brak starszych wersji pliku na Drive. Odzyskanie danych nie jest możliwe.');
+    }
+
+    log(`Znaleziono ${revisions.length} wersji. Szukam wersji z oryginalnymi danymi...`);
+
+    // Try revisions from oldest to newest, looking for one with `time` fields
+    let oldData = null;
+    let usedRevision = null;
+
+    for (const rev of revisions) {
+      try {
+        log(`Sprawdzam wersję z ${new Date(rev.modifiedTime).toLocaleString('pl-PL')}...`);
+        const text = await this.downloadRevision(rev.id);
+        let parsed;
+        try { parsed = JSON.parse(text); } catch (e) { continue; }
+
+        // Check if this revision has old-format data (session.time fields)
+        const hasSessionTimes = (parsed.sessions || []).some(s => s.time && typeof s.time === 'string');
+        // Check if this revision has patient schedule data (sessionDays)
+        const hasPatientDays = (parsed.patients || []).some(p =>
+          Array.isArray(p.sessionDays) && p.sessionDays.length > 0
+        );
+
+        if (hasSessionTimes || hasPatientDays) {
+          oldData = parsed;
+          usedRevision = rev;
+          log(`✅ Znaleziono wersję z ${hasSessionTimes ? 'czasami sesji' : ''}${hasSessionTimes && hasPatientDays ? ' i ' : ''}${hasPatientDays ? 'harmonogramem pacjentów' : ''} z dnia ${new Date(rev.modifiedTime).toLocaleString('pl-PL')}`);
+          break;
+        }
+      } catch (e) {
+        log(`⚠️ Nie udało się odczytać wersji: ${e.message}`);
+      }
+    }
+
+    if (!oldData) {
+      throw new Error('Nie znaleziono żadnej wersji z oryginalnymi danymi (time/sessionDays). Wszystkie wersje mają już nowy format.');
+    }
+
+    // ── Merge session times ──
+    let sessionsFixed = 0;
+    const oldSessionsById = {};
+    for (const s of (oldData.sessions || [])) {
+      if (s.id) oldSessionsById[s.id] = s;
+    }
+
+    for (const currentSession of AppState.sessions) {
+      const old = oldSessionsById[currentSession.id];
+      if (!old) continue;
+
+      if (old.time && typeof old.time === 'string') {
+        // Old session has a separate time field — merge it into current date
+        const datePart = currentSession.date.substring(0, 10);
+        const newDate = new Date(datePart + 'T' + old.time + ':00').toISOString();
+        if (newDate !== currentSession.date) {
+          currentSession.date = newDate;
+          sessionsFixed++;
+        }
+      }
+    }
+
+    log(`Naprawiono czasy ${sessionsFixed} sesji.`);
+
+    // ── Merge patient schedule data ──
+    let patientsFixed = 0;
+    const oldPatientsById = {};
+    for (const p of (oldData.patients || [])) {
+      if (p.id) oldPatientsById[p.id] = p;
+    }
+
+    const dayToISO = {
+      monday: 1, tuesday: 2, wednesday: 3, thursday: 4,
+      friday: 5, saturday: 6, sunday: 7,
+    };
+
+    for (const currentPatient of AppState.patients) {
+      const old = oldPatientsById[currentPatient.id];
+      if (!old) continue;
+
+      // Only fix if current patient has empty sessionDayConfigs
+      if (Array.isArray(currentPatient.sessionDayConfigs) && currentPatient.sessionDayConfigs.length > 0) {
+        continue;
+      }
+
+      if (Array.isArray(old.sessionDays) && old.sessionDays.length > 0) {
+        const times = old.sessionTimes || {};
+        currentPatient.sessionDayConfigs = old.sessionDays
+          .filter(d => dayToISO[d] !== undefined)
+          .map(d => ({
+            weekday: dayToISO[d],
+            sessionTime: times[d] || '10:00',
+          }));
+        patientsFixed++;
+      }
+    }
+
+    log(`Naprawiono harmonogramy ${patientsFixed} pacjentów.`);
+
+    // ── Save corrected data ──
+    if (sessionsFixed > 0 || patientsFixed > 0) {
+      log('Zapisywanie poprawionych danych na Drive...');
+      await DriveService.saveData();
+      log(`✅ Gotowe! Naprawiono ${sessionsFixed} sesji i ${patientsFixed} pacjentów.`);
+    } else {
+      log('⚠️ Nie znaleziono danych do naprawienia (ID sesji/pacjentów mogły się zmienić).');
+    }
+
+    return { sessionsFixed, patientsFixed };
+  },
+};
+
 // ─── Offline / online banners ─────────────────────────────────────────────────
 window.addEventListener('online',  () => {
   document.getElementById('offline-banner') &&
