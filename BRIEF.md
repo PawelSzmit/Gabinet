@@ -2,6 +2,7 @@
 
 > Dokument źródłowy dla AI do przygotowania raportu rozwojowo-marketingowego.
 > Zawiera pełny opis funkcji, architektury, designu, modelu danych i stanu aplikacji.
+> Ostatnia aktualizacja: 2026-03-26 | Cache: gabinet-v19
 
 ---
 
@@ -51,9 +52,15 @@ Jedna aplikacja dedykowana psychoterapeutom, która:
 ### 3.1. Kalendarz sesji
 
 **Trzy widoki:**
-- **Miesięczny** — siatka z chipami sesji w kolorach statusu
+- **Miesięczny (domyślny)** — siatka z chipami sesji w kolorach statusu, duże komórki (min. 80px), pełna wysokość bez scrollowania
 - **Tygodniowy** (Pn–Pt) — siatka godzinowa z podświetleniem godzin pracy
 - **Dzienny** — szczegółowy plan dnia z godzinami i statusami
+
+**Panel skupienia (Focus Panel) — jednolity nagłówek dla wszystkich widoków:**
+- Górna linia: kicker „Twój gabinet" + tytuł z datą (po lewej), następna sesja (po prawej)
+- Dolna linia: 4 kafelki statystyk w jednym rzędzie — sesje dziś, należności, aktywni pacjenci, tryb dnia
+- Brak przycisków akcji w panelu (dodawanie przez modal kalendarza)
+- Panel wygląda identycznie niezależnie od wybranego widoku (M/T/D)
 
 **Automatyzacja:**
 - Sesje generowane automatycznie na bieżący miesiąc przy pierwszym logowaniu w danym miesiącu
@@ -74,34 +81,62 @@ Jedna aplikacja dedykowana psychoterapeutom, która:
 ### 3.2. Zarządzanie pacjentami
 
 **Dane pacjenta:**
-- Imię, nazwisko, pseudonim (wymagany, unikalny)
+- Imię, nazwisko, pseudonim (opcjonalny)
 - Data rozpoczęcia terapii
-- Dni sesji (checkboxy: Wt/Śr/Czw + dowolne)
-- Godzina sesji na każdy dzień
+- Dni sesji (checkboxy: Pn–Nd + godzina przy każdym)
 - Stawka za sesję (PLN)
-- Liczba sesji na tydzień (1 lub 2)
-- Do 3 okresów urlopowych (data start–koniec)
-- Notatki ogólne
+- Liczba sesji na tydzień (1, 2 lub 3)
+- Okresy urlopowe (data start–koniec)
+- Poprzednie terapie (dane historyczne)
 
 **Lista pacjentów:**
 - Sortowanie alfabetyczne po nazwisku
 - Wyszukiwanie po imieniu/nazwisku/pseudonimie
 - Badge z liczbą nieopłaconych sesji
 - Pseudonim wyświetlany dużą czcionką, imię i nazwisko małą (priorytet prywatności)
+- Przycisk „Archiwum" (tekst, wyrównany do prawej krawędzi)
 
-**Widok szczegółowy pacjenta — 7 zakładek:**
+**Widok szczegółowy pacjenta:**
 
-1. **Informacje** — karty z danymi: pseudonim, imię/nazwisko, data startu, dni sesji, stawka, czas trwania terapii
-2. **Sesje** — lista sesji z filtrami (Wszystkie/Odbyte/Zaplanowane/Nieopłacone), kliknięcie otwiera modal sesji
-3. **Notatki** — szyfrowane notatki kliniczne z datą, podgląd odszyfrowanego tekstu
-4. **Cele** — cele terapeutyczne ze statusem (W toku / Osiągnięty / Nieaktualny), datą ustalenia i osiągnięcia
-5. **Postępy** — oś czasu wpisów z kategorią (Przełom / Obserwacja / Zmiana / Inne)
-6. **Poprzednie terapie** — ilość (0–5), daty start/koniec każdej, łączna liczba sesji z poprzednich terapii, notatki; numeracja sesji kontynuuje z uwzględnieniem offsetu
-7. **Sesje odwołane** — lista odwołanych sesji z datą i powodem (przez terapeutę / urlop pacjenta / przez pacjenta / w ostatniej chwili — płatna)
+Nagłówek z awatarem, imieniem/pseudonimem, debtbadge, statystykami (czas terapii, sesje, notatki, cele).
+
+Nawigacja chipowa: Przegląd | Sesje | Kliniczne | Historia
+
+Sekcja **Przegląd:**
+- Karta „Tożsamość i ustawienia terapii" — imię, nazwisko, pseudonim, stawka, sesje w tygodniu
+- Karta „Przebieg terapii" — data startu, czas trwania, ukończone sesje (z formatem historycznym, np. `3 (57)`), zaległości
+- Karta „Rytm spotkań" — harmonogram dni/godzin
+
+Sekcja **Sesje:**
+- Ostatnie sesje z datą, godziną, statusem, ikoną płatności
+- Urlopy i przerwy z datami, przycisk dodawania
+
+Sekcja **Kliniczne:**
+- **Notatki i obserwacje** — chronologiczna lista (jak zeszyt: najstarsze na górze, najnowsze na dole):
+  - Notatki z sesji kalendarza — automatycznie pobierane z pola `sessionNotes` sesji, oznaczone etykietą „Sesja", tylko do odczytu
+  - Notatki ręczne — dodawane przyciskiem „+ Dodaj" (np. archiwalne notatki), z możliwością usunięcia
+  - Oba typy mieszane w jednej liście, posortowane po dacie
+  - Pełna treść notatki (bez obcinania), async odszyfrowanie AES-256-GCM
+- Cele terapeutyczne — ze statusem (W toku / Osiągnięty / Nieaktualny)
+
+Sekcja **Historia:**
+- Wpisy postępów z kategorią i datą
+- Cykle terapii
+
+**Formularz edycji pacjenta — 4 sekcje:**
+1. **Dane osobowe** — imię*, nazwisko*, pseudonim, data rozpoczęcia terapii*
+2. **Finansowe** — stawka za sesję*
+3. **Harmonogram** — sesje w tygodniu (select 1–3), dni sesji (checkboxy z godziną)
+4. **Poprzednie terapie** — pole liczbowe „Liczba poprzednich terapii" generuje dynamicznie tyle wierszy; każdy wiersz: data Od, data Do, liczba sesji. Dane historyczne (nie generują sesji w kalendarzu). Służą do obliczania łącznego licznika sesji.
+
+**Licznik sesji z historią:**
+- Format: `3 (57)` — 3 ukończone sesje w bieżącej terapii, 57 łącznie z poprzednimi
+- Wyświetlany w kaflach statystyk i w karcie „Przebieg terapii"
+- Jeśli brak poprzednich terapii, wyświetla się samo `3`
 
 **Archiwizacja:**
 - Pacjent przenoszony do archiwum, zaplanowane sesje usuwane
-- Przywracanie z archiwum: nowy cykl terapii, nowa data startu, nowe dni/godziny
+- Przywracanie z archiwum: nowy cykl terapii, nowa data startu
 
 ### 3.3. Zarządzanie sesjami
 
@@ -118,15 +153,15 @@ Jedna aplikacja dedykowana psychoterapeutom, która:
 - Numer sesji (format: „Sesja nr 3 (38)" — bieżąca terapia + łącznie z poprzednimi)
 - Informacja o przeniesieniu (jeśli dotyczy)
 - Radio buttony statusu
-- Opcje odwołania: toggle „Sesja płatna" + powód odwołania (przez pacjenta / przez terapeutę / urlop pacjenta)
+- Opcje odwołania: toggle „Sesja płatna" + powód odwołania
 - Informacja o płatności (status, kwota, metoda)
-- Notatka do sesji (textarea, szyfrowana)
+- **Notatka do sesji** (textarea, szyfrowana AES-256-GCM) — po zapisie automatycznie widoczna w widoku pacjenta w sekcji „Notatki i obserwacje" z datą sesji jako nagłówkiem
 - Formularz przeniesienia (nowa data + godzina)
 
 **Numeracja sesji:**
 - `cycleSessionNumber` — numer w bieżącej terapii (1, 2, 3...)
 - `globalSessionNumber` — łącznie z poprzednimi terapiami (36, 37, 38...)
-- Offset pochodzi z zakładki „Poprzednie terapie"
+- Łączna liczba sesji z `previousTherapies` uwzględniana w wyświetlaniu
 - Przenumerowanie automatyczne po każdej zmianie statusu
 
 ### 3.4. Płatności
@@ -154,52 +189,43 @@ Jedna aplikacja dedykowana psychoterapeutom, która:
 
 ### 3.5. Finanse — dashboard
 
-- **Wykres słupkowy** przychodów miesięcznych (Chart.js):
-  - Słupki stacked wg metody płatności (Alior/ING/Gotówka)
-  - Wybór okresu: 3 / 6 / 12 miesięcy
-- **Zakładka Płatności** — pełna lista z filtrowaniem
+**Tytuł:** „Kondycja finansowa gabinetu" (krótki, bez opisu pod spodem)
 
-### 3.6. Statystyki
+**Kafelki metrykowe:**
+- Przychód w miesiącu, zaległości, odsetki odwołań — tylko wartość, bez podtytułów `<small>`
 
-**Zakres dat:**
-- Presety: 3 / 6 / 12 miesięcy
-- Własny zakres dat (datepickery)
+**Rzeczy wymagające uwagi:**
+- Lista w formie pogrubionego tekstu (bez dodatkowych wyjaśnień w `<span>`)
 
-**Karty statystyk:**
-- Łączna liczba sesji
-- Sesje odbyte
-- Średnia sesji na tydzień
-- Średnia sesji na miesiąc
-- Wskaźnik odwołań (%)
-- Nowi pacjenci w okresie
-- Łączny przychód
-- Średni przychód/miesiąc
-- Średnia kwota płatności
-- Sumy per metoda (Alior / ING / Gotówka)
-- Trend przychodów vs poprzedni okres (% zmiana, strzałka góra/dół)
-- Najlepszy miesiąc (kwota)
-- Najgorszy miesiąc (kwota)
+**Wykres słupkowy przychodów:**
+- Słupki stacked wg metody płatności (Alior/ING/Gotówka)
+- **Przełącznik okresu: 3 / 6 / 12 miesięcy** — przyciski nad wykresem, wykres aktualizuje się w miejscu bez przeładowania strony
 
-**Wykresy:**
-- Liniowy: sesje w czasie (odbyte vs odwołane)
-- Stacked area: wpłaty w czasie wg metody
+Brak przycisku „Przejdź do pacjentów" (usunięty — zbędny w kontekście dashboardu).
 
-### 3.7. Ustawienia
+### 3.6. Ustawienia
 
 - Dane terapeuty: imię, adres, NIP
-- Godziny pracy: per dzień tygodnia (Pn–Pt), checkbox włączony/wyłączony + godziny start/koniec
 - Blokowane okresy (urlopy terapeuty): data start + koniec + powód, dodawanie/usuwanie
-- Regeneracja kalendarza: wybór miesiąca, potwierdzenie, zachowanie sesji odbytych/odwołanych
-- Konto Google: email zalogowanego użytkownika, przycisk wylogowania
+- Regeneracja kalendarza: wybór miesiąca, potwierdzenie
+- Konto Google: email, przycisk wylogowania
 - Synchronizacja: data ostatniej synchronizacji, przycisk ręcznej synchronizacji
 - Informacje o aplikacji: wersja
-- Strefa zagrożenia: reset wszystkich danych (z potwierdzeniem)
+- Strefa zagrożenia: reset danych (z potwierdzeniem)
 
-### 3.8. Archiwum
+### 3.7. Archiwum
 
 - Lista zarchiwizowanych pacjentów
 - Informacje: imię/nazwisko, pseudonim, okres terapii, liczba sesji
 - Przycisk przywracania z formularzem: nowa data startu, dni sesji, godziny
+
+### 3.8. Odzyskiwanie danych (DataRecovery)
+
+Moduł `DataRecovery` w `drive.js`:
+- Skanuje WSZYSTKIE rewizje pliku `gabinet-data.json` na Google Drive (od najnowszej do najstarszej)
+- Odzyskuje utracone dane (godziny sesji, harmonogramy pacjentów) z historii wersji
+- Zbiera dane z każdej rewizji do map, łączy najbardziej kompletne dane
+- Użyteczny po migracji, kiedy dane mogły zostać utracone w konwersji formatu
 
 ---
 
@@ -210,14 +236,13 @@ Jedna aplikacja dedykowana psychoterapeutom, która:
 | Warstwa | Technologia | Uwagi |
 |---------|-------------|-------|
 | Frontend | Vanilla JavaScript (ES6+) | Brak frameworka (React/Vue/Angular) |
-| HTML | Jeden plik `index.html` (SPA) | ~782 linii |
-| CSS | 3 pliki, ~2511 linii łącznie | Brak preprocesora (SASS/Less) |
-| Wykresy | Chart.js (CDN) | Jedyna zewnętrzna biblioteka JS |
-| Fonty | Google Fonts: Playfair Display | Ekran logowania |
-| Uwierzytelnianie | Google OAuth 2.0 (GIS) | Biblioteki Google ładowane z CDN |
+| HTML | Jeden plik `index.html` (SPA) | ~440 linii |
+| CSS | 1 plik `styles.css` + style wstrzykiwane przez moduły JS | ~3340 linii w pliku + ~200 inline per moduł |
+| Fonty | Google Fonts: Manrope (interfejs), Playfair Display (login) | |
+| Uwierzytelnianie | Google OAuth 2.0 (GIS) | |
 | Przechowywanie danych | Google Drive API v3 | Jeden plik JSON na Drive użytkownika |
 | Szyfrowanie | Web Crypto API (AES-256-GCM) | Notatki kliniczne, cele, postępy |
-| Offline | Service Worker (Cache API) | Cache-first strategy |
+| Offline | Service Worker (Cache API) | Network-first (HTML) + Cache-first (assets) |
 | PWA | manifest.json + SW | Instalowalna na urządzeniu |
 
 ### 4.2. Architektura aplikacji
@@ -228,184 +253,159 @@ Jedna aplikacja dedykowana psychoterapeutom, która:
 │              (Single Page Application)           │
 ├─────────────────────────────────────────────────┤
 │                                                 │
-│  ┌─────────┐  ┌──────────┐  ┌───────────────┐ │
-│  │ auth.js │→ │ config.js│  │ encryption.js │ │
-│  └────┬────┘  └──────────┘  └───────────────┘ │
-│       │                                        │
-│  ┌────▼────┐                                   │
-│  │ app.js  │ ← Router + Stan globalny          │
-│  └────┬────┘                                   │
-│       │                                        │
-│  ┌────▼──────────────────────────────────────┐ │
-│  │            Moduły funkcjonalne             │ │
-│  │                                           │ │
-│  │  patients.js  sessions.js   calendar.js   │ │
-│  │  payments.js  finance.js    stats.js      │ │
-│  │  notes.js     archive.js    utils.js      │ │
-│  └───────────────────┬───────────────────────┘ │
-│                      │                         │
-│  ┌───────────────────▼───────────────────────┐ │
-│  │              drive.js                      │ │
-│  │     ↕ Google Drive API v3 (REST)          │ │
-│  └───────────────────────────────────────────┘ │
-│                                                 │
+│  ┌──────────┐  ┌───────────────┐               │
+│  │ app.js   │  │ encryption.js │               │
+│  │ AutoLock │  │ AES-256-GCM   │               │
+│  │ Router   │  └───────────────┘               │
+│  └────┬─────┘                                   │
+│       │                                         │
+│  ┌────▼──────────────────────────────────────┐  │
+│  │  data.js — AppState, modele, persistence  │  │
+│  │  (createPatient, createSession, ...)      │  │
+│  └────┬──────────────────────────────────────┘  │
+│       │                                         │
+│  ┌────▼──────────────────────────────────────┐  │
+│  │         Moduły widoków (views/)            │  │
+│  │  calendar.js  patients.js  finance.js      │  │
+│  │  settings.js                               │  │
+│  └────┬──────────────────────────────────────┘  │
+│       │                                         │
+│  ┌────▼─────────┐  ┌────────────┐              │
+│  │  drive.js    │  │  utils.js  │              │
+│  │  DriveService│  │  Helpery   │              │
+│  │  DataRecovery│  └────────────┘              │
+│  └──────────────┘                               │
 ├─────────────────────────────────────────────────┤
-│              service-worker.js                  │
-│         (Cache-first + offline fallback)        │
+│                    sw.js                         │
+│        (Cache-first + network fallback)          │
 └─────────────────────────────────────────────────┘
 ```
 
 ### 4.3. Wzorce architektoniczne
 
-- **SPA z hash-routingiem** — nawigacja przez `#/calendar`, `#/patients`, `#/patients/:id` itd.
-- **Moduły IIFE (Revealing Module Pattern)** — każdy plik JS eksportuje publiczne API przez `return { ... }`
-- **Globalny obiekt danych** — jeden `appData` w `app.js`, przekazywany przez `App.getData()`
-- **Debounced save** — zapis na Google Drive opóźniony o 300ms, z retry (3 próby)
-- **Cache + Network fallback** — Service Worker obsługuje offline
+- **SPA z imperatywnym routingiem** — `Router.navigate('patients', { patientId })` wywołuje render odpowiedniego widoku
+- **Moduły IIFE / Object Literal** — `CalendarViews`, `PatientViews`, `FinanceViews`, `SettingsViews` — obiekty z metodami `render()`, `_bind*Events()`
+- **Globalny AppState** — jeden obiekt w `data.js` ze getterami `activePatients`, `archivedPatients`; serializowany/deserializowany do Google Drive
+- **Style wstrzykiwane przez JS** — każdy moduł widoku ma `_injectStyles()` tworzący `<style>` w `<head>` (deduplikacja przez id)
+- **Debounced save** — zapis na Google Drive z opóźnieniem, z retry (3 próby)
+- **AutoLock** — blokada ekranu po 15 minutach bezczynności (nasłuchuje click, keydown, touchstart, mousemove, scroll)
 
 ### 4.4. Pliki i rozmiary
 
 | Plik | Linie kodu | Rola |
 |------|-----------|------|
-| `index.html` | ~782 | Cała struktura HTML (widoki, modale, formularze) |
-| `css/main.css` | ~802 | Zmienne, layout, nawigacja, login, dark mode |
-| `css/components.css` | ~1277 | Przyciski, formularze, modale, listy, karty, badge |
-| `css/calendar.css` | ~432 | Widoki kalendarza (miesiąc, tydzień, dzień) |
-| `js/app.js` | ~437 | Router, inicjalizacja, stan globalny, ustawienia |
-| `js/auth.js` | ~207 | Google OAuth 2.0, zarządzanie tokenem |
-| `js/drive.js` | ~263 | CRUD na Google Drive, retry, cache lokalny |
-| `js/encryption.js` | ~57 | AES-256-GCM, generowanie/ładowanie klucza |
-| `js/patients.js` | ~710 | CRUD pacjentów, widok szczegółowy, poprzednie terapie |
-| `js/sessions.js` | ~401 | Generowanie sesji, numeracja, modal, statusy |
-| `js/calendar.js` | ~348 | Renderowanie kalendarza (3 widoki) |
-| `js/payments.js` | ~320 | Rejestracja/edycja/usuwanie płatności |
-| `js/finance.js` | ~132 | Dashboard finansowy, wykres przychodów |
-| `js/stats.js` | ~394 | Statystyki, wykresy, karty |
-| `js/notes.js` | ~417 | Notatki, cele, postępy (szyfrowane) |
-| `js/archive.js` | ~185 | Archiwizacja i przywracanie pacjentów |
-| `js/utils.js` | ~264 | Helpery, formatowanie, UI utilities |
-| `js/config.js` | ~7 | Klucze Google API |
-| `service-worker.js` | ~50 | Strategia cachowania |
-| **ŁĄCZNIE** | **~6800** | |
+| `index.html` | ~440 | Struktura SPA (shell, ekran logowania, kontenery widoków) |
+| `styles.css` | ~3340 | Zmienne CSS, layout, nawigacja, responsywność, dark mode |
+| `js/app.js` | ~1290 | AutoLock, Router, App (init, auth flow, tab bar, renderowanie) |
+| `js/data.js` | ~631 | AppState, fabryki modeli, helpery, generowanie sesji, persistence |
+| `js/drive.js` | ~503 | DriveService (CRUD na Google Drive), DataRecovery |
+| `js/encryption.js` | ~57 | AES-256-GCM szyfrowanie/deszyfrowanie, zarządzanie kluczem |
+| `js/utils.js` | ~441 | Formatowanie dat, kwot, kolory awatarów, helpery UI |
+| `js/views/calendar.js` | ~1186 | Trzy widoki kalendarza, focus panel, modale sesji |
+| `js/views/patients.js` | ~1769 | Lista pacjentów, widok szczegółowy, formularz, archiwum, notatki |
+| `js/views/finance.js` | ~827 | Dashboard finansowy, wykres przychodów, kafelki |
+| `js/views/settings.js` | ~462 | Ustawienia, blokowane okresy |
+| `sw.js` | ~62 | Service Worker — strategia cache |
+| **ŁĄCZNIE** | **~11 008** | |
 
 ### 4.5. Zewnętrzne zależności
 
-| Zależność | Wersja | Źródło | Cel |
-|-----------|--------|--------|-----|
-| Chart.js | 4.x | CDN (cdn.jsdelivr.net) | Wykresy słupkowe i liniowe |
-| Google Identity Services | latest | CDN (accounts.google.com) | OAuth 2.0 |
-| Google API Client (gapi) | latest | CDN (apis.google.com) | Drive API |
-| Google Fonts: Playfair Display | — | CDN (fonts.googleapis.com) | Czcionka na ekranie logowania |
+| Zależność | Źródło | Cel |
+|-----------|--------|-----|
+| Google Identity Services | CDN (accounts.google.com) | OAuth 2.0 |
+| Google API Client (gapi) | CDN (apis.google.com) | Drive API |
+| Google Fonts: Manrope, Playfair Display | CDN (fonts.googleapis.com) | Typografia |
 
-**Brak npm, node_modules, bundlera, transpilera.** Wszystko ładowane bezpośrednio z CDN lub lokalnie.
+**Brak npm, node_modules, bundlera, transpilera, Chart.js.** Wykresy rysowane ręcznie w HTML/CSS (pure divs). Wszystko ładowane bezpośrednio z CDN lub lokalnie.
 
 ---
 
 ## 5. Model danych
 
-### 5.1. Struktura pliku `gabinet-data.json` (Google Drive)
+### 5.1. Struktura AppState (data.js) — serializowana do `gabinet-data.json` na Google Drive
 
 ```javascript
 {
-  version: "1.0",
-  lastSync: "ISO timestamp",
+  version: 2,
+  exportedAt: "ISO timestamp",
 
   settings: {
-    therapistName: String,
-    therapistAddress: String,
-    therapistNIP: String,        // 10 cyfr
-    workingHours: {
-      monday: { enabled: Boolean, start: "HH:MM", end: "HH:MM" },
-      tuesday: { ... },
-      wednesday: { ... },
-      thursday: { ... },
-      friday: { ... }
-    }
+    therapistName:      String,
+    therapistAddress:   String,
+    therapistNIP:       String,         // 10 cyfr
+    workingHoursStart:  "HH:MM",        // np. "08:00"
+    workingHoursEnd:    "HH:MM",        // np. "20:00"
+    autoLockTimeout:    Number,         // sekundy (domyślnie 120, ale w UI 900 = 15 min)
+    lastGeneratedMonth: "YYYY-MM"|null  // ostatni miesiąc z automatyczną generacją sesji
   },
 
   patients: [{
-    id: UUID,
-    firstName: String,
-    lastName: String,
-    pseudonym: String,           // unikalny, wymagany
-    therapyStartDate: "yyyy-mm-dd",
-    sessionDays: ["tuesday", "thursday"],
-    sessionTimes: { tuesday: "10:00", thursday: "14:00" },
-    sessionsPerWeek: 1 | 2,
-    sessionRate: Number,         // PLN
-    sessionNumberOffset: Number, // offset z poprzednich terapii
-    vacationPeriods: [{ id, startDate, endDate }],
-    isArchived: Boolean,
-    archivedDate: "yyyy-mm-dd" | null,
-    therapyCycles: [{ id, startDate, endDate, cycleNumber }],
-    therapeuticGoals: [{ id, title, description*, status, dateSet, dateAchieved }],
-    previousTherapies: {
-      count: 0-5,
-      therapies: [{ startDate, endDate }],
-      totalSessions: Number,
-      notes: String
-    },
-    generalNotes: String
+    id:                 UUID,
+    firstName:          String,
+    lastName:           String,
+    pseudonym:          String,         // opcjonalny
+    isActive:           Boolean,        // domyślnie true
+    isArchived:         Boolean,
+    archivedDate:       ISO|null,
+    sessionsPerWeek:    1|2|3,
+    sessionRate:        Number,         // PLN
+    therapyStartDate:   ISO,
+    dateAdded:          ISO,
+    // [{weekday: 1–7 (ISO), sessionTime: "HH:MM"}]
+    sessionDayConfigs:  Array,
+    // [{id, startDate, endDate, cycleNumber}]
+    therapyCycles:      Array,
+    // [{id, startDate, endDate}]
+    vacationPeriods:    Array,
+    // [{id, title, status, dateSet, dateAchieved, notes}]
+    therapeuticGoals:   Array,
+    // [{id, date, category, title, content}]
+    progressEntries:    Array,
+    // [{id, date, content*, sessionId}] — ręczne notatki, szyfrowane
+    sessionNotes:       Array,
+    invoices:           Array,          // zarezerwowane
+    // [{id, startDate, endDate, sessionsCount}] — dane historyczne
+    previousTherapies:  Array
   }],
 
   sessions: [{
-    id: UUID,
-    patientId: UUID,
-    date: "yyyy-mm-dd",
-    time: "HH:MM",
-    status: "scheduled" | "completed" | "cancelled",
-    isPaymentRequired: Boolean,
-    isPaid: Boolean,
-    paymentId: UUID | null,
-    sessionNumber: Number | null,
-    cycleSessionNumber: Number | null,     // nr w bieżącej terapii
-    globalSessionNumber: Number | null,    // łącznie z poprzednimi
-    wasRescheduled: Boolean,
-    originalDate: "yyyy-mm-dd" | null,
-    originalTime: "HH:MM" | null,
-    notes: String*,                        // szyfrowane AES-256-GCM
-    cancellationReason: "patient" | "therapist" | "patient_vacation" | null
+    id:                   UUID,
+    date:                 ISO,          // data+czas sesji (pełny ISO)
+    patientId:            UUID,
+    status:               "scheduled"|"completed"|"cancelled",
+    isPaymentRequired:    Boolean,
+    isPaid:               Boolean,
+    paymentMethod:        String|null,
+    paymentDate:          ISO|null,
+    paymentAmount:        Number|null,
+    paymentId:            UUID|null,
+    isManuallyCreated:    Boolean,
+    sessionNumber:        Number|null,
+    globalSessionNumber:  Number|null,
+    cycleSessionNumber:   Number|null,
+    wasRescheduled:       Boolean,
+    originalDate:         ISO|null,
+    sessionNotes:         String*       // szyfrowane AES-256-GCM — widoczne w widoku pacjenta
   }],
 
   payments: [{
-    id: UUID,
-    patientId: UUID,
-    date: "yyyy-mm-dd",
-    amount: Number,              // PLN
-    method: "aliorBank" | "ingBank" | "cash",
-    sessionIds: [UUID],
+    id:            UUID,
+    patientId:     UUID,
+    date:          ISO,
+    amount:        Number,
+    method:        "aliorBank"|"ingBank"|"cash",
     sessionsCount: Number,
-    note: String
-  }],
-
-  sessionNotes: [{
-    id: UUID,
-    patientId: UUID,
-    sessionId: UUID | null,
-    date: "yyyy-mm-dd",
-    content: String*,            // szyfrowane AES-256-GCM
-    createdAt: "ISO timestamp",
-    modifiedAt: "ISO timestamp"
-  }],
-
-  progressEntries: [{
-    id: UUID,
-    patientId: UUID,
-    sessionId: UUID | null,
-    date: "yyyy-mm-dd",
-    category: "Przełom" | "Obserwacja" | "Zmiana" | "Inne",
-    title: String,
-    content: String*             // szyfrowane AES-256-GCM
+    sessionIds:    [UUID],
+    note:          String,
+    createdAt:     ISO
   }],
 
   blockedPeriods: [{
-    id: UUID,
-    startDate: "yyyy-mm-dd",
-    endDate: "yyyy-mm-dd",
-    reason: String
-  }],
-
-  invoices: []                   // zarezerwowane na przyszłość
+    id:        UUID,
+    startDate: ISO,
+    endDate:   ISO,
+    reason:    String
+  }]
 }
 // * = szyfrowane AES-256-GCM przed zapisem
 ```
@@ -423,53 +423,35 @@ Jedna aplikacja dedykowana psychoterapeutom, która:
 
 ---
 
-## 6. Design System — Liquid Glass
+## 6. Design System — Naturalistic Liquid Glass
 
 ### 6.1. Filozofia designu
 
-Inspiracja: **Apple Liquid Glass** (macOS Tahoe, WWDC 2025) + **Bold Editorial Design** (ekran logowania).
+Inspiracja: **Apple Liquid Glass** (macOS Tahoe, WWDC 2025) połączona z **ciepłą paletą botaniczną** — naturalne zielenie, ciepłe beże, delikatne cienie zamiast ostrych kontrastów.
 
 Kluczowe cechy:
-- **Glassmorphism** — półprzezroczyste tła z blur i saturate
+- **Glassmorphism** — `color-mix()`, półprzezroczyste tła, `backdrop-filter: blur()`
+- **Botaniczna paleta** — ciemnozielone akcenty (#49664f), ciepłe tła (#f7f2eb), naturalne cienie
+- **Zaokrąglenia** — duże promienie (16–28px) na kartach, przyciskach, formularzach
 - **Minimalizm** — czyste powierzchnie, dużo białej przestrzeni
-- **System Apple Colors** — kolory systemowe iOS/macOS
-- **Responsywność** — mobile-first z breakpointami na tablet i desktop
-- **Dark mode** — automatyczny na podstawie preferencji systemowych
+- **Responsywność** — mobile-first z breakpointami na tablet (768px), desktop (1024px), wide (1440px)
+- **Dark mode** — automatyczny na podstawie `prefers-color-scheme`, ciemnozielone tła (#223128)
 
 ### 6.2. Paleta kolorów
 
-**Kolory systemowe:**
-```
-Primary:      #007AFF (niebieski Apple)
-Primary Dark: #0056CC
-Primary Light:#5AC8FA
-Success:      #34C759 (zielony)
-Warning:      #FF9F0A (pomarańczowy)
-Danger:       #FF3B30 (czerwony)
-Neutral:      #8E8E93 (szary)
-```
-
-**Powierzchnie (Light Mode):**
-```
-Background:   #F2F2F7
-Card:         rgba(255,255,255,0.72)   + blur(20px) saturate(180%)
-Card Solid:   #FFFFFF
-Border:       rgba(0,0,0,0.08)
-Text:         #1C1C1E
-Text Sec.:    #8E8E93
+**Kolory główne (zmienne CSS):**
+```css
+--blue:           #49664f   /* Ciemnozielony — główny akcent */
+--text:           #243126   /* Tekst — ciemnozielony */
+--text-secondary: rgba(36,49,38,.68)
+--border:         rgba(73,102,79,.14)
+--surface-raised: #f7f2eb   /* Tło kart — ciepły beż */
+--green:          #6b9073   /* Sukces */
+--red:            #bf6152   /* Błąd/danger */
+--orange:         #cc8b56   /* Ostrzeżenie */
 ```
 
-**Powierzchnie (Dark Mode):**
-```
-Background:   #000000
-Card:         rgba(28,28,30,0.72)      + blur(20px) saturate(180%)
-Card Solid:   #1C1C1E
-Border:       rgba(255,255,255,0.1)
-Text:         #F5F5F7
-Text Sec.:    #8E8E93
-```
-
-**Kolory biznesowe (wykresy):**
+**Kolory biznesowe (wykresy przychodów):**
 ```
 Alior Bank:   #CC0000 (czerwony)
 ING Bank:     #FF6600 (pomarańczowy)
@@ -478,61 +460,47 @@ Gotówka:      #34C759 (zielony)
 
 ### 6.3. Typografia
 
-- **Ekran logowania:** Playfair Display (serif) — nagłówek „Gabinet Terapeutyczny", gradient tekst
-- **Cała aplikacja:** -apple-system, BlinkMacSystemFont, system-ui (domyślny stack Apple)
-- **Rozmiar bazowy:** 16px
-- **Nagłówki:** `font-weight: 700`
+- **Interfejs:** Manrope (sans-serif) — czcionka główna, font-weight 600–800
+- **Ekran logowania:** Playfair Display (serif) — nagłówek z gradientowym tekstem
+- **Rozmiar bazowy:** clamp()-based fluid sizing
+- **Nagłówki sekcji:** uppercase, letter-spacing 0.08–0.18em, font-weight 800, mały rozmiar (0.72–0.82rem)
 
 ### 6.4. Komponenty UI
 
-**Nawigacja (Dock):**
-- Mobile (dół ekranu): 5 ikon + etykiety, efekt powiększenia przy hover (do 1.55×), tooltip nad ikoną
-- Desktop (lewy sidebar, 240px): ikony + etykiety obok siebie, aktywny element z niebieskim tłem
+**Nawigacja (Tab Bar):**
+- Mobile (dół ekranu): floating pill z blur, 4 zakładki (Dziś, Pacjenci, Finanse, Ustawienia)
+- Desktop (lewy sidebar, 80px): pionowy pasek z ikonami, fixed
+- Aktywna zakładka podświetlona — poprawiona synchronizacja klasy `active` / `tab-btn--active`
 
-**Przyciski:**
-- Primary: gradient niebieski z glow
-- Outline: glass effect z obramowaniem
-- Danger: gradient czerwony
-- Warning: gradient pomarańczowy
-- FAB: okrągły, fixed bottom-right, niebieski gradient
+**Karty (Panel Cards):**
+- `border-radius: 24px`, `padding: 18px`
+- Tło: `color-mix(in srgb, var(--surface-raised) 92%, transparent)`
+- Cień: `var(--shadow-sm)`
+- Nagłówki kart: uppercase, mały rozmiar, duży tracking
 
 **Formularze:**
-- Inputy z glass backdrop
-- Focus: niebieskie obramowanie + glow
-- Error: czerwone obramowanie + glow
-- Toggle slider: iOS-style
+- Inputy: `border-radius: 16px`, `padding: .8rem .95rem`
+- Focus: zielone obramowanie + subtlejna poświata `rgba(73,102,79,.12)`
+- Sekcje formularza: zaokrąglone karty (24px)
 
-**Modale:**
-- Overlay ciemny, półprzezroczysty
-- Okno max 500px szerokości, wycentrowane
-- Header z przyciskiem ×, scrollowalny body
+**Notatki (Notebook View):**
+- Chronologiczna lista (najstarsze na górze, najnowsze na dole)
+- Data jako nagłówek każdej notatki
+- Etykieta „Sesja" (zielona, uppercase) przy notatkach z kalendarza
+- Pełna treść bez obcinania, `white-space: pre-wrap`
 
 **Toasty:**
-- Slide-in z prawej strony
-- 4 typy: info (niebieski), success (zielony), warning (pomarańczowy), error (czerwony)
-- Auto-hide po 3 sekundach
-
-**Listy:**
-- `.list-item` z tytułem i podtytułem
-- Badge z liczbą (np. nieopłacone sesje)
-- Empty state: szary tekst na środku
+- Slide-in z prawej strony, auto-hide po 3 sekundach
 
 ### 6.5. Breakpointy responsywne
 
 | Breakpoint | Zachowanie |
 |-----------|------------|
-| < 480px | Kompaktowy mobile |
-| < 768px | Mobile — bottom nav, brak sidebaru |
-| ≥ 768px | Tablet — sidebar widoczny, bottom nav ukryty |
-| ≥ 1024px | Desktop — szerszy content area |
-
-### 6.6. Ekran logowania (Bold Editorial)
-
-- Czcionka: Playfair Display (serif), oversized
-- Gradient tekst: `linear-gradient(135deg, #007AFF, #5AC8FA, #34C759)`
-- Animowane szklane orby w tle (CSS animation)
-- Podtytuł: „Twój cyfrowy asystent gabinetu psychoterapeutycznego"
-- Przycisk: „Zaloguj przez Google" z ikoną Google
+| < 640px | Kompaktowy mobile — 1 kolumna, pełna szerokość przycisków |
+| < 880px | Mobile — bottom nav, siatka 1-kolumnowa |
+| ≥ 768px | Tablet — content max-width 900px |
+| ≥ 1024px | Desktop — sidebar 80px po lewej, content max-width 960px |
+| ≥ 1440px | Wide desktop — content max-width 1080px |
 
 ---
 
@@ -542,8 +510,8 @@ Gotówka:      #34C759 (zielony)
 
 | Co jest szyfrowane | Algorytm | Gdzie klucz |
 |-------------------|----------|-------------|
-| Notatki do sesji | AES-256-GCM | localStorage przeglądarki |
-| Notatki kliniczne | AES-256-GCM | localStorage przeglądarki |
+| Notatki do sesji (sessionNotes) | AES-256-GCM | localStorage przeglądarki |
+| Notatki ręczne pacjenta | AES-256-GCM | localStorage przeglądarki |
 | Opisy celów terapeutycznych | AES-256-GCM | localStorage przeglądarki |
 | Wpisy postępów | AES-256-GCM | localStorage przeglądarki |
 
@@ -554,17 +522,17 @@ Gotówka:      #34C759 (zielony)
 
 ### 7.2. Pseudonimizacja
 
-- Każdy pacjent ma wymagany pseudonim (np. „Klient A", „Motyl")
+- Każdy pacjent może mieć pseudonim
 - Pseudonim wyświetlany jako główny identyfikator (duża czcionka)
 - Imię i nazwisko wyświetlane jako podrzędne (mała czcionka)
-- W kalendarzu widoczny tylko pseudonim
+- W kalendarzu widoczny pseudonim (jeśli ustawiony) lub imię
 
-### 7.3. Uwierzytelnianie
+### 7.3. Uwierzytelnianie i blokada
 
 - Google OAuth 2.0 — brak własnego systemu logowania
 - Token odświeżany automatycznie przed wygaśnięciem
 - Scope: `drive.file` — dostęp tylko do plików utworzonych przez aplikację
-- Klucze API ograniczone do domeny hostingu (Google Cloud Console)
+- **Automatyczna blokada ekranu po 15 minutach bezczynności** — nasłuchuje aktywności użytkownika (kliknięcia, ruchy myszy, scrolla, klawiatura, dotyk)
 
 ### 7.4. Znane ryzyka bezpieczeństwa
 
@@ -572,34 +540,35 @@ Gotówka:      #34C759 (zielony)
 2. Dane strukturalne (daty, kwoty, pseudonimy) nieszyfrowane na Drive
 3. Brak 2FA poza Google OAuth
 4. Brak audit log (kto/kiedy otwierał dane)
-5. Brak automatycznego wylogowania po okresie bezczynności
-6. Jeden użytkownik — brak systemu ról/uprawnień
+5. Jeden użytkownik — brak systemu ról/uprawnień
 
 ---
 
 ## 8. Przepływ użytkownika (User Flow)
 
 ### 8.1. Pierwsze uruchomienie
-1. Otwórz URL → ekran logowania (Bold Editorial)
+1. Otwórz URL → ekran logowania (Playfair Display, szklane orby w tle)
 2. Kliknij „Zaloguj przez Google" → consent screen Google
 3. Zatwierdzenie → aplikacja tworzy `gabinet-data.json` na Google Drive
-4. Ustawienia: wpisz dane terapeuty, godziny pracy
+4. Ustawienia: wpisz dane terapeuty
 5. Dodaj pierwszego pacjenta (imię, nazwisko, pseudonim, dni sesji, stawka)
 6. Sesje generowane automatycznie na bieżący miesiąc
 
 ### 8.2. Codzienny flow terapeuty
-1. Otwarcie aplikacji → kalendarz na dziś
-2. Kliknięcie sesji → modal z detalami
-3. Zmiana statusu na „Odbyła się" + notatka kliniczna → Zapisz
-4. Rejestracja płatności (po kilku sesjach)
-5. Sprawdzenie statystyk i przychodów (okresowo)
+1. Otwarcie aplikacji → kalendarz miesięczny (domyślny widok)
+2. Panel na górze: ile sesji dziś, należności, aktywni pacjenci
+3. Kliknięcie sesji → modal z detalami
+4. Zmiana statusu na „Odbyła się" + notatka kliniczna → Zapisz
+5. Notatka automatycznie pojawia się w widoku pacjenta w sekcji „Notatki i obserwacje"
+6. Rejestracja płatności (po kilku sesjach)
+7. Sprawdzenie kondycji finansowej (zakładka Finanse)
 
-### 8.3. Odwołanie sesji
-1. Kliknięcie sesji w kalendarzu
-2. Status → „Nie odbyła się"
-3. Jeśli w ostatniej chwili: toggle „Sesja płatna" ON
-4. Jeśli z wyprzedzeniem: toggle OFF → wybór powodu (pacjent / terapeuta / urlop)
-5. Zapisz
+### 8.3. Przeglądanie historii pacjenta
+1. Zakładka Pacjenci → kliknięcie pacjenta
+2. Sekcja „Kliniczne" → „Notatki i obserwacje"
+3. Chronologiczna lista notatek: od najstarszej do najnowszej
+4. Notatki z sesji (oznaczone „Sesja") + notatki ręczne — razem w jednej liście
+5. Pełna treść każdej notatki, z datą jako nagłówkiem
 
 ---
 
@@ -607,24 +576,26 @@ Gotówka:      #34C759 (zielony)
 
 ### 9.1. Co działa dobrze
 - Kompletny flow zarządzania sesjami i pacjentami
-- Automatyczne generowanie kalendarza
-- Szyfrowanie notatek klinicznych
-- Synchronizacja z Google Drive
+- Automatyczne generowanie kalendarza z uwzględnieniem urlopów i blokad
+- Szyfrowanie notatek klinicznych (AES-256-GCM)
+- Synchronizacja z Google Drive (z retry i offline cache)
+- Odzyskiwanie danych z historii wersji Google Drive (DataRecovery)
 - Instalacja PWA na telefonie
 - Tryb offline (odczyt z cache)
-- Responsywny design (mobile/tablet/desktop)
+- Responsywny design (mobile/tablet/desktop) z sidebar na dużych ekranach
 - Dark mode automatyczny
+- Automatyczna blokada ekranu (15 min bezczynności)
+- Ujednolicony panel skupienia w kalendarzu (identyczny dla widoku M/T/D)
+- Chronologiczny widok notatek (jak zeszyt) z automatycznym pobieraniem notatek sesji
 
 ### 9.2. Ograniczenia techniczne
 - **Jeden użytkownik** — brak multi-tenancy, brak kont użytkowników
 - **Brak backendu** — cała logika w przeglądarce, brak serwera
-- **Brak bazy danych** — jeden plik JSON na Google Drive (skalowalność?)
+- **Brak bazy danych** — jeden plik JSON na Google Drive
 - **Vanilla JS** — brak frameworka, trudniejsze utrzymanie przy rozbudowie
 - **Brak testów** — zero unit/integration/e2e testów
 - **Brak CI/CD** — poza GitHub Pages deploy
 - **Brak i18n** — hardcoded polski
-- **Chart.js z CDN** — brak kontroli wersji
-- **Brak backup** — poza historią wersji Google Drive
 
 ### 9.3. Ograniczenia funkcjonalne
 - Brak fakturowania (pole `invoices` zarezerwowane, ale puste)
@@ -635,7 +606,6 @@ Gotówka:      #34C759 (zielony)
 - Brak widoku dla pacjenta (portal pacjenta)
 - Brak RODO/GDPR compliance panel
 - Brak logów aktywności
-- Brak systemu uprawnień (np. sekretarka vs terapeuta)
 
 ---
 
@@ -649,56 +619,39 @@ GitHub repo (main) → GitHub Pages → https://pawelszmit.github.io/Gabinet/
 ### 10.2. Planowany setup
 ```
 VPS OVH Cloud → Nginx reverse proxy → domena.pl
-                                    → inna-domena.pl (inna aplikacja)
 ```
 
 ### 10.3. Wymagania serwera
-- Serwer HTTP (Nginx/Apache) — serwowanie plików statycznych
+- Serwer HTTP (Nginx) — serwowanie plików statycznych
 - SSL (Let's Encrypt) — HTTPS wymagany przez Google OAuth
 - Brak Node.js/Python/PHP — aplikacja jest czysto kliencka
 - Brak bazy danych na serwerze — dane na Google Drive użytkownika
 
 ---
 
-## 11. Metryki i KPI (do wdrożenia)
+## 11. Ostatnie zmiany (changelog v9 → v19)
 
-Obecnie brak analityki. Sugerowane metryki:
-- Liczba aktywnych użytkowników (DAU/MAU)
-- Liczba sesji zarejestrowanych per miesiąc
-- Średnia liczba pacjentów per terapeuta
-- Retencja użytkowników (30/60/90 dni)
-- Czas spędzony w aplikacji
-- Najczęściej używane funkcje
-
----
-
-## 12. Kontekst rynkowy
-
-### 12.1. Potencjalni użytkownicy
-- Psychoterapeuci z prywatną praktyką (gabinet 1-osobowy)
-- Psychologowie prowadzący terapie indywidualne
-- Coachowie i terapeuci par (z adaptacją)
-- Gabinety grupowe (wymaga multi-user)
-
-### 12.2. Potencjalna konkurencja (do zbadania)
-- Ogólne systemy CRM (zbyt rozbudowane)
-- Calendly / Cal.com (tylko rezerwacje, brak płatności/notatek)
-- Cliniko, SimplePractice, TherapyNotes (anglojęzyczne, drogie)
-- Arkusze Google / Notion (brak automatyzacji i szyfrowania)
-- Dedykowane polskie rozwiązania (do zbadania)
-
-### 12.3. Unikalne wyróżniki (USP)
-1. **Dedykowana dla polskich psychoterapeutów** — język, NIP, PLN
-2. **Szyfrowanie notatek klinicznych** — wrażliwe dane chronione
-3. **Pseudonimizacja** — dodatkowa warstwa prywatności
-4. **Automatyczny kalendarz sesji** — oszczędność czasu
-5. **Zero konfiguracji serwera** — dane na Google Drive użytkownika
-6. **PWA** — instalacja na telefonie bez App Store
-7. **Offline** — dostęp do danych bez internetu
+| Zmiana | Opis |
+|--------|------|
+| Migracja UI/UX | Przebudowa z Apple Blue na Naturalistic Liquid Glass (botaniczna paleta, Manrope, zaokrąglone karty) |
+| Moduły widoków | Nowa struktura: `views/calendar.js`, `views/patients.js`, `views/finance.js`, `views/settings.js` |
+| Szyfrowanie | Migracja na AES-256-GCM (Web Crypto API) |
+| Model danych v2 | `sessionDayConfigs[]` zamiast `sessionDays[]` + `sessionTimes{}`, daty ISO zamiast osobnych pól date/time |
+| DataRecovery | Moduł odzyskiwania danych z historii wersji Google Drive |
+| Kalendarz | Widok miesięczny domyślny, większe komórki, ujednolicony focus panel bez przycisków akcji |
+| Focus panel | Identyczny nagłówek dla widoków M/T/D — kicker, data, następna sesja, 4 kafelki |
+| Tab bar | Poprawiona synchronizacja klasy aktywnej zakładki |
+| Archiwum | Ikonka zastąpiona tekstem „Archiwum" wysuniętym do prawej krawędzi |
+| Edycja pacjenta | Naprawiony przycisk Edytuj (routing), dodana sekcja Poprzednie terapie |
+| Poprzednie terapie | Pole liczbowe → dynamiczne wiersze (Od/Do/Sesji); licznik `3 (57)` |
+| Badge prywatności | Usunięty badge „Pseudonim na pierwszym planie" z widoku pacjenta |
+| Notatki | Ujednolicona lista chronologiczna — notatki z sesji kalendarza + ręczne w jednym widoku (najstarsze na górze, jak zeszyt) |
+| Finanse | Krótszy tytuł, usunięty opis i przycisk, kafelki bez podtytułów, toggle 3/6/12 mies. na wykresie |
+| AutoLock | 2 min → 15 min timeout bezczynności |
+| Service Worker | Strategia: network-first (HTML) + cache-first (assets), wersjonowanie cache |
 
 ---
 
-*Dokument wygenerowany: 2026-03-23*
-*Wersja aplikacji: 1.0*
-*Cache: gabinet-v9*
-*Łączna liczba linii kodu: ~6800*
+*Dokument wygenerowany: 2026-03-23, zaktualizowany: 2026-03-26*
+*Wersja cache: gabinet-v19*
+*Łączna liczba linii kodu: ~11 000*
