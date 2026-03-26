@@ -664,7 +664,7 @@ const PatientViews = {
         : '';
       return (
         '<div class="pv-sess-row">' +
-          '<span class="pv-sess-date">Przed aplikacją ' + (prevs.length > 1 ? (i + 1) : '') + '</span>' +
+          '<span class="pv-sess-date">Poprzednia terapia' + (prevs.length > 1 ? ' ' + (i + 1) : '') + '</span>' +
           '<span class="pv-row-duration">' + dateRange + sessionsBadge + '</span>' +
         '</div>'
       );
