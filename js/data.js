@@ -611,6 +611,70 @@ function deserializeAppData(json) {
   AppState.blockedPeriods  = (data.blockedPeriods || []).map(createBlockedPeriod);
   AppState.settings        = createAppSettings(data.settings || {});
   AppState.generatedMonths = Array.isArray(data.generatedMonths) ? data.generatedMonths : [];
+
+  // Always reconcile payment flags so sessions stay in sync with payment records
+  reconcilePaymentStatus();
+}
+
+/**
+ * Reconciles isPaid / isPartiallyPaid / paymentId / paymentMethod / paymentDate
+ * on every session based on the authoritative Payment records.
+ *
+ * This is a data-integrity repair that runs after every load. It fixes
+ * inconsistencies caused by rescheduling, duplicate-session bugs, etc.
+ */
+function reconcilePaymentStatus() {
+  // Step 1 — clear payment flags on all sessions that appear in any payment.
+  const referenced = new Set();
+  AppState.payments.forEach(p => (p.sessionIds || []).forEach(id => referenced.add(id)));
+  AppState.sessions.forEach(s => {
+    if (!referenced.has(s.id)) return;
+    s.isPaid = false;
+    s.isPartiallyPaid = false;
+    s.partialPaymentAmount = null;
+    s.paymentId = null;
+    s.paymentMethod = null;
+    s.paymentDate = null;
+  });
+
+  // Step 2 — re-apply each payment using oldest-session-first distribution.
+  AppState.payments.forEach(payment => {
+    const sessions = (payment.sessionIds || [])
+      .map(id => AppState.sessions.find(s => s.id === id))
+      .filter(Boolean)
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    let remaining = Number(payment.amount) || 0;
+    sessions.forEach(session => {
+      const patient = getPatient(session.patientId);
+      const rate = (session.paymentAmount !== null && session.paymentAmount !== undefined)
+        ? session.paymentAmount
+        : (patient ? patient.sessionRate : 0);
+
+      session.paymentId     = payment.id;
+      session.paymentMethod = payment.method;
+      session.paymentDate   = payment.date;
+
+      if (remaining >= rate) {
+        session.isPaid              = true;
+        session.isPartiallyPaid     = false;
+        session.partialPaymentAmount = null;
+        remaining -= rate;
+      } else if (remaining > 0) {
+        session.isPaid              = false;
+        session.isPartiallyPaid     = true;
+        session.partialPaymentAmount = remaining;
+        remaining = 0;
+      } else {
+        session.isPaid              = false;
+        session.isPartiallyPaid     = false;
+        session.partialPaymentAmount = null;
+        session.paymentId            = null;
+        session.paymentMethod        = null;
+        session.paymentDate          = null;
+      }
+    });
+  });
 }
 
 /**
