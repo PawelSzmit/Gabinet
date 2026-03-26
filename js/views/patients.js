@@ -639,16 +639,42 @@ const PatientViews = {
   },
 
   _renderTherapyCyclesSection(patient) {
-    if (!patient.therapyCycles || patient.therapyCycles.length === 0) {
+    const cycles   = Array.isArray(patient.therapyCycles)    ? patient.therapyCycles    : [];
+    const prevs    = Array.isArray(patient.previousTherapies) ? patient.previousTherapies : [];
+
+    if (cycles.length === 0 && prevs.length === 0) {
       return '<p class="pv-empty-sub">Brak zapisanych cykli terapii.</p>';
     }
-    const rows = patient.therapyCycles.slice().reverse().map(cycle => (
+
+    // Current / app-managed cycles (newest first)
+    const cycleRows = cycles.slice().reverse().map(cycle => (
       '<div class="pv-sess-row">' +
         '<span class="pv-sess-date">Cykl ' + escHtml(String(cycle.cycleNumber || '—')) + '</span>' +
         '<span class="pv-row-duration">' + escHtml(formatDateShort(cycle.startDate)) + ' – ' + escHtml(cycle.endDate ? formatDateShort(cycle.endDate) : 'trwa') + '</span>' +
       '</div>'
     )).join('');
-    return '<div class="pv-sessions-list">' + rows + '</div>';
+
+    // Previous therapies entered manually (oldest first, to mirror form order)
+    const prevRows = prevs.map((t, i) => {
+      const dateRange = (t.startDate ? escHtml(formatDateShort(t.startDate)) : '?')
+        + ' – '
+        + (t.endDate ? escHtml(formatDateShort(t.endDate)) : '?');
+      const sessionsBadge = t.sessionsCount
+        ? '<span class="pv-cycle-sessions-badge">' + escHtml(String(t.sessionsCount)) + ' sesji</span>'
+        : '';
+      return (
+        '<div class="pv-sess-row">' +
+          '<span class="pv-sess-date">Przed aplikacją ' + (prevs.length > 1 ? (i + 1) : '') + '</span>' +
+          '<span class="pv-row-duration">' + dateRange + sessionsBadge + '</span>' +
+        '</div>'
+      );
+    }).join('');
+
+    const separator = (cycleRows && prevRows)
+      ? '<div class="pv-cycle-separator"></div>'
+      : '';
+
+    return '<div class="pv-sessions-list">' + cycleRows + separator + prevRows + '</div>';
   },
 
   // ── PATIENT FORM ─────────────────────────────────────────────────────────
@@ -1715,6 +1741,8 @@ const PatientViews = {
       '.pv-schedule-row{justify-content:space-between}',
       '.pv-schedule-day,.pv-goal-title{color:var(--text,#243126);font-weight:600}',
       '.pv-schedule-time,.pv-vacation-dates,.pv-sess-date,.pv-row-duration{color:var(--text-secondary,rgba(36,49,38,.68))}',
+      '.pv-cycle-sessions-badge{margin-left:.4rem;font-size:.75rem;font-weight:700;background:rgba(73,102,79,.1);color:var(--green,#49664f);border-radius:999px;padding:.1rem .5rem;white-space:nowrap}',
+      '.pv-cycle-separator{height:1px;background:var(--separator,rgba(73,102,79,.18));margin:.4rem 0}',
       '.pv-goal-icon{font-size:1rem;flex-shrink:0}',
       '.pv-goal-status{font-size:.74rem;padding:.2rem .48rem;border-radius:999px;font-weight:800}',
       '.pv-goal-status--inProgress{background:var(--blue-light,#dbe7d7);color:var(--blue,#49664f)}',
