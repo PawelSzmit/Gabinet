@@ -172,6 +172,10 @@ const SettingsView = (() => {
           <div class="sv-row sv-row-btn blue" id="sv-export-btn">
             <span>⬇️ Eksportuj dane (JSON)</span>
           </div>
+          <div class="sv-row sv-row-btn orange" id="sv-recover-btn">
+            <span>🔧 Odzyskaj czasy sesji z historii Drive</span>
+          </div>
+          <div id="sv-recover-log" style="padding:8px 16px;font-size:13px;color:#8e8e93;display:none;max-height:200px;overflow-y:auto;white-space:pre-line;"></div>
         </div>
 
         <!-- ABOUT -->
@@ -270,6 +274,41 @@ const SettingsView = (() => {
         }
         const ok = document.getElementById('sv-regen-ok');
         if (ok) { ok.style.display = 'block'; setTimeout(() => { ok.style.display = 'none'; }, 3000); }
+      });
+    }
+
+    // Recover data from Drive history
+    const recoverBtn = document.getElementById('sv-recover-btn');
+    if (recoverBtn) {
+      recoverBtn.addEventListener('click', async () => {
+        if (!confirm('Czy chcesz spróbować odzyskać oryginalne czasy sesji i harmonogramy pacjentów z historii wersji Google Drive?')) return;
+
+        const logEl = document.getElementById('sv-recover-log');
+        if (logEl) { logEl.style.display = 'block'; logEl.textContent = ''; }
+
+        const addLog = (msg) => {
+          if (logEl) logEl.textContent += msg + '\n';
+          console.log('[Recovery]', msg);
+        };
+
+        recoverBtn.style.pointerEvents = 'none';
+        recoverBtn.style.opacity = '0.5';
+
+        try {
+          if (typeof DataRecovery === 'undefined') throw new Error('DataRecovery nie jest dostępny.');
+          const result = await DataRecovery.recoverFromHistory(addLog);
+          if (result.sessionsFixed > 0 || result.patientsFixed > 0) {
+            if (typeof toast === 'function') toast('Dane odzyskane!', 'success');
+          } else {
+            if (typeof toast === 'function') toast('Nie znaleziono danych do naprawienia.', 'warning');
+          }
+        } catch (err) {
+          addLog('❌ Błąd: ' + err.message);
+          if (typeof toast === 'function') toast('Błąd odzyskiwania: ' + err.message, 'error');
+        } finally {
+          recoverBtn.style.pointerEvents = '';
+          recoverBtn.style.opacity = '';
+        }
       });
     }
 
