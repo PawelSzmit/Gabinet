@@ -51,6 +51,21 @@ const DriveService = {
         localStorage.setItem(LS_TOKEN_KEY,  response.access_token);
         localStorage.setItem(LS_EXPIRY_KEY, String(expiresAt));
 
+        // Fetch user profile (name + email) and cache it
+        fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: 'Bearer ' + response.access_token }
+        })
+          .then(r => r.json())
+          .then(info => {
+            if (info && (info.name || info.email)) {
+              localStorage.setItem('gabinet_user_info', JSON.stringify({
+                name:  info.name  || '',
+                email: info.email || '',
+              }));
+            }
+          })
+          .catch(() => {});
+
         if (this._tokenResolve) {
           this._tokenResolve(response.access_token);
         }
