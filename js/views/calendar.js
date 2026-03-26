@@ -595,15 +595,22 @@ const CalendarViews = {
                 + '</div>' : '')
           + '</div>')
       : '<div class="cal-detail-section"><p class="cal-detail-muted">Płatność nie jest wymagana.</p></div>';
-    const actionsSection = session.status === 'scheduled'
-      ? ('<div class="cal-detail-section">'
-          + '<h4 class="cal-detail-section-title">Akcje</h4>'
-          + '<div class="cal-detail-actions">'
-            + '<button class="cal-action-btn cal-action-complete" id="detail-btn-complete">Oznacz jako odbyła się</button>'
-            + '<button class="cal-action-btn cal-action-absent" id="detail-btn-absent">Nie odbyła się</button>'
-            + '<button class="cal-action-btn cal-action-reschedule" id="detail-btn-reschedule">Przełóż sesję</button>'
-          + '</div>'
-          + '</div>') : '';
+    const actionsSection = (
+      '<div class="cal-detail-section">'
+        + '<h4 class="cal-detail-section-title">Akcje</h4>'
+        + '<div class="cal-detail-actions">'
+          + (session.status !== 'completed'
+              ? '<button class="cal-action-btn cal-action-complete" id="detail-btn-complete">Oznacz jako odbyła się</button>'
+              : '<button class="cal-action-btn cal-action-complete cal-action-btn--active" id="detail-btn-complete">✓ Odbyła się — zmień</button>')
+          + (session.status !== 'cancelled'
+              ? '<button class="cal-action-btn cal-action-absent" id="detail-btn-absent">Nie odbyła się</button>'
+              : '<button class="cal-action-btn cal-action-absent cal-action-btn--active" id="detail-btn-absent">✕ Odwołana — zmień</button>')
+          + (session.status === 'scheduled'
+              ? '<button class="cal-action-btn cal-action-reschedule" id="detail-btn-reschedule">Przełóż sesję</button>'
+              : '')
+        + '</div>'
+      + '</div>'
+    );
     const cancelReasonLabels = { patient_vacation: 'Urlop pacjenta', patient_late: 'Odwołana w ostatniej chwili', therapist: 'Odwołana przez terapeutę' };
     const cancelReasonRow = session.status === 'cancelled' && session.cancellationReason
       ? ('<div class="cal-detail-row">'
@@ -710,7 +717,11 @@ const CalendarViews = {
     const btnComplete = modal.querySelector('#detail-btn-complete');
     if (btnComplete) {
       btnComplete.addEventListener('click', () => {
-        session.status = 'completed';
+        session.status             = 'completed';
+        session.cancellationReason = null;
+        session.isPaymentRequired  = true;
+        const patient = getPatient(session.patientId);
+        if (patient) recalculateSessionNumbers(patient);
         if (typeof persistData === 'function') persistData();
         modal.remove();
         this._refresh();
@@ -1199,6 +1210,7 @@ const CalendarViews = {
       '.cal-action-complete{background:#34C759;color:#fff}',
       '.cal-action-absent{background:#FF3B30;color:#fff}',
       '.cal-action-reschedule{background:#FF9500;color:#fff}',
+      '.cal-action-btn--active{opacity:.55;font-style:italic}',
       '.cal-edit-notes-btn{border:none;background:transparent;color:#007AFF;font-size:.85rem;font-weight:600;cursor:pointer;padding:0}',
       '@media (max-width: 880px){.cal-wrapper{padding:14px 14px calc(var(--tab-bar-height) + 24px)}.cal-focus-stats{grid-template-columns:repeat(2,1fr)}}',
       '@media (max-width: 600px){.cal-focus-top{grid-template-columns:1fr}.cal-focus-stats{grid-template-columns:repeat(2,1fr)}}',
