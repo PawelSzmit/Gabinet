@@ -611,6 +611,7 @@ const CalendarViews = {
           + (session.status === 'scheduled'
               ? '<button class="cal-action-btn cal-action-reschedule" id="detail-btn-reschedule">Przełóż sesję</button>'
               : '')
+          + '<button class="cal-action-btn cal-action-delete" id="detail-btn-delete">Usuń sesję</button>'
         + '</div>'
       + '</div>'
     );
@@ -735,6 +736,45 @@ const CalendarViews = {
     if (btnAbsent) btnAbsent.addEventListener('click', () => this._showAbsentDialog(session, modal));
     const btnReschedule = modal.querySelector('#detail-btn-reschedule');
     if (btnReschedule) btnReschedule.addEventListener('click', () => this._showRescheduleDialog(session, modal));
+    const btnDelete = modal.querySelector('#detail-btn-delete');
+    if (btnDelete) btnDelete.addEventListener('click', () => this._showDeleteSessionDialog(session, modal));
+  },
+
+  _showDeleteSessionDialog(session, parentModal) {
+    const patient = getPatient(session.patientId);
+    const name    = patient ? patient.firstName + ' ' + patient.lastName : '—';
+    const dateStr = formatDateTimeWithWeekday(new Date(session.date));
+    const dialog  = document.createElement('div');
+    dialog.className    = 'cal-modal-overlay';
+    dialog.style.zIndex = '10001';
+    dialog.innerHTML = (
+      '<div class="cal-modal-sheet" role="dialog" aria-modal="true">'
+      + '<div class="cal-modal-header">'
+        + '<button class="cal-modal-cancel" id="delete-session-cancel">Anuluj</button>'
+        + '<h2 class="cal-modal-title">Usuń sesję</h2>'
+        + '<button class="cal-modal-save cal-modal-save--danger" id="delete-session-confirm">Usuń</button>'
+      + '</div>'
+      + '<div class="cal-modal-body">'
+        + '<p class="cal-detail-muted" style="margin-bottom:8px">Czy na pewno chcesz usunąć tę sesję? Tej operacji nie można cofnąć.</p>'
+        + '<div class="cal-detail-section" style="margin-top:0">'
+          + '<div class="cal-detail-row"><span class="cal-detail-label">Pacjent</span><span class="cal-detail-value">' + name + '</span></div>'
+          + '<div class="cal-detail-row"><span class="cal-detail-label">Data</span><span class="cal-detail-value">' + dateStr + '</span></div>'
+        + '</div>'
+      + '</div>'
+      + '</div>'
+    );
+    document.body.appendChild(dialog);
+    dialog.querySelector('#delete-session-cancel').addEventListener('click', () => dialog.remove());
+    dialog.addEventListener('click', e => { if (e.target === dialog) dialog.remove(); });
+    dialog.querySelector('#delete-session-confirm').addEventListener('click', () => {
+      AppState.sessions = AppState.sessions.filter(s => s.id !== session.id);
+      if (patient) recalculateSessionNumbers(patient);
+      if (typeof persistData === 'function') persistData();
+      dialog.remove();
+      parentModal.remove();
+      this._refresh();
+      toast('Sesja usunięta.', 'success');
+    });
   },
 
   _showAbsentDialog(session, parentModal) {
@@ -1215,6 +1255,8 @@ const CalendarViews = {
       '.cal-action-complete{background:#34C759;color:#fff}',
       '.cal-action-absent{background:#FF3B30;color:#fff}',
       '.cal-action-reschedule{background:#FF9500;color:#fff}',
+      '.cal-action-delete{background:transparent;color:#FF3B30;border:1.5px solid #FF3B30}',
+      '.cal-modal-save--danger{background:#FF3B30;color:#fff}',
       '.cal-action-btn--active{opacity:.55;font-style:italic}',
       '.cal-edit-notes-btn{border:none;background:transparent;color:#007AFF;font-size:.85rem;font-weight:600;cursor:pointer;padding:0}',
       '@media (max-width: 880px){.cal-wrapper{padding:14px 14px calc(var(--tab-bar-height) + 24px)}.cal-focus-stats{grid-template-columns:repeat(2,1fr)}}',
