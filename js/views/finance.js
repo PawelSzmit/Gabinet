@@ -6,6 +6,7 @@ const FinanceViews = (() => {
   let currentTab = 'dashboard';
   let containerRef = null;
   let paymentFilters = { method: 'all', from: '', to: '' };
+  let chartPeriod = 6;
 
   function injectStyles() {
     if (document.getElementById('fin-styles')) return;
@@ -17,7 +18,11 @@ const FinanceViews = (() => {
       '.fin-shell{border-radius:30px;padding:24px}',
       '.fin-hero{display:grid;grid-template-columns:1.1fr .9fr;gap:16px;align-items:start}',
       '.fin-kicker{display:inline-block;margin-bottom:10px;font-size:.72rem;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:var(--blue,#49664f)}',
-      '.fin-title{margin:0;font-family:var(--font-display,"Fraunces",serif);font-size:clamp(2rem,4vw,3.2rem);line-height:.96;letter-spacing:-.06em;color:var(--text,#243126);max-width:10ch}',
+      '.fin-title{margin:0;font-family:var(--font-display,"Fraunces",serif);font-size:clamp(1.5rem,3vw,2.4rem);line-height:1;letter-spacing:-.04em;color:var(--text,#243126);white-space:nowrap}',
+      '.fin-section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}',
+      '.fin-period-toggle{display:flex;gap:4px;background:rgba(255,255,255,.48);border-radius:999px;padding:4px;border:1px solid var(--border,rgba(73,102,79,.12))}',
+      '.fin-period-btn{border:none;background:transparent;padding:7px 11px;border-radius:999px;font-size:.74rem;font-weight:800;cursor:pointer;color:var(--text-secondary,rgba(36,49,38,.68))}',
+      '.fin-period-btn.active{background:#fff;color:var(--blue,#49664f);box-shadow:0 4px 10px rgba(31,43,35,.08)}',
       '.fin-text{margin:14px 0 0;max-width:38rem;color:var(--text-secondary,rgba(36,49,38,.68));line-height:1.75}',
       '.fin-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px}',
       '.fin-action{border:none;border-radius:999px;padding:13px 16px;font-size:.84rem;font-weight:800;cursor:pointer;background:rgba(255,255,255,.68);color:var(--blue,#49664f);transition:transform .15s ease,background .15s ease}',
@@ -227,11 +232,12 @@ const FinanceViews = (() => {
     return points;
   }
 
-  function renderRevenueBars() {
-    const points = monthlyRevenueSeries(6);
+  function renderRevenueBars(period) {
+    const points = monthlyRevenueSeries(period);
     const max = Math.max(...points.map((point) => point.value), 1);
+    const cols = period <= 3 ? 3 : period <= 6 ? 6 : 12;
     return (
-      '<div class="fin-bar-chart">' +
+      '<div class="fin-bar-chart" style="grid-template-columns:repeat(' + cols + ',minmax(0,1fr))">' +
       points.map((point) => (
         '<div class="fin-bar">' +
           '<div class="fin-bar__value">' + (point.value ? escHtml(formatCurrency(point.value)) : '&nbsp;') + '</div>' +
@@ -275,11 +281,9 @@ const FinanceViews = (() => {
           '<div class="fin-hero">' +
             '<div>' +
               '<span class="fin-kicker">Finanse</span>' +
-              '<h1 class="fin-title">Kondycja gabinetu bez arkuszy i zgadywania.</h1>' +
-              '<p class="fin-text">Zobacz bieżący przychód, zaległości i najważniejsze działania finansowe w jednym spokojnym panelu.</p>' +
+              '<h1 class="fin-title">Kondycja finansowa gabinetu</h1>' +
               '<div class="fin-actions">' +
                 '<button class="fin-action fin-action--primary" id="fin-open-add-payment">Zarejestruj płatność</button>' +
-                '<button class="fin-action" id="fin-open-patients">Przejdź do pacjentów</button>' +
               '</div>' +
             '</div>' +
             '<div class="fin-highlight">' +
@@ -289,10 +293,10 @@ const FinanceViews = (() => {
             '</div>' +
           '</div>' +
           '<div class="fin-metric-grid">' +
-            '<article class="fin-metric"><span>Przychód</span><strong>' + escHtml(formatCurrency(monthRevenue)) + '</strong><small>bieżący miesiąc</small></article>' +
-            '<article class="fin-metric"><span>Należności</span><strong>' + escHtml(formatCurrency(outstandingTotal)) + '</strong><small>' + outstanding.length + ' sesji czeka na rozliczenie</small></article>' +
-            '<article class="fin-metric"><span>Pacjenci z zaległościami</span><strong>' + Object.keys(debtMap).length + '</strong><small>potrzebują spokojnej reakcji</small></article>' +
-            '<article class="fin-metric"><span>Śr. przychód / miesiąc</span><strong>' + escHtml(formatCurrency(averageMonthlyRevenue)) + '</strong><small>rok bieżący</small></article>' +
+            '<article class="fin-metric"><span>Przychód</span><strong>' + escHtml(formatCurrency(monthRevenue)) + '</strong></article>' +
+            '<article class="fin-metric"><span>Należności</span><strong>' + escHtml(formatCurrency(outstandingTotal)) + '</strong></article>' +
+            '<article class="fin-metric"><span>Pacjenci z zaległościami</span><strong>' + Object.keys(debtMap).length + '</strong></article>' +
+            '<article class="fin-metric"><span>Śr. przychód / miesiąc</span><strong>' + escHtml(formatCurrency(averageMonthlyRevenue)) + '</strong></article>' +
           '</div>' +
         '</section>' +
 
@@ -309,16 +313,23 @@ const FinanceViews = (() => {
           '<section class="fin-section">' +
             '<h2 class="fin-section-title">Rzeczy wymagające uwagi</h2>' +
             '<div class="fin-actions-list">' +
-              '<div class="fin-action-row"><div><strong>' + outstanding.length + ' sesji do rozliczenia</strong><span>zaległe lub odwołane płatne spotkania</span></div></div>' +
-              '<div class="fin-action-row"><div><strong>' + Object.keys(debtMap).length + ' pacjentów z należnościami</strong><span>warto sprawdzić kontekst terapii i ostatnie ustalenia</span></div></div>' +
-              '<div class="fin-action-row"><div><strong>' + paid + ' opłaconych w tym miesiącu</strong><span>bieżący rytm przychodów gabinetu</span></div></div>' +
+              '<div class="fin-action-row"><strong>' + outstanding.length + ' sesji do rozliczenia</strong></div>' +
+              '<div class="fin-action-row"><strong>' + Object.keys(debtMap).length + ' pacjentów z należnościami</strong></div>' +
+              '<div class="fin-action-row"><strong>' + paid + ' opłaconych w tym miesiącu</strong></div>' +
             '</div>' +
           '</section>' +
         '</div>' +
 
         '<section class="fin-section">' +
-          '<h2 class="fin-section-title">Trend przychodów</h2>' +
-          renderRevenueBars() +
+          '<div class="fin-section-header">' +
+            '<h2 class="fin-section-title" style="margin:0">Trend przychodów</h2>' +
+            '<div class="fin-period-toggle" id="fin-period-toggle">' +
+              '<button class="fin-period-btn' + (chartPeriod === 3  ? ' active' : '') + '" data-period="3">3 mies.</button>' +
+              '<button class="fin-period-btn' + (chartPeriod === 6  ? ' active' : '') + '" data-period="6">6 mies.</button>' +
+              '<button class="fin-period-btn' + (chartPeriod === 12 ? ' active' : '') + '" data-period="12">12 mies.</button>' +
+            '</div>' +
+          '</div>' +
+          '<div id="fin-bars-wrap" style="margin-top:14px">' + renderRevenueBars(chartPeriod) + '</div>' +
         '</section>' +
 
         '<section class="fin-section">' +
@@ -421,9 +432,18 @@ const FinanceViews = (() => {
       button.addEventListener('click', () => openAddPayment());
     });
 
-    const patientsButton = container.querySelector('#fin-open-patients');
-    if (patientsButton) {
-      patientsButton.addEventListener('click', () => Router.navigate('patients'));
+    const periodToggle = container.querySelector('#fin-period-toggle');
+    if (periodToggle) {
+      periodToggle.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-period]');
+        if (!btn) return;
+        chartPeriod = Number(btn.dataset.period);
+        const barsWrap = container.querySelector('#fin-bars-wrap');
+        if (barsWrap) barsWrap.innerHTML = renderRevenueBars(chartPeriod);
+        periodToggle.querySelectorAll('.fin-period-btn').forEach((b) => {
+          b.classList.toggle('active', Number(b.dataset.period) === chartPeriod);
+        });
+      });
     }
 
     container.querySelectorAll('.fin-chip').forEach((chip) => {
