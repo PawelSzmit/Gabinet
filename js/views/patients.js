@@ -110,18 +110,30 @@ const PatientViews = {
     if (!patient) return;
     const container = document.getElementById('view-container');
     if (!container) return;
+
+    const fillBody = (row, encryptedContent) => {
+      if (!row) return;
+      const el = row.querySelector('.pv-note-body');
+      if (!el) return;
+      Encryption.decrypt(encryptedContent).then(decrypted => {
+        el.textContent = decrypted && decrypted.trim() ? decrypted : '(pusta notatka)';
+      }).catch(() => {
+        el.textContent = '(nie mo\u017cna odczyta\u0107)';
+      });
+    };
+
+    // Manual notes
     (patient.sessionNotes || []).forEach(n => {
       if (!n.content) return;
-      const row = container.querySelector('.pv-note-row[data-noteid="' + n.id + '"]');
-      if (!row) return;
-      const preview = row.querySelector('.pv-note-preview');
-      if (!preview) return;
-      Encryption.decrypt(n.content).then(decrypted => {
-        const text = decrypted.slice(0, 100);
-        const ellipsis = decrypted.length > 100 ? '\u2026' : '';
-        preview.textContent = text + ellipsis;
-      });
+      fillBody(container.querySelector('.pv-note-row[data-noteid="' + n.id + '"]'), n.content);
     });
+
+    // Calendar session notes
+    getPatientSessions(patientId)
+      .filter(s => s.sessionNotes && s.sessionNotes.trim())
+      .forEach(s => {
+        fillBody(container.querySelector('.pv-note-row[data-sessionnoteid="' + s.id + '"]'), s.sessionNotes);
+      });
   },
 
   _renderFormPage(patientId) {
@@ -332,7 +344,8 @@ const PatientViews = {
     const color          = avatarColor(patient.firstName || patient.pseudonym);
     const duration       = getPatientTherapyDuration(patient);
     const fullName       = ((patient.firstName || '') + ' ' + (patient.lastName || '')).trim();
-    const notesCount     = (patient.sessionNotes || []).length;
+    const sessionNotesWithContent = sessions.filter(s => s.sessionNotes && s.sessionNotes.trim());
+    const notesCount     = (patient.sessionNotes || []).length + sessionNotesWithContent.length;
     const goalsCount     = (patient.therapeuticGoals || []).length;
     const progressCount  = (patient.progressEntries || []).length;
     const debtAmount     = debt.total > 0 ? formatPLN(debt.total) : 'Brak zaległości';
@@ -520,23 +533,55 @@ const PatientViews = {
   },
 
   _renderNotesSection(patient) {
-    if (!patient.sessionNotes || patient.sessionNotes.length === 0) {
+    // Combine manual notes and calendar session notes into one chronological list
+    const manualNotes = (patient.sessionNotes || []).map(n => ({
+      date:    n.date,
+      type:    'manual',
+      id:      n.id,
+      content: n.content,
+    }));
+
+    const sessionNotes = getPatientSessions(patient.id)
+      .filter(s => s.sessionNotes && s.sessionNotes.trim())
+      .map(s => ({
+        date:    s.date,
+        type:    'session',
+        id:      s.id,
+        content: s.sessionNotes,
+      }));
+
+    // Oldest first — newest at the bottom, like a notebook
+    const all = manualNotes.concat(sessionNotes)
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    if (all.length === 0) {
       return '<p class="pv-empty-sub">Brak notatek.</p>';
     }
-    const rows = patient.sessionNotes.slice().reverse().map(n => {
-      const preview = (n.content || '').slice(0, 100);
-      const ellipsis = (n.content || '').length > 100 ? '\u2026' : '';
+
+    const rows = all.map(item => {
+      const isSession  = item.type === 'session';
+      const dataAttr   = isSession
+        ? 'data-sessionnoteid="' + escHtml(item.id) + '"'
+        : 'data-noteid="' + escHtml(item.id) + '"';
+      const typeTag    = isSession
+        ? '<span class="pv-note-type-tag">Sesja</span>'
+        : '';
+      const deleteBtn  = isSession
+        ? ''
+        : '<button class="pv-row-delete-btn" data-noteid="' + escHtml(item.id) + '"' +
+            ' data-patientid="' + escHtml(patient.id) + '" title="Usu\u0144 notatk\u0119">&#10005;</button>';
       return (
-        '<div class="pv-note-row" data-noteid="' + escHtml(n.id) + '">' +
+        '<div class="pv-note-row" ' + dataAttr + '>' +
           '<div class="pv-note-header">' +
-            '<span class="pv-note-date">' + escHtml(formatDateMedium(n.date)) + '</span>' +
-            '<button class="pv-row-delete-btn" data-noteid="' + escHtml(n.id) + '"' +
-              ' data-patientid="' + escHtml(patient.id) + '" title="Usu\u0144 notatk\u0119">&#10005;</button>' +
+            '<span class="pv-note-date">' + escHtml(formatDateMedium(item.date)) + '</span>' +
+            typeTag +
+            deleteBtn +
           '</div>' +
-          '<p class="pv-note-preview">' + escHtml(preview) + ellipsis + '</p>' +
+          '<p class="pv-note-body">\u2026</p>' +
         '</div>'
       );
     }).join('');
+
     return '<div class="pv-notes-list">' + rows + '</div>';
   },
 
@@ -1690,6 +1735,8 @@ const PatientViews = {
       '.pv-day-toggle input[type=checkbox]{width:1.1rem;height:1.1rem;accent-color:var(--blue,#49664f);cursor:pointer}',
       '.pv-day-label{font-weight:600}',
       '.pv-time-input:disabled{opacity:.35;pointer-events:none}',
+      '.pv-note-body{font-size:.9rem;color:var(--text,#243126);line-height:1.65;margin:6px 0 0;white-space:pre-wrap;word-break:break-word}',
+      '.pv-note-type-tag{font-size:.7rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--blue,#49664f);background:rgba(73,102,79,.1);border-radius:6px;padding:2px 7px;margin-left:6px}',
       '.pv-prev-therapy-row{border:1.5px solid var(--border,rgba(73,102,79,.14));border-radius:16px;padding:12px 14px;margin-bottom:10px;background:rgba(255,255,255,.5)}',
       '.pv-prev-therapy-fields{display:grid;grid-template-columns:1fr 1fr 80px;gap:.6rem;align-items:end}',
       '.pv-form-label--inline{margin-bottom:0}',
