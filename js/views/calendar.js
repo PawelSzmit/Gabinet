@@ -7,25 +7,63 @@
 const CalendarViews = {
   currentDate:  new Date(),
   selectedDate: new Date(),
-  viewMode:     'daily',
+  viewMode:     'monthly',
 
   render() {
     const container = document.getElementById('view-container');
     if (!container) return;
+    const showFocusPanel = this.viewMode !== 'monthly';
     container.innerHTML = [
       '<div class="cal-wrapper cal-wrapper--' + this.viewMode + '">',
-        this.renderFocusPanel(),
+        showFocusPanel ? this.renderFocusPanel() : this._renderMonthlyHeader(),
         this._renderToolbar(),
         '<div class="cal-body" id="cal-body">',
           this._renderCurrentView(),
         '</div>',
         '<div class="cal-day-sessions" id="cal-day-sessions">',
-          this.renderDaySessionsList(this.selectedDate),
+          this.viewMode === 'monthly' ? this.renderDaySessionsList(this.selectedDate) : '',
         '</div>',
       '</div>',
     ].join('');
     this._injectStyles();
     this.bindEvents();
+  },
+
+  _renderMonthlyHeader() {
+    const today = new Date();
+    const todaySessions = getSessionsByDate(this._dateKey(today));
+    const upcoming = AppState.sessions
+      .filter(s => s.status === 'scheduled' && new Date(s.date) >= today)
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
+    const nextSession = upcoming[0] || null;
+    const nextPatient = nextSession ? getPatient(nextSession.patientId) : null;
+    const unpaidTotal = AppState.sessions.filter(s => {
+      if (s.isPaid || !s.isPaymentRequired) return false;
+      return s.status === 'completed' || s.status === 'cancelled';
+    }).reduce((sum, s) => {
+      const p = getPatient(s.patientId);
+      return sum + (s.paymentAmount !== null ? s.paymentAmount : (p ? p.sessionRate : 0));
+    }, 0);
+    const nextText = nextSession
+      ? (this._escapeHtml(nextPatient ? (nextPatient.pseudonym || nextPatient.firstName) : '?')
+        + ' · ' + formatDateTimeWithWeekday(new Date(nextSession.date)))
+      : 'Brak zaplanowanych sesji';
+    return '<div class="cal-month-header">'
+      + '<div class="cal-month-header-stats">'
+        + '<div class="cal-mhs-item"><span class="cal-mhs-label">Sesje dziś</span><strong>' + todaySessions.length + '</strong></div>'
+        + '<div class="cal-mhs-item"><span class="cal-mhs-label">Aktywni</span><strong>' + AppState.activePatients.length + '</strong></div>'
+        + (unpaidTotal > 0 ? '<div class="cal-mhs-item cal-mhs-debt"><span class="cal-mhs-label">Należności</span><strong>' + formatPLN(unpaidTotal) + '</strong></div>' : '')
+      + '</div>'
+      + '<div class="cal-mhs-next">'
+        + '<span class="cal-mhs-next-label">Następna:</span> '
+        + '<span class="cal-mhs-next-text">' + nextText + '</span>'
+      + '</div>'
+      + '<div class="cal-month-header-actions">'
+        + '<button class="cal-focus-action cal-focus-action--primary" id="today-btn-add-session">Dodaj sesję</button>'
+        + '<button class="cal-focus-action" id="today-btn-add-payment">Zarejestruj płatność</button>'
+        + '<button class="cal-focus-action" id="today-btn-open-patients">Pacjenci</button>'
+      + '</div>'
+      + '</div>';
   },
 
   renderFocusPanel() {
@@ -901,6 +939,16 @@ const CalendarViews = {
   },
 
   _refresh() {
+    // If switching between monthly and other views, we need a full re-render
+    // because the focus panel changes
+    const wrapper = document.querySelector('.cal-wrapper');
+    const isMonthly = this.viewMode === 'monthly';
+    const wasMonthly = wrapper && wrapper.classList.contains('cal-wrapper--monthly');
+    if (isMonthly !== wasMonthly) {
+      this.render();
+      return;
+    }
+
     const body = document.getElementById('cal-body');
     if (body) body.innerHTML = this._renderCurrentView();
     const title = document.getElementById('cal-title');
@@ -1022,7 +1070,20 @@ const CalendarViews = {
     const style = document.createElement('style');
     style.id = 'cal-styles';
     const rules = [
-      '.cal-wrapper{display:flex;flex-direction:column;height:100%;overflow:hidden;background:transparent;font-family:var(--font-sans,"Manrope",sans-serif);padding:18px 18px calc(var(--tab-bar-height) + 30px)}',
+      '.cal-wrapper{display:flex;flex-direction:column;min-height:100%;background:transparent;font-family:var(--font-sans,"Manrope",sans-serif);padding:18px 18px calc(var(--tab-bar-height) + 30px)}',
+      '.cal-wrapper--monthly{height:auto;overflow:visible}',
+      '.cal-wrapper--daily,.cal-wrapper--weekly{height:100%;overflow:hidden}',
+      /* Monthly compact header */
+      '.cal-month-header{background:color-mix(in srgb,var(--surface-raised,#f7f2eb) 92%, transparent);border:1px solid var(--border,rgba(73,102,79,.14));border-radius:20px;padding:14px 18px;margin-bottom:12px;box-shadow:var(--shadow-sm)}',
+      '.cal-month-header-stats{display:flex;gap:20px;align-items:center;flex-wrap:wrap}',
+      '.cal-mhs-item{display:flex;flex-direction:column;gap:1px}',
+      '.cal-mhs-label{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text-secondary,rgba(36,49,38,.6))}',
+      '.cal-mhs-item strong{font-size:1.25rem;font-weight:800;color:var(--text,#243126);line-height:1}',
+      '.cal-mhs-debt strong{color:#FF3B30}',
+      '.cal-mhs-next{font-size:.82rem;color:var(--text-secondary,rgba(36,49,38,.68));margin-top:8px;padding-top:8px;border-top:1px solid var(--border,rgba(73,102,79,.1))}',
+      '.cal-mhs-next-label{font-weight:700;color:var(--text,#243126)}',
+      '.cal-month-header-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}',
+      '.cal-month-header-actions .cal-focus-action{padding:9px 14px;font-size:.8rem}',
       '.cal-focus-panel{display:grid;grid-template-columns:1.2fr .9fr;gap:16px;padding:22px 24px;margin-bottom:14px;border-radius:28px;background:color-mix(in srgb,var(--surface-raised,#f7f2eb) 92%, transparent);border:1px solid var(--border,rgba(73,102,79,.14));box-shadow:var(--shadow-md)}',
       '.cal-focus-kicker{display:inline-block;margin-bottom:12px;font-size:.72rem;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:var(--blue,#49664f)}',
       '.cal-focus-title{margin:0;font-family:var(--font-display,"Fraunces",serif);font-size:clamp(2rem,4vw,3rem);line-height:.96;letter-spacing:-.05em;color:var(--text,#243126);max-width:11ch}',
@@ -1061,11 +1122,13 @@ const CalendarViews = {
       '.cal-add-menu-item{display:block;width:100%;padding:14px 16px;border:none;background:transparent;text-align:left;font-size:.9rem;cursor:pointer;color:var(--text,#243126);border-bottom:1px solid var(--separator,rgba(73,102,79,.12))}',
       '.cal-add-menu-item:last-child{border-bottom:none}.cal-add-menu-item:hover{background:rgba(255,255,255,.6)}',
       '.cal-body{flex:1;overflow-y:auto;overflow-x:hidden;min-height:0}',
+      '.cal-wrapper--monthly .cal-body{flex:none;overflow:visible}',
       '.cal-monthly{display:flex;flex-direction:column}',
       '.cal-grid-headers{display:grid;grid-template-columns:repeat(7,1fr);background:#fff;border-bottom:1px solid #e0e0e5;position:sticky;top:0;z-index:5}',
       '.cal-header-cell{text-align:center;font-size:.72rem;font-weight:600;color:#8e8e93;padding:6px 0;text-transform:uppercase;letter-spacing:.03em}',
       '.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);background:#e0e0e5;gap:1px}',
-      '.cal-cell{background:#fff;min-height:56px;padding:4px 3px;cursor:pointer;position:relative;display:flex;flex-direction:column;align-items:flex-start;transition:background .12s;user-select:none}',
+      '.cal-cell{background:#fff;min-height:80px;padding:6px 4px;cursor:pointer;position:relative;display:flex;flex-direction:column;align-items:flex-start;transition:background .12s;user-select:none}',
+      '@media (min-width:600px){.cal-cell{min-height:100px}}',
       '.cal-cell:active{background:#eef5ff}',
       '.cal-cell-other{background:#fafafa;opacity:.55;cursor:default;pointer-events:none}',
       '.cal-cell-weekend .cal-day-num{color:#8e8e93}',
@@ -1107,7 +1170,8 @@ const CalendarViews = {
       '.cal-daily-event-time{font-size:.78rem;font-weight:700;color:#1c1c1e}',
       '.cal-daily-event-name{font-size:.85rem;color:#1c1c1e;font-weight:500}',
       '.cal-daily-event-flag{font-size:.72rem;color:#FF9500;margin-top:2px}',
-      '.cal-day-sessions{border-top:1px solid var(--separator,rgba(73,102,79,.12));background:color-mix(in srgb,var(--surface-raised,#f7f2eb) 90%, transparent);flex-shrink:0;max-height:42vh;overflow-y:auto;border-radius:0 0 24px 24px;box-shadow:var(--shadow-sm)}',
+      '.cal-day-sessions{border-top:1px solid var(--separator,rgba(73,102,79,.12));background:color-mix(in srgb,var(--surface-raised,#f7f2eb) 90%, transparent);flex-shrink:0;max-height:42vh;overflow-y:auto;border-radius:0 0 24px 24px;box-shadow:var(--shadow-sm);margin-top:12px}',
+      '.cal-wrapper--monthly .cal-day-sessions{max-height:none;overflow:visible;border-radius:20px;border-top:none}',
       '.cal-sessions-list{padding-bottom:8px}',
       '.cal-sessions-list-header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px 6px;border-bottom:1px solid #f2f2f7;position:sticky;top:0;background:#fff;z-index:2}',
       '.cal-sessions-list-title{font-size:.88rem;font-weight:600;color:#1c1c1e;margin:0;text-transform:capitalize}',
