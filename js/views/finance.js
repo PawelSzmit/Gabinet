@@ -195,7 +195,11 @@ const FinanceViews = (() => {
         grouped[session.patientId] = { sessions: [], total: 0 };
       }
       grouped[session.patientId].sessions.push(session);
-      grouped[session.patientId].total += sessionAmount(session);
+      const full = sessionAmount(session);
+      const owed = session.isPartiallyPaid && session.partialPaymentAmount
+        ? full - session.partialPaymentAmount
+        : full;
+      grouped[session.patientId].total += owed;
     });
     return grouped;
   }
@@ -257,7 +261,13 @@ const FinanceViews = (() => {
     const monthRevenue = monthSessions.filter((session) => session.isPaid)
       .reduce((sum, session) => sum + sessionAmount(session), 0);
     const outstanding = outstandingSessions();
-    const outstandingTotal = outstanding.reduce((sum, session) => sum + sessionAmount(session), 0);
+    const outstandingTotal = outstanding.reduce((sum, session) => {
+      const full = sessionAmount(session);
+      const owed = session.isPartiallyPaid && session.partialPaymentAmount
+        ? full - session.partialPaymentAmount
+        : full;
+      return sum + owed;
+    }, 0);
     const methods = revenueByMethod(monthSessions);
     const debtMap = outstandingByPatient();
     const debtRows = Object.keys(debtMap).map((patientId) => {
