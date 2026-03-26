@@ -324,6 +324,8 @@ const PatientViews = {
     const debt           = getPatientDebt(patientId);
     const sessions       = getPatientSessions(patientId);
     const completedCount = sessions.filter(s => s.status === 'completed').length;
+    const prevTotal      = (patient.previousTherapies || []).reduce((s, t) => s + (parseInt(t.sessionsCount, 10) || 0), 0);
+    const sessionDisplay = prevTotal > 0 ? completedCount + ' (' + (completedCount + prevTotal) + ')' : String(completedCount);
     const lastTen        = sessions.slice().reverse().slice(0, 12);
     const display        = patientDisplayName(patient);
     const initials       = patientInitials(patient);
@@ -335,9 +337,6 @@ const PatientViews = {
     const progressCount  = (patient.progressEntries || []).length;
     const debtAmount     = debt.total > 0 ? formatPLN(debt.total) : 'Brak zaległości';
 
-    const privacyBadge = patient.pseudonym
-      ? '<span class="pv-debt-badge pv-debt-badge--soft">Pseudonim na pierwszym planie</span>'
-      : '';
     const pseudonymDl = patient.pseudonym
       ? '<dt>Pseudonim</dt><dd>' + escHtml(patient.pseudonym) + '</dd>'
       : '';
@@ -354,12 +353,11 @@ const PatientViews = {
           '<h1 class="pv-detail-name">' + escHtml(display) + '</h1>' +
           '<p class="pv-detail-pseudonym">' + escHtml(fullName) + '</p>' +
           '<div class="pv-detail-badges">' +
-            privacyBadge +
             '<span class="pv-debt-badge">' + escHtml(debtAmount) + '</span>' +
           '</div>' +
           '<div class="pv-overview-stats">' +
             '<article class="pv-overview-stat"><span>Czas terapii</span><strong>' + escHtml(duration) + '</strong></article>' +
-            '<article class="pv-overview-stat"><span>Sesje</span><strong>' + completedCount + '</strong></article>' +
+            '<article class="pv-overview-stat"><span>Sesje</span><strong>' + sessionDisplay + '</strong></article>' +
             '<article class="pv-overview-stat"><span>Notatki</span><strong>' + notesCount + '</strong></article>' +
             '<article class="pv-overview-stat"><span>Cele</span><strong>' + goalsCount + '</strong></article>' +
           '</div>' +
@@ -392,7 +390,7 @@ const PatientViews = {
                 '<dl class="pv-dl">' +
                   '<dt>Pocz\u0105tek terapii</dt><dd>' + escHtml(formatDateLong(patient.therapyStartDate)) + '</dd>' +
                   '<dt>Czas trwania</dt><dd>' + escHtml(duration) + '</dd>' +
-                  '<dt>Uko\u0144czone sesje</dt><dd>' + completedCount + '</dd>' +
+                  '<dt>Uko\u0144czone sesje</dt><dd>' + sessionDisplay + '</dd>' +
                   '<dt>Zaległości</dt><dd>' + escHtml(debtAmount) + '</dd>' +
                 '</dl>' +
               '</article>' +
@@ -631,6 +629,27 @@ const PatientViews = {
       ? '<button type="button" class="pv-btn pv-btn-danger" id="pv-form-delete" data-id="' + escHtml(p.id || '') + '">Usu\u0144</button>'
       : '';
 
+    const prevTherapies = Array.isArray(p.previousTherapies) ? p.previousTherapies : [];
+    const prevTherapyCount = prevTherapies.length;
+    const prevTherapyRows = prevTherapies.map((t, i) => {
+      const startVal = t.startDate ? new Date(t.startDate).toISOString().split('T')[0] : '';
+      const endVal   = t.endDate   ? new Date(t.endDate).toISOString().split('T')[0]   : '';
+      const sessVal  = t.sessionsCount !== undefined ? String(t.sessionsCount) : '';
+      return (
+        '<div class="pv-prev-therapy-row" data-index="' + i + '">' +
+          '<input type="hidden" class="pt-id" value="' + escHtml(t.id || '') + '">' +
+          '<div class="pv-prev-therapy-fields">' +
+            '<label class="pv-form-label pv-form-label--inline"><span>Od</span>' +
+              '<input type="date" class="pv-form-input pt-start" value="' + escHtml(startVal) + '"></label>' +
+            '<label class="pv-form-label pv-form-label--inline"><span>Do</span>' +
+              '<input type="date" class="pv-form-input pt-end" value="' + escHtml(endVal) + '"></label>' +
+            '<label class="pv-form-label pv-form-label--inline"><span>Sesji</span>' +
+              '<input type="number" class="pv-form-input pt-sessions" value="' + escHtml(sessVal) + '" min="0" placeholder="0"></label>' +
+          '</div>' +
+        '</div>'
+      );
+    }).join('');
+
     return (
       '<div class="pv-page pv-page--form">' +
         '<div class="pv-detail-header">' +
@@ -694,6 +713,16 @@ const PatientViews = {
               '</div>' +
               '<span class="pv-form-error" id="err-days"></span>' +
             '</div>' +
+          '</section>' +
+
+          '<section class="pv-form-section">' +
+            '<h3 class="pv-form-section-title">Poprzednie terapie</h3>' +
+            '<label class="pv-form-label">' +
+              '<span>Liczba poprzednich terapii</span>' +
+              '<input type="number" id="pv-prev-therapy-count" class="pv-form-input"' +
+                ' min="0" max="20" value="' + prevTherapyCount + '" placeholder="0">' +
+            '</label>' +
+            '<div id="pv-prev-therapies-rows">' + prevTherapyRows + '</div>' +
           '</section>' +
 
           '<div class="pv-form-actions">' +
@@ -1255,6 +1284,37 @@ const PatientViews = {
       });
     }
 
+    // Previous therapies count → generate / remove rows
+    const prevCountEl = document.getElementById('pv-prev-therapy-count');
+    const prevRowsEl  = document.getElementById('pv-prev-therapies-rows');
+    if (prevCountEl && prevRowsEl) {
+      prevCountEl.addEventListener('input', () => {
+        const target  = Math.max(0, Math.min(20, parseInt(prevCountEl.value, 10) || 0));
+        const current = prevRowsEl.querySelectorAll('.pv-prev-therapy-row').length;
+        if (target > current) {
+          for (let i = current; i < target; i++) {
+            const row = document.createElement('div');
+            row.className   = 'pv-prev-therapy-row';
+            row.dataset.index = i;
+            row.innerHTML   =
+              '<input type="hidden" class="pt-id" value="">' +
+              '<div class="pv-prev-therapy-fields">' +
+                '<label class="pv-form-label pv-form-label--inline"><span>Od</span>' +
+                  '<input type="date" class="pv-form-input pt-start"></label>' +
+                '<label class="pv-form-label pv-form-label--inline"><span>Do</span>' +
+                  '<input type="date" class="pv-form-input pt-end"></label>' +
+                '<label class="pv-form-label pv-form-label--inline"><span>Sesji</span>' +
+                  '<input type="number" class="pv-form-input pt-sessions" min="0" placeholder="0"></label>' +
+              '</div>';
+            prevRowsEl.appendChild(row);
+          }
+        } else {
+          const rows = prevRowsEl.querySelectorAll('.pv-prev-therapy-row');
+          for (let i = target; i < rows.length; i++) rows[i].remove();
+        }
+      });
+    }
+
     // Form submit
     const form = document.getElementById('pv-patient-form');
     if (form) {
@@ -1353,17 +1413,35 @@ const PatientViews = {
 
     const therapyStartDate = new Date(startDateRaw).toISOString();
 
+    // Collect previousTherapies from dynamic rows
+    const previousTherapies = [];
+    const prevRowsContainer = document.getElementById('pv-prev-therapies-rows');
+    if (prevRowsContainer) {
+      prevRowsContainer.querySelectorAll('.pv-prev-therapy-row').forEach(row => {
+        const idEl       = row.querySelector('.pt-id');
+        const startEl    = row.querySelector('.pt-start');
+        const endEl      = row.querySelector('.pt-end');
+        const sessionsEl = row.querySelector('.pt-sessions');
+        const therapyId  = (idEl && idEl.value) ? idEl.value : uuid();
+        const startDate  = (startEl  && startEl.value)  ? new Date(startEl.value).toISOString()  : null;
+        const endDate    = (endEl    && endEl.value)    ? new Date(endEl.value).toISOString()    : null;
+        const sessionsCount = parseInt((sessionsEl && sessionsEl.value) || '0', 10) || 0;
+        previousTherapies.push({ id: therapyId, startDate, endDate, sessionsCount });
+      });
+    }
+
     if (id) {
       // --- Update existing patient ---
       const patient = getPatient(id);
       if (!patient) { toast('Nie znaleziono pacjenta.', 'error'); return; }
-      patient.firstName         = firstName;
-      patient.lastName          = lastName;
-      patient.pseudonym         = pseudonym;
-      patient.therapyStartDate  = therapyStartDate;
-      patient.sessionRate       = sessionRate;
-      patient.sessionsPerWeek   = sessionsPerWeek;
-      patient.sessionDayConfigs = sessionDayConfigs;
+      patient.firstName          = firstName;
+      patient.lastName           = lastName;
+      patient.pseudonym          = pseudonym;
+      patient.therapyStartDate   = therapyStartDate;
+      patient.sessionRate        = sessionRate;
+      patient.sessionsPerWeek    = sessionsPerWeek;
+      patient.sessionDayConfigs  = sessionDayConfigs;
+      patient.previousTherapies  = previousTherapies;
       persistData();
       toast('Pacjent zaktualizowany.', 'success');
       Router.navigate('patients', { patientId: id });
@@ -1377,6 +1455,7 @@ const PatientViews = {
         sessionRate,
         sessionsPerWeek,
         sessionDayConfigs,
+        previousTherapies,
       });
 
       // Create the initial therapy cycle
@@ -1611,6 +1690,10 @@ const PatientViews = {
       '.pv-day-toggle input[type=checkbox]{width:1.1rem;height:1.1rem;accent-color:var(--blue,#49664f);cursor:pointer}',
       '.pv-day-label{font-weight:600}',
       '.pv-time-input:disabled{opacity:.35;pointer-events:none}',
+      '.pv-prev-therapy-row{border:1.5px solid var(--border,rgba(73,102,79,.14));border-radius:16px;padding:12px 14px;margin-bottom:10px;background:rgba(255,255,255,.5)}',
+      '.pv-prev-therapy-fields{display:grid;grid-template-columns:1fr 1fr 80px;gap:.6rem;align-items:end}',
+      '.pv-form-label--inline{margin-bottom:0}',
+      '@media (max-width:520px){.pv-prev-therapy-fields{grid-template-columns:1fr 1fr;}.pv-prev-therapy-fields .pv-form-label--inline:last-child{grid-column:1 / -1}}',
       '.pv-modal{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;background:rgba(14,18,15,.4);padding:1rem}',
       '.pv-modal.hidden{display:none}',
       '.pv-modal-box{border-radius:28px;padding:1.5rem;width:100%;max-width:420px}',

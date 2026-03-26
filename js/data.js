@@ -54,6 +54,8 @@ function createPatient(data = {}) {
     // [{id, date, content, sessionId}]
     sessionNotes:       Array.isArray(data.sessionNotes)       ? data.sessionNotes       : [],
     invoices:           Array.isArray(data.invoices)           ? data.invoices           : [],
+    // [{id, startDate, endDate, sessionsCount}]
+    previousTherapies:  Array.isArray(data.previousTherapies)  ? data.previousTherapies  : [],
   };
 }
 
