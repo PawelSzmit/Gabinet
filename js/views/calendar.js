@@ -12,10 +12,9 @@ const CalendarViews = {
   render() {
     const container = document.getElementById('view-container');
     if (!container) return;
-    const showFocusPanel = this.viewMode !== 'monthly';
     container.innerHTML = [
       '<div class="cal-wrapper cal-wrapper--' + this.viewMode + '">',
-        showFocusPanel ? this.renderFocusPanel() : this._renderMonthlyHeader(),
+        this.renderFocusPanel(),
         this._renderToolbar(),
         '<div class="cal-body" id="cal-body">',
           this._renderCurrentView(),
@@ -29,42 +28,6 @@ const CalendarViews = {
     this.bindEvents();
   },
 
-  _renderMonthlyHeader() {
-    const today = new Date();
-    const todaySessions = getSessionsByDate(this._dateKey(today));
-    const upcoming = AppState.sessions
-      .filter(s => s.status === 'scheduled' && new Date(s.date) >= today)
-      .sort((a, b) => new Date(a.date) - new Date(b.date));
-    const nextSession = upcoming[0] || null;
-    const nextPatient = nextSession ? getPatient(nextSession.patientId) : null;
-    const unpaidTotal = AppState.sessions.filter(s => {
-      if (s.isPaid || !s.isPaymentRequired) return false;
-      return s.status === 'completed' || s.status === 'cancelled';
-    }).reduce((sum, s) => {
-      const p = getPatient(s.patientId);
-      return sum + (s.paymentAmount !== null ? s.paymentAmount : (p ? p.sessionRate : 0));
-    }, 0);
-    const nextText = nextSession
-      ? (this._escapeHtml(nextPatient ? (nextPatient.pseudonym || nextPatient.firstName) : '?')
-        + ' · ' + formatDateTimeWithWeekday(new Date(nextSession.date)))
-      : 'Brak zaplanowanych sesji';
-    return '<div class="cal-month-header">'
-      + '<div class="cal-month-header-stats">'
-        + '<div class="cal-mhs-item"><span class="cal-mhs-label">Sesje dziś</span><strong>' + todaySessions.length + '</strong></div>'
-        + '<div class="cal-mhs-item"><span class="cal-mhs-label">Aktywni</span><strong>' + AppState.activePatients.length + '</strong></div>'
-        + (unpaidTotal > 0 ? '<div class="cal-mhs-item cal-mhs-debt"><span class="cal-mhs-label">Należności</span><strong>' + formatPLN(unpaidTotal) + '</strong></div>' : '')
-      + '</div>'
-      + '<div class="cal-mhs-next">'
-        + '<span class="cal-mhs-next-label">Następna:</span> '
-        + '<span class="cal-mhs-next-text">' + nextText + '</span>'
-      + '</div>'
-      + '<div class="cal-month-header-actions">'
-        + '<button class="cal-focus-action cal-focus-action--primary" id="today-btn-add-session">Dodaj sesję</button>'
-        + '<button class="cal-focus-action" id="today-btn-add-payment">Zarejestruj płatność</button>'
-        + '<button class="cal-focus-action" id="today-btn-open-patients">Pacjenci</button>'
-      + '</div>'
-      + '</div>';
-  },
 
   renderFocusPanel() {
     const focusDate = this.selectedDate instanceof Date ? this.selectedDate : new Date();
@@ -933,12 +896,9 @@ const CalendarViews = {
   },
 
   _refresh() {
-    // If switching between monthly and other views, we need a full re-render
-    // because the focus panel changes
+    // Full re-render needed when switching view modes (wrapper class changes)
     const wrapper = document.querySelector('.cal-wrapper');
-    const isMonthly = this.viewMode === 'monthly';
-    const wasMonthly = wrapper && wrapper.classList.contains('cal-wrapper--monthly');
-    if (isMonthly !== wasMonthly) {
+    if (wrapper && !wrapper.classList.contains('cal-wrapper--' + this.viewMode)) {
       this.render();
       return;
     }
@@ -1067,17 +1027,6 @@ const CalendarViews = {
       '.cal-wrapper{display:flex;flex-direction:column;min-height:100%;background:transparent;font-family:var(--font-sans,"Manrope",sans-serif);padding:18px 18px calc(var(--tab-bar-height) + 30px)}',
       '.cal-wrapper--monthly{height:auto;overflow:visible}',
       '.cal-wrapper--daily,.cal-wrapper--weekly{height:100%;overflow:hidden}',
-      /* Monthly compact header */
-      '.cal-month-header{background:color-mix(in srgb,var(--surface-raised,#f7f2eb) 92%, transparent);border:1px solid var(--border,rgba(73,102,79,.14));border-radius:20px;padding:14px 18px;margin-bottom:12px;box-shadow:var(--shadow-sm)}',
-      '.cal-month-header-stats{display:flex;gap:20px;align-items:center;flex-wrap:wrap}',
-      '.cal-mhs-item{display:flex;flex-direction:column;gap:1px}',
-      '.cal-mhs-label{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text-secondary,rgba(36,49,38,.6))}',
-      '.cal-mhs-item strong{font-size:1.25rem;font-weight:800;color:var(--text,#243126);line-height:1}',
-      '.cal-mhs-debt strong{color:#FF3B30}',
-      '.cal-mhs-next{font-size:.82rem;color:var(--text-secondary,rgba(36,49,38,.68));margin-top:8px;padding-top:8px;border-top:1px solid var(--border,rgba(73,102,79,.1))}',
-      '.cal-mhs-next-label{font-weight:700;color:var(--text,#243126)}',
-      '.cal-month-header-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}',
-      '.cal-month-header-actions .cal-focus-action{padding:9px 14px;font-size:.8rem}',
       '.cal-focus-panel{display:flex;flex-direction:column;gap:16px;padding:22px 24px;margin-bottom:14px;border-radius:28px;background:color-mix(in srgb,var(--surface-raised,#f7f2eb) 92%, transparent);border:1px solid var(--border,rgba(73,102,79,.14));box-shadow:var(--shadow-md)}',
       '.cal-focus-top{display:grid;grid-template-columns:1fr 1.1fr;gap:16px;align-items:start}',
       '.cal-focus-kicker{display:inline-block;margin-bottom:10px;font-size:.72rem;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:var(--blue,#49664f)}',
