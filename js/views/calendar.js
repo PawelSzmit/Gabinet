@@ -253,11 +253,14 @@ const CalendarViews = {
       '<div class="cal-week-time-label">' + String(h).padStart(2, '0') + ':00</div>'
     ).join('');
     return '<div class="cal-weekly">'
-      + '<div class="cal-week-header">' + headerHtml + '</div>'
-      + '<div class="cal-week-body">'
-        + '<div class="cal-week-time-col">' + timeLabels + '</div>'
-        + colsHtml
-      + '</div></div>';
+      + '<div class="cal-week-scroll">'
+        + '<div class="cal-week-header">' + headerHtml + '</div>'
+        + '<div class="cal-week-body">'
+          + '<div class="cal-week-time-col">' + timeLabels + '</div>'
+          + colsHtml
+        + '</div>'
+      + '</div>'
+    + '</div>';
   },
 
   renderDaily() {
@@ -1214,12 +1217,12 @@ const CalendarViews = {
       '.cal-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}',
       '.cal-dot-more{font-size:.58rem;color:#8e8e93;line-height:1}',
       '.cal-weekly{display:flex;flex-direction:column;height:100%}',
-      '.cal-week-header{display:grid;grid-template-columns:50px repeat(7,1fr);background:#fff;border-bottom:1px solid #e0e0e5;position:sticky;top:0;z-index:5;flex-shrink:0}',
+      '.cal-week-scroll{flex:1;min-height:0;overflow:auto;}',
+      '.cal-week-header{display:grid;grid-template-columns:50px repeat(7,minmax(110px,1fr));background:#fff;border-bottom:1px solid #e0e0e5;position:sticky;top:0;z-index:5;min-width:calc(50px + 7*110px)}',
       '.cal-week-header .cal-week-time-col{border-right:1px solid #e0e0e5}',
       '.cal-week-header-cell{text-align:center;font-size:.75rem;font-weight:500;color:#3c3c43;padding:7px 2px;cursor:pointer;border-right:1px solid #f2f2f7;user-select:none}',
       '.cal-week-header-cell.today{color:#007AFF;font-weight:700}.cal-week-header-cell.selected{background:#EBF4FF}',
-      '.cal-week-body{display:grid;grid-template-columns:50px repeat(7,1fr);overflow-y:scroll;flex:1;min-height:0}',
-      '.cal-week-header{overflow-y:scroll;scrollbar-width:none}.cal-week-header::-webkit-scrollbar{display:none}',
+      '.cal-week-body{display:grid;grid-template-columns:50px repeat(7,minmax(110px,1fr));min-width:calc(50px + 7*110px)}',
       '.cal-week-time-col{border-right:1px solid #e0e0e5}',
       '.cal-week-time-label{font-size:.68rem;color:#8e8e93;padding:4px 4px 0;height:52px;border-bottom:1px solid #f2f2f7;display:flex;align-items:flex-start;box-sizing:border-box}',
       '.cal-week-day-col{border-right:1px solid #f2f2f7}.cal-week-day-col.today{background:#f0f7ff}',
@@ -1330,7 +1333,7 @@ const CalendarViews = {
         '.cal-week-time-label,.cal-daily-time{color:rgba(244,237,228,.45)!important}' +
         '.cal-daily-header{background:#1e2d24;color:rgba(244,237,228,.9)}' +
         '.cal-daily-header.today{color:#6ab0f5}' +
-        '.cal-week-body::-webkit-scrollbar{width:6px}.cal-week-body::-webkit-scrollbar-track{background:transparent}.cal-week-body::-webkit-scrollbar-thumb{background:rgba(220,194,157,.25);border-radius:3px}' +
+        '.cal-week-scroll::-webkit-scrollbar{width:6px;height:6px}.cal-week-scroll::-webkit-scrollbar-track{background:transparent}.cal-week-scroll::-webkit-scrollbar-thumb{background:rgba(220,194,157,.25);border-radius:3px}' +
         '}',
       '.hidden{display:none!important}',
     ];
