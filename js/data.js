@@ -87,6 +87,9 @@ function createSession(data = {}) {
     sessionNotes:         data.sessionNotes         || '',
     // null | 'patient_vacation' | 'patient_late' | 'therapist'
     cancellationReason:   data.cancellationReason   || null,
+    // partial payment support
+    isPartiallyPaid:      data.isPartiallyPaid      || false,
+    partialPaymentAmount: data.partialPaymentAmount  || null,
   };
 }
 
@@ -220,7 +223,12 @@ function getPatientDebt(patientId) {
   });
 
   const total = unpaid.reduce((sum, s) => {
-    return sum + (s.paymentAmount !== null ? s.paymentAmount : rate);
+    const fullRate = s.paymentAmount !== null ? s.paymentAmount : rate;
+    // For partially paid sessions, only count the remaining amount
+    const owed = s.isPartiallyPaid && s.partialPaymentAmount
+      ? fullRate - s.partialPaymentAmount
+      : fullRate;
+    return sum + owed;
   }, 0);
 
   return { sessions: unpaid, total };
