@@ -349,6 +349,12 @@ const PatientViews = {
     const goalsCount     = (patient.therapeuticGoals || []).length;
     const progressCount  = (patient.progressEntries || []).length;
     const debtAmount     = debt.total > 0 ? formatPLN(debt.total) : 'Brak zaległości';
+    const cancelledSessions = sessions.filter(s => s.status === 'cancelled');
+    const cancelVacation    = cancelledSessions.filter(s => s.cancellationReason === 'patient_vacation').length;
+    const cancelPatient     = cancelledSessions.filter(s => s.cancellationReason === 'patient_late').length;
+    const cancelTherapist   = cancelledSessions.filter(s => s.cancellationReason === 'therapist').length;
+    const cancelOther       = cancelledSessions.filter(s => !s.cancellationReason).length;
+    const cancelTotal       = cancelledSessions.length;
 
     const pseudonymDl = patient.pseudonym
       ? '<dt>Pseudonim</dt><dd>' + escHtml(patient.pseudonym) + '</dd>'
@@ -407,6 +413,17 @@ const PatientViews = {
                   '<dt>Zaległości</dt><dd>' + escHtml(debtAmount) + '</dd>' +
                 '</dl>' +
               '</article>' +
+              (cancelTotal > 0 ? (
+              '<article class="pv-panel-card">' +
+                '<h3>Odwołane sesje</h3>' +
+                '<dl class="pv-dl">' +
+                  '<dt>Łącznie</dt><dd>' + cancelTotal + '</dd>' +
+                  (cancelVacation > 0 ? '<dt>Urlop pacjenta</dt><dd>' + cancelVacation + '</dd>' : '') +
+                  (cancelPatient > 0 ? '<dt>Z winy pacjenta</dt><dd>' + cancelPatient + '</dd>' : '') +
+                  (cancelTherapist > 0 ? '<dt>Odwołane przez terapeutę</dt><dd>' + cancelTherapist + '</dd>' : '') +
+                  (cancelOther > 0 ? '<dt>Bez kategorii</dt><dd>' + cancelOther + '</dd>' : '') +
+                '</dl>' +
+              '</article>') : '') +
               '<article class="pv-panel-card pv-panel-card--wide">' +
                 '<h3>Rytm spotkań</h3>' +
                 this._renderScheduleSection(patient) +
