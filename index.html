@@ -68,39 +68,55 @@
         </span>
         <span class="auth-brand__text">Gabinet</span>
       </a>
-
       <nav class="auth-nav__links" aria-label="Sekcje strony">
         <a href="#auth-benefits">Korzyści</a>
         <a href="#auth-privacy">Prywatność</a>
         <a href="#auth-preview">Podgląd</a>
         <a href="#auth-faq">FAQ</a>
       </nav>
-
-      <button id="btn-google-signin" class="auth-nav__cta" type="button">
-        Zaloguj się
-      </button>
+      <button id="btn-google-signin" data-action="google-signin" class="auth-nav__cta" type="button">Zaloguj się</button>
     </header>
 
     <main class="auth-landing">
+
+      <!-- HERO: 2-kolumnowy editorial -->
       <section class="auth-hero" id="auth-hero">
-        <div class="auth-hero__copy">
-          <p class="auth-kicker">Spokój pracy. Porządek dnia. Pełna dyskrecja.</p>
-          <h1 class="auth-screen__title">Cyfrowy porządek dla gabinetu psychoterapeutycznego.</h1>
-          <p class="auth-screen__subtitle">
-            Prowadź pacjentów, sesje, płatności i szyfrowane notatki w jednym spokojnym narzędziu.
-            Bez własnego serwera, bez chaosu, z danymi po Twojej stronie.
+        <div class="auth-hero__left">
+          <p class="auth-kicker">Dla psychoterapeutów prowadzących prywatny gabinet</p>
+          <h1 class="auth-hero__title">Cyfrowy porządek dla gabinetu psychoterapeutycznego.</h1>
+          <p class="auth-hero__subtitle">
+            Sesje, notatki kliniczne, płatności i historia terapii — w jednym spokojnym narzędziu. Bez serwera, bez arkuszy.
           </p>
-
+          <ul class="auth-usp-list">
+            <li>Szyfrowane notatki kliniczne (AES-256)</li>
+            <li>Dane wyłącznie na Twoim Google Drive</li>
+            <li>Automatyczny kalendarz sesji</li>
+          </ul>
+          <button data-action="google-signin" class="auth-cta auth-cta--primary" type="button">
+            Zaloguj się przez Google
+          </button>
           <p id="auth-error" class="auth-screen__error hidden" hidden></p>
-
-          <div class="auth-usp-strip">
-            <div class="auth-usp-pill">Szyfrowane notatki kliniczne</div>
-            <div class="auth-usp-pill">Dane na Twoim Google Drive</div>
-            <div class="auth-usp-pill">Automatyczny kalendarz sesji</div>
+        </div>
+        <div class="auth-hero__right" aria-hidden="true">
+          <div class="auth-mockup">
+            <div class="auth-mockup__kicker">DZISIAJ</div>
+            <div class="auth-mockup__title">Plan dnia dla Twojego gabinetu</div>
+            <div class="auth-mockup__next">
+              <span class="auth-mockup__next-label">NAJBLIŻSZA SESJA</span>
+              <span class="auth-mockup__next-name">Kair</span>
+              <span class="auth-mockup__next-time">wtorek, 31 marca 2026, 08:00</span>
+            </div>
+            <div class="auth-mockup__tiles">
+              <div class="auth-mockup__tile"><span>SESJE DZIŚ</span><strong>3</strong><small>3 odbytych</small></div>
+              <div class="auth-mockup__tile"><span>NALEŻNOŚCI</span><strong>500 zł</strong><small>2 pacjentów</small></div>
+              <div class="auth-mockup__tile"><span>PACJENCI</span><strong>6</strong><small>aktywni</small></div>
+              <div class="auth-mockup__tile"><span>TRYB DNIA</span><strong>Otwarte</strong><small>bez blokad</small></div>
+            </div>
           </div>
         </div>
       </section>
 
+      <!-- KORZYŚCI -->
       <section class="auth-section auth-section--benefits" id="auth-benefits">
         <div class="auth-section__header">
           <p class="auth-section__eyebrow">Trzy filary produktu</p>
@@ -108,21 +124,25 @@
         </div>
         <div class="auth-card-grid auth-card-grid--3">
           <article class="auth-feature-card">
+            <div class="auth-feature-card__icon">🔒</div>
             <h3>Prywatność w praktyce</h3>
             <p>Szyfruje notatki kliniczne, eksponuje pseudonimy i przechowuje dane na Twoim Drive, a nie na obcej bazie.</p>
           </article>
           <article class="auth-feature-card">
+            <div class="auth-feature-card__icon">📅</div>
             <h3>Automatyzacja terapii</h3>
             <p>Buduje kalendarz sesji na podstawie harmonogramu, urlopów i historii terapii, żeby oszczędzać Twój czas.</p>
           </article>
           <article class="auth-feature-card">
+            <div class="auth-feature-card__icon">💰</div>
             <h3>Finanse bez Excela</h3>
             <p>Łączy płatności z konkretnymi sesjami, pokazuje zaległości i porządkuje przychody bez dodatkowych arkuszy.</p>
           </article>
         </div>
       </section>
 
-      <section class="auth-section auth-section--steps">
+      <!-- JAK TO DZIAŁA -->
+      <section class="auth-section auth-section--steps" id="auth-how">
         <div class="auth-section__header">
           <p class="auth-section__eyebrow">Jak to działa</p>
           <h2>Od pierwszego logowania do spokojnego planu dnia.</h2>
@@ -131,7 +151,7 @@
           <article class="auth-step-card">
             <span class="auth-step-card__index">01</span>
             <h3>Logujesz się kontem Google</h3>
-            <p>Aplikacja automatycznie się synchronizuje pomiędzy urządzeniami, więc możesz zacząć dzień pracą przy komputerze, a zakończyć korzystając z telefonu lub tabletu.</p>
+            <p>Dane synchronizują się automatycznie między urządzeniami. Zacznij przy komputerze, kontynuuj na telefonie.</p>
           </article>
           <article class="auth-step-card">
             <span class="auth-step-card__index">02</span>
@@ -146,6 +166,7 @@
         </div>
       </section>
 
+      <!-- PRYWATNOŚĆ -->
       <section class="auth-section auth-section--privacy" id="auth-privacy">
         <div class="auth-section__header">
           <p class="auth-section__eyebrow">Prywatność i bezpieczeństwo</p>
@@ -156,57 +177,83 @@
             <h3>Aplikacja od początku została zbudowana dla psychoterapeuty.</h3>
             <p>Dlatego prywatność nie jest dodatkiem marketingowym, tylko osią całego doświadczenia.</p>
           </article>
-          <article class="auth-privacy-card auth-privacy-card--lower-copy">
+          <article class="auth-privacy-card">
             <h3>Szyfrowanie treści klinicznych</h3>
             <p>Notatki z sesji, wpisy kliniczne i cele terapeutyczne są szyfrowane przed zapisem.</p>
           </article>
-          <article class="auth-privacy-card auth-privacy-card--lower-copy">
+          <article class="auth-privacy-card">
             <h3>Pseudonimy zamiast nazwisk</h3>
             <p>Interfejs priorytetyzuje pseudonim pacjenta, a pełne dane osobowe pozostają drugoplanowe.</p>
           </article>
-          <article class="auth-privacy-card auth-privacy-card--lower-copy">
+          <article class="auth-privacy-card">
             <h3>Dane po Twojej stronie</h3>
-            <p>Brak własnej bazy danych oznacza większą prostotę i większą kontrolę nad miejscem przechowywania danych.</p>
+            <p>Brak własnej bazy danych oznacza większą prostotę i kontrolę nad miejscem przechowywania.</p>
           </article>
         </div>
       </section>
 
+      <!-- PODGLĄD: mockupy interfejsu -->
       <section class="auth-section auth-section--preview" id="auth-preview">
         <div class="auth-section__header">
           <p class="auth-section__eyebrow">Podgląd produktu</p>
           <h2>Interfejs zbudowany pod rytm dnia terapeuty.</h2>
         </div>
         <div class="auth-preview-grid">
-          <article class="auth-preview-card auth-preview-card--day">
-            <span class="auth-preview-card__badge">Tryb dzienny</span>
-            <h3>Dzisiaj</h3>
-            <ul>
-              <li>najbliższe sesje</li>
-              <li>szybkie statusy i notatki</li>
-              <li>zaległe płatności i ważne sygnały</li>
-            </ul>
+          <!-- Mockup: lista pacjentów -->
+          <article class="auth-preview-card">
+            <span class="auth-preview-card__badge">Pacjenci</span>
+            <div class="auth-preview-mock-list">
+              <div class="auth-mock-patient">
+                <div class="auth-mock-avatar" style="background:#c97b5a">AG</div>
+                <div class="auth-mock-patient-info"><strong>Kair</strong><span>Anna G. · Wt · 3 sesje</span></div>
+              </div>
+              <div class="auth-mock-patient">
+                <div class="auth-mock-avatar" style="background:#5a7bc9">AG</div>
+                <div class="auth-mock-patient-info"><strong>Muchomor</strong><span class="auth-mock-debt">50 zł</span><span>Antek G. · Wt · 5 sesji</span></div>
+              </div>
+              <div class="auth-mock-patient">
+                <div class="auth-mock-avatar" style="background:#5a9c72">GJ</div>
+                <div class="auth-mock-patient-info"><strong>Ciemny</strong><span>Grzegorz J. · Śr · 3 sesje</span></div>
+              </div>
+            </div>
           </article>
-          <article class="auth-preview-card auth-preview-card--dark">
-            <span class="auth-preview-card__badge">Dark mode</span>
-            <h3>Pacjenci i historia terapii</h3>
-            <ul>
-              <li>pseudonim na pierwszym planie</li>
-              <li>spokojny widok kliniczny</li>
-              <li>intymny, wieczorny charakter pracy</li>
-            </ul>
-          </article>
-          <article class="auth-preview-card auth-preview-card--finance">
+          <!-- Mockup: finanse -->
+          <article class="auth-preview-card">
             <span class="auth-preview-card__badge">Finanse</span>
-            <h3>Porządek przychodów</h3>
-            <ul>
-              <li>bieżący przychód</li>
-              <li>należności do rozliczenia</li>
-              <li>metody płatności i trendy</li>
-            </ul>
+            <div class="auth-preview-mock-finance">
+              <div class="auth-mock-fin-row"><span>PRZYCHÓD</span><strong>7 570,00 zł</strong></div>
+              <div class="auth-mock-fin-row"><span>NALEŻNOŚCI</span><strong>500,00 zł</strong></div>
+              <div class="auth-mock-fin-row"><span>ŚR. / MIESIĄC</span><strong>2 523,33 zł</strong></div>
+              <div class="auth-mock-fin-bars">
+                <div class="auth-mock-bar" style="height:60%;background:#cc0000"></div>
+                <div class="auth-mock-bar" style="height:80%;background:#ff6600"></div>
+                <div class="auth-mock-bar" style="height:45%;background:#34c759"></div>
+                <div class="auth-mock-bar" style="height:70%;background:#cc0000"></div>
+                <div class="auth-mock-bar" style="height:90%;background:#ff6600"></div>
+                <div class="auth-mock-bar" style="height:55%;background:#34c759"></div>
+              </div>
+            </div>
+          </article>
+          <!-- Mockup: notatki kliniczne -->
+          <article class="auth-preview-card">
+            <span class="auth-preview-card__badge">Notatki kliniczne</span>
+            <div class="auth-preview-mock-notes">
+              <div class="auth-mock-note">
+                <span class="auth-mock-note-date">18 mar 2026</span>
+                <span class="auth-mock-note-badge">Sesja</span>
+                <p class="auth-mock-note-text">Pacjent opisuje wyraźną poprawę w obszarze relacji...</p>
+              </div>
+              <div class="auth-mock-note">
+                <span class="auth-mock-note-date">11 mar 2026</span>
+                <span class="auth-mock-note-badge">Sesja</span>
+                <p class="auth-mock-note-text">Powrót do tematu z poprzedniego tygodnia. Refleksja nad...</p>
+              </div>
+            </div>
           </article>
         </div>
       </section>
 
+      <!-- FAQ -->
       <section class="auth-section auth-section--faq" id="auth-faq">
         <div class="auth-section__header">
           <p class="auth-section__eyebrow">FAQ</p>
@@ -219,26 +266,29 @@
           </details>
           <details class="auth-faq-item">
             <summary>Czy notatki kliniczne są chronione?</summary>
-            <p>Tak. Wrażliwe treści są szyfrowane przed zapisem, a interfejs dodatkowo opiera się na pseudonimizacji.</p>
+            <p>Tak. Wrażliwe treści są szyfrowane algorytmem AES-256-GCM przed zapisem. Klucz szyfrowania jest przechowywany wyłącznie w Twojej przeglądarce.</p>
           </details>
           <details class="auth-faq-item">
             <summary>Czy mogę korzystać z aplikacji na telefonie?</summary>
-            <p>Tak, to jest strona internetowa, którą możesz noramlnie otworzyć na przegląarce w telefonie.</p>
+            <p>Tak — to progresywna aplikacja webowa (PWA), którą możesz zainstalować na telefonie lub tablecie jak natywną aplikację.</p>
           </details>
         </div>
       </section>
 
-      <section class="auth-section auth-section--closing">
-        <div class="auth-closing-card">
+      <!-- CLOSING CTA -->
+      <section class="auth-section auth-section--closing" id="auth-closing">
+        <div class="auth-closing-inner">
           <p class="auth-section__eyebrow">Gotowe do wejścia</p>
-          <h2>Produkt dla psychoterapeuty, który chce mniej chaosu i więcej spokoju w pracy.</h2>
-          <p>Zaloguj się kontem Google, aby wejść do aplikacji i zacząć pracę ze swoim gabinetem.</p>
+          <h2>Mniej chaosu. Więcej spokoju w pracy.</h2>
+          <p>Zaloguj się kontem Google, aby wejść do aplikacji.</p>
+          <button data-action="google-signin" class="auth-cta auth-cta--primary" type="button">
+            Zaloguj się przez Google
+          </button>
+          <p class="auth-closing-footnote">Dane przechowywane wyłącznie na Twoim Google Drive.</p>
         </div>
       </section>
 
-      <p class="auth-screen__footer">
-        Dane przechowywane wyłącznie na Twoim Google Drive.
-      </p>
+      <p class="auth-screen__footer">© 2026 Gabinet Terapeutyczny</p>
     </main>
   </div>
 

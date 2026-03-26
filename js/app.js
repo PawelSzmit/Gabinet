@@ -112,11 +112,10 @@ const App = {
       this.showAuth(false);
     }
 
-    // Wire up the Google sign-in button.
-    const signInBtn = document.getElementById('btn-google-signin');
-    if (signInBtn) {
-      signInBtn.addEventListener('click', () => this._handleSignInClick());
-    }
+    // Wire up all Google sign-in buttons (nav + hero + closing CTA).
+    document.querySelectorAll('[data-action="google-signin"]').forEach((btn) => {
+      btn.addEventListener('click', () => this._handleSignInClick());
+    });
 
     document.querySelectorAll('[data-auth-scroll]').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -239,7 +238,7 @@ const App = {
     if (screen) {
       screen.hidden = false;
       screen.classList.remove('hidden');
-      const title = screen.querySelector('.auth-screen__title');
+      const title = screen.querySelector('.auth-hero__title');
       if (title) {
         title.textContent = isLock
           ? 'Zaloguj się ponownie, aby wrócić do spokojnej pracy.'
