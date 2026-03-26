@@ -351,9 +351,9 @@ const DataRecovery = {
   },
 
   /**
-   * Attempts to recover session times and patient schedule data from
-   * the oldest available revision that still has `time` fields on sessions
-   * or `sessionDays`/`sessionTimes` on patients.
+   * Attempts to recover session times and patient schedule data by scanning
+   * ALL available revisions on Google Drive. Collects the best data from
+   * every revision (the one with the most recoverable fields wins per-item).
    *
    * @param {function} onProgress — callback(message) for UI updates
    * @returns {Promise<{sessionsFixed: number, patientsFixed: number}>}
@@ -368,60 +368,80 @@ const DataRecovery = {
       throw new Error('Brak starszych wersji pliku na Drive. Odzyskanie danych nie jest możliwe.');
     }
 
-    log(`Znaleziono ${revisions.length} wersji. Szukam wersji z oryginalnymi danymi...`);
+    log(`Znaleziono ${revisions.length} wersji. Przeglądam WSZYSTKIE od najnowszej...`);
 
-    // Try revisions from oldest to newest, looking for one with `time` fields
-    let oldData = null;
-    let usedRevision = null;
+    // Collect session times and patient schedules from ALL revisions.
+    // Key: session/patient id → value from the revision with the most data.
+    // We use maps so that later (more complete) revisions overwrite earlier ones.
+    const collectedSessionTimes = {};   // sessionId → { time: "HH:MM" }
+    const collectedPatientDays  = {};   // patientId → { sessionDays: [...], sessionTimes: {...} }
+    let revisionsWithData = 0;
 
-    for (const rev of revisions) {
+    // Scan from newest to oldest — newest pre-corruption revision has most data
+    const reversedRevisions = revisions.slice().reverse();
+
+    for (const rev of reversedRevisions) {
       try {
-        log(`Sprawdzam wersję z ${new Date(rev.modifiedTime).toLocaleString('pl-PL')}...`);
+        const dateStr = new Date(rev.modifiedTime).toLocaleString('pl-PL');
+        log(`Sprawdzam wersję z ${dateStr}...`);
         const text = await this.downloadRevision(rev.id);
         let parsed;
         try { parsed = JSON.parse(text); } catch (e) { continue; }
 
-        // Check if this revision has old-format data (session.time fields)
-        const hasSessionTimes = (parsed.sessions || []).some(s => s.time && typeof s.time === 'string');
-        // Check if this revision has patient schedule data (sessionDays)
-        const hasPatientDays = (parsed.patients || []).some(p =>
-          Array.isArray(p.sessionDays) && p.sessionDays.length > 0
-        );
+        let foundInThisRev = 0;
 
-        if (hasSessionTimes || hasPatientDays) {
-          oldData = parsed;
-          usedRevision = rev;
-          log(`✅ Znaleziono wersję z ${hasSessionTimes ? 'czasami sesji' : ''}${hasSessionTimes && hasPatientDays ? ' i ' : ''}${hasPatientDays ? 'harmonogramem pacjentów' : ''} z dnia ${new Date(rev.modifiedTime).toLocaleString('pl-PL')}`);
-          break;
+        // Collect session times
+        for (const s of (parsed.sessions || [])) {
+          if (s.id && s.time && typeof s.time === 'string') {
+            if (!collectedSessionTimes[s.id]) {
+              collectedSessionTimes[s.id] = s.time;
+              foundInThisRev++;
+            }
+          }
+        }
+
+        // Collect patient schedule data
+        for (const p of (parsed.patients || [])) {
+          if (p.id && Array.isArray(p.sessionDays) && p.sessionDays.length > 0) {
+            if (!collectedPatientDays[p.id]) {
+              collectedPatientDays[p.id] = {
+                sessionDays: p.sessionDays,
+                sessionTimes: p.sessionTimes || {},
+              };
+              foundInThisRev++;
+            }
+          }
+        }
+
+        if (foundInThisRev > 0) {
+          revisionsWithData++;
+          log(`  → Znaleziono ${foundInThisRev} nowych pól w tej wersji`);
         }
       } catch (e) {
         log(`⚠️ Nie udało się odczytać wersji: ${e.message}`);
       }
     }
 
-    if (!oldData) {
-      throw new Error('Nie znaleziono żadnej wersji z oryginalnymi danymi (time/sessionDays). Wszystkie wersje mają już nowy format.');
+    const totalSessionTimes = Object.keys(collectedSessionTimes).length;
+    const totalPatientDays = Object.keys(collectedPatientDays).length;
+
+    log(`\nPodsumowanie: znaleziono ${totalSessionTimes} czasów sesji i ${totalPatientDays} harmonogramów pacjentów w ${revisionsWithData} wersjach.`);
+
+    if (totalSessionTimes === 0 && totalPatientDays === 0) {
+      throw new Error('Nie znaleziono żadnych oryginalnych danych (time/sessionDays) w historii wersji.');
     }
 
     // ── Merge session times ──
     let sessionsFixed = 0;
-    const oldSessionsById = {};
-    for (const s of (oldData.sessions || [])) {
-      if (s.id) oldSessionsById[s.id] = s;
-    }
-
     for (const currentSession of AppState.sessions) {
-      const old = oldSessionsById[currentSession.id];
-      if (!old) continue;
+      const oldTime = collectedSessionTimes[currentSession.id];
+      if (!oldTime) continue;
 
-      if (old.time && typeof old.time === 'string') {
-        // Old session has a separate time field — merge it into current date
-        const datePart = currentSession.date.substring(0, 10);
-        const newDate = new Date(datePart + 'T' + old.time + ':00').toISOString();
-        if (newDate !== currentSession.date) {
-          currentSession.date = newDate;
-          sessionsFixed++;
-        }
+      const datePart = currentSession.date.substring(0, 10);
+      const newDate = new Date(datePart + 'T' + oldTime + ':00').toISOString();
+      if (newDate !== currentSession.date) {
+        currentSession.date = newDate;
+        sessionsFixed++;
       }
     }
 
@@ -429,18 +449,13 @@ const DataRecovery = {
 
     // ── Merge patient schedule data ──
     let patientsFixed = 0;
-    const oldPatientsById = {};
-    for (const p of (oldData.patients || [])) {
-      if (p.id) oldPatientsById[p.id] = p;
-    }
-
     const dayToISO = {
       monday: 1, tuesday: 2, wednesday: 3, thursday: 4,
       friday: 5, saturday: 6, sunday: 7,
     };
 
     for (const currentPatient of AppState.patients) {
-      const old = oldPatientsById[currentPatient.id];
+      const old = collectedPatientDays[currentPatient.id];
       if (!old) continue;
 
       // Only fix if current patient has empty sessionDayConfigs
@@ -448,16 +463,13 @@ const DataRecovery = {
         continue;
       }
 
-      if (Array.isArray(old.sessionDays) && old.sessionDays.length > 0) {
-        const times = old.sessionTimes || {};
-        currentPatient.sessionDayConfigs = old.sessionDays
-          .filter(d => dayToISO[d] !== undefined)
-          .map(d => ({
-            weekday: dayToISO[d],
-            sessionTime: times[d] || '10:00',
-          }));
-        patientsFixed++;
-      }
+      currentPatient.sessionDayConfigs = old.sessionDays
+        .filter(d => dayToISO[d] !== undefined)
+        .map(d => ({
+          weekday: dayToISO[d],
+          sessionTime: old.sessionTimes[d] || '10:00',
+        }));
+      patientsFixed++;
     }
 
     log(`Naprawiono harmonogramy ${patientsFixed} pacjentów.`);
@@ -466,7 +478,7 @@ const DataRecovery = {
     if (sessionsFixed > 0 || patientsFixed > 0) {
       log('Zapisywanie poprawionych danych na Drive...');
       await DriveService.saveData();
-      log(`✅ Gotowe! Naprawiono ${sessionsFixed} sesji i ${patientsFixed} pacjentów.`);
+      log(`\n✅ Gotowe! Naprawiono ${sessionsFixed} sesji i ${patientsFixed} pacjentów.`);
     } else {
       log('⚠️ Nie znaleziono danych do naprawienia (ID sesji/pacjentów mogły się zmienić).');
     }
