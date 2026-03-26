@@ -41,10 +41,13 @@ const CalendarViews = {
     });
     const unpaidTotal = unpaidSessions.reduce((sum, session) => {
       const patient = getPatient(session.patientId);
-      const amount = session.paymentAmount !== null
+      const full = session.paymentAmount !== null
         ? session.paymentAmount
         : (patient ? patient.sessionRate : 0);
-      return sum + amount;
+      const owed = session.isPartiallyPaid && session.partialPaymentAmount
+        ? full - session.partialPaymentAmount
+        : full;
+      return sum + owed;
     }, 0);
     const upcoming = AppState.sessions
       .filter((session) => session.status === 'scheduled' && new Date(session.date) >= new Date())
