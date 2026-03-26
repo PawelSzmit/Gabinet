@@ -3,7 +3,7 @@
 // ─── AutoLock ─────────────────────────────────────────────────────────────────
 const AutoLock = {
   timer:   null,
-  timeout: 120_000, // 2 minutes
+  timeout: 900_000, // 15 minutes
 
   start() {
     clearTimeout(this.timer);
