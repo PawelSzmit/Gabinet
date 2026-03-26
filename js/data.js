@@ -85,6 +85,8 @@ function createSession(data = {}) {
     originalDate:         data.originalDate         || null,
     // encrypted text
     sessionNotes:         data.sessionNotes         || '',
+    // null | 'patient_vacation' | 'patient_late' | 'therapist'
+    cancellationReason:   data.cancellationReason   || null,
   };
 }
 

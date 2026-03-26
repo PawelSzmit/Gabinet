@@ -604,6 +604,12 @@ const CalendarViews = {
             + '<button class="cal-action-btn cal-action-reschedule" id="detail-btn-reschedule">Przełóż sesję</button>'
           + '</div>'
           + '</div>') : '';
+    const cancelReasonLabels = { patient_vacation: 'Urlop pacjenta', patient_late: 'Odwołana w ostatniej chwili', therapist: 'Odwołana przez terapeutę' };
+    const cancelReasonRow = session.status === 'cancelled' && session.cancellationReason
+      ? ('<div class="cal-detail-row">'
+          + '<span class="cal-detail-label">Powód</span>'
+          + '<span class="cal-detail-value">' + (cancelReasonLabels[session.cancellationReason] || session.cancellationReason) + '</span>'
+          + '</div>') : '';
     const reschedInfo = session.wasRescheduled && session.originalDate
       ? ('<div class="cal-detail-row cal-detail-reschedule">'
           + '<span class="cal-detail-label">Pierwotna data</span>'
@@ -640,6 +646,7 @@ const CalendarViews = {
               + '<span class="cal-detail-label">Numer</span>'
               + '<span class="cal-detail-value">' + numLabel + '</span>'
               + '</div>' : '')
+          + cancelReasonRow
           + reschedInfo
         + '</div>'
         + paymentSection
@@ -730,22 +737,29 @@ const CalendarViews = {
         + '<button class="cal-modal-save" id="absent-save">Zapisz</button>'
       + '</div>'
       + '<div class="cal-modal-body">'
-        + '<p class="cal-detail-muted">Sesja zostanie oznaczona jako odwołana.</p>'
-        + '<div class="cal-form-group cal-form-row">'
-          + '<label class="cal-form-label">Pobierz opłatę (' + formatPLN(rate) + ')</label>'
-          + '<label class="cal-toggle">'
-            + '<input type="checkbox" id="absent-payment-req"' + (session.isPaymentRequired ? ' checked' : '') + '>'
-            + '<span class="cal-toggle-slider"></span>'
+        + '<p class="cal-detail-muted">Wybierz powód odwołania sesji:</p>'
+        + '<div class="cal-absent-options">'
+          + '<label class="cal-absent-option">'
+            + '<input type="radio" name="absent-reason" value="patient_vacation">'
+            + '<div class="cal-absent-option-body">'
+              + '<strong>Urlop pacjenta</strong>'
+              + '<span class="cal-detail-muted">Zgłoszony wcześniej — sesja niepłatna</span>'
+            + '</div>'
           + '</label>'
-        + '</div>'
-        + '<div class="cal-form-group">'
-          + '<label class="cal-form-label">Metoda płatności</label>'
-          + '<select class="cal-form-control" id="absent-payment-method">'
-            + '<option value="">Nie zapłacono jeszcze</option>'
-            + '<option value="cash">Gotówka</option>'
-            + '<option value="aliorBank">Alior Bank</option>'
-            + '<option value="ingBank">ING Bank</option>'
-          + '</select>'
+          + '<label class="cal-absent-option">'
+            + '<input type="radio" name="absent-reason" value="patient_late" checked>'
+            + '<div class="cal-absent-option-body">'
+              + '<strong>Odwołana w ostatniej chwili</strong>'
+              + '<span class="cal-detail-muted">Sesja płatna (' + formatPLN(rate) + ')</span>'
+            + '</div>'
+          + '</label>'
+          + '<label class="cal-absent-option">'
+            + '<input type="radio" name="absent-reason" value="therapist">'
+            + '<div class="cal-absent-option-body">'
+              + '<strong>Odwołana przez terapeutę</strong>'
+              + '<span class="cal-detail-muted">Sesja niepłatna</span>'
+            + '</div>'
+          + '</label>'
         + '</div>'
       + '</div>'
       + '</div>'
@@ -754,21 +768,25 @@ const CalendarViews = {
     dialog.querySelector('#absent-cancel').addEventListener('click', () => dialog.remove());
     dialog.addEventListener('click', e => { if (e.target === dialog) dialog.remove(); });
     dialog.querySelector('#absent-save').addEventListener('click', () => {
-      const payReq = dialog.querySelector('#absent-payment-req').checked;
-      const method = dialog.querySelector('#absent-payment-method').value;
-      session.status            = 'cancelled';
-      session.isPaymentRequired = payReq;
-      if (method) {
-        session.isPaid        = true;
-        session.paymentMethod = method;
-        session.paymentDate   = new Date().toISOString();
+      const reason = dialog.querySelector('input[name="absent-reason"]:checked').value;
+      session.status             = 'cancelled';
+      session.cancellationReason = reason;
+      // Tylko "odwołana w ostatniej chwili" jest płatna i zaliczana do zobowiązań
+      if (reason === 'patient_late') {
+        session.isPaymentRequired = true;
+      } else {
+        session.isPaymentRequired = false;
+        session.isPaid            = false;
+        session.paymentMethod     = null;
+        session.paymentDate       = null;
       }
       if (patient) recalculateSessionNumbers(patient);
       if (typeof persistData === 'function') persistData();
       dialog.remove();
       parentModal.remove();
       this._refresh();
-      toast('Sesja oznaczona jako nie odbyła się.', 'info');
+      const labels = { patient_vacation: 'Urlop pacjenta', patient_late: 'Odwołana w ostatniej chwili', therapist: 'Odwołana przez terapeutę' };
+      toast('Sesja: ' + (labels[reason] || 'odwołana'), 'info');
     });
   },
 
@@ -1166,6 +1184,13 @@ const CalendarViews = {
       '.cal-detail-patient-name{font-size:1.1rem;font-weight:700;color:#1c1c1e}',
       '.cal-detail-patient-pseudo{font-size:.85rem;color:#8e8e93;margin-top:4px}',
       '.cal-detail-muted{font-size:.85rem;color:#8e8e93;margin:4px 0 0}',
+      '.cal-absent-options{display:flex;flex-direction:column;gap:8px;margin-top:8px}',
+      '.cal-absent-option{display:flex;align-items:flex-start;gap:12px;padding:12px 14px;border-radius:14px;background:#f7f2eb;cursor:pointer;transition:background .15s}',
+      '.cal-absent-option:has(input:checked){background:#e8f0ea;outline:2px solid #49664f}',
+      '.cal-absent-option input[type="radio"]{margin-top:3px;accent-color:#49664f;flex-shrink:0}',
+      '.cal-absent-option-body{display:flex;flex-direction:column;gap:2px}',
+      '.cal-absent-option-body strong{font-size:.9rem;color:#1c1c1e}',
+      '.cal-absent-option-body .cal-detail-muted{margin:0;font-size:.8rem}',
       '.cal-detail-notes-text{font-size:.88rem;color:#1c1c1e;line-height:1.55;margin:4px 0 0}',
       '.cal-paid{color:#34C759!important}.cal-unpaid{color:#FF3B30!important}',
       '.cal-detail-actions{display:flex;flex-direction:column;gap:8px}',
