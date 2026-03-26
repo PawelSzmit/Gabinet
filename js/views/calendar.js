@@ -596,6 +596,9 @@ const CalendarViews = {
                 + '<span class="cal-detail-label">Data płatności</span>'
                 + '<span class="cal-detail-value">' + formatDateMedium(new Date(session.paymentDate)) + '</span>'
                 + '</div>' : '')
+          + '<div class="cal-detail-row" style="margin-top:4px">'
+            + '<button class="cal-edit-notes-btn" id="detail-btn-payment-menu">Zarządzaj płatnością ›</button>'
+          + '</div>'
           + '</div>')
       : '<div class="cal-detail-section"><p class="cal-detail-muted">Płatność nie jest wymagana.</p></div>';
     const actionsSection = (
@@ -738,6 +741,51 @@ const CalendarViews = {
     if (btnReschedule) btnReschedule.addEventListener('click', () => this._showRescheduleDialog(session, modal));
     const btnDelete = modal.querySelector('#detail-btn-delete');
     if (btnDelete) btnDelete.addEventListener('click', () => this._showDeleteSessionDialog(session, modal));
+    const btnPaymentMenu = modal.querySelector('#detail-btn-payment-menu');
+    if (btnPaymentMenu) btnPaymentMenu.addEventListener('click', () => this._showPaymentMenuDialog(session, modal));
+  },
+
+  _showPaymentMenuDialog(session, parentModal) {
+    const hasPayment = Boolean(session.paymentId);
+    const dialog = document.createElement('div');
+    dialog.className    = 'cal-modal-overlay';
+    dialog.style.zIndex = '10001';
+    dialog.innerHTML = (
+      '<div class="cal-modal-sheet" role="dialog" aria-modal="true">'
+      + '<div class="cal-modal-header">'
+        + '<button class="cal-modal-cancel" id="pay-menu-cancel">Anuluj</button>'
+        + '<h2 class="cal-modal-title">Zarządzaj płatnością</h2>'
+        + '<div></div>'
+      + '</div>'
+      + '<div class="cal-modal-body">'
+        + '<div class="cal-detail-actions">'
+          + '<button class="cal-action-btn" id="pay-menu-new">Zarejestruj nową płatność</button>'
+          + (hasPayment
+              ? '<button class="cal-action-btn" id="pay-menu-edit">Edytuj dokonaną płatność</button>'
+              : '')
+        + '</div>'
+      + '</div>'
+      + '</div>'
+    );
+    document.body.appendChild(dialog);
+    dialog.querySelector('#pay-menu-cancel').addEventListener('click', () => dialog.remove());
+    dialog.addEventListener('click', e => { if (e.target === dialog) dialog.remove(); });
+    dialog.querySelector('#pay-menu-new').addEventListener('click', () => {
+      dialog.remove();
+      parentModal.remove();
+      if (typeof FinanceViews !== 'undefined' && typeof FinanceViews.openAddPaymentForSession === 'function') {
+        FinanceViews.openAddPaymentForSession(session);
+      }
+    });
+    if (hasPayment) {
+      dialog.querySelector('#pay-menu-edit').addEventListener('click', () => {
+        dialog.remove();
+        parentModal.remove();
+        if (typeof FinanceViews !== 'undefined' && typeof FinanceViews.openEditPayment === 'function') {
+          FinanceViews.openEditPayment(session.paymentId);
+        }
+      });
+    }
   },
 
   _showDeleteSessionDialog(session, parentModal) {
@@ -884,9 +932,19 @@ const CalendarViews = {
       const tp = timeVal.split(':').map(Number);
       const dp = dateVal.split('-').map(Number);
       const newDate = new Date(dp[0], dp[1] - 1, dp[2], tp[0], tp[1], 0, 0);
+      // Snapshot payment fields before mutation (safety — object is mutated in-place
+      // so these values are preserved, but being explicit prevents future regressions)
+      const paymentSnapshot = {
+        isPaid: session.isPaid, isPartiallyPaid: session.isPartiallyPaid,
+        partialPaymentAmount: session.partialPaymentAmount,
+        paymentAmount: session.paymentAmount, paymentMethod: session.paymentMethod,
+        paymentDate: session.paymentDate, paymentId: session.paymentId,
+      };
       session.originalDate   = session.date;
       session.wasRescheduled = true;
       session.date           = newDate.toISOString();
+      // Restore payment fields (guard against any accidental reset)
+      Object.assign(session, paymentSnapshot);
       if (typeof persistData === 'function') persistData();
       dialog.remove();
       parentModal.remove();
