@@ -413,17 +413,6 @@ const PatientViews = {
                   '<dt>Zaległości</dt><dd>' + escHtml(debtAmount) + '</dd>' +
                 '</dl>' +
               '</article>' +
-              (cancelTotal > 0 ? (
-              '<article class="pv-panel-card">' +
-                '<h3>Odwołane sesje</h3>' +
-                '<dl class="pv-dl">' +
-                  '<dt>Łącznie</dt><dd>' + cancelTotal + '</dd>' +
-                  (cancelVacation > 0 ? '<dt>Urlop pacjenta</dt><dd>' + cancelVacation + '</dd>' : '') +
-                  (cancelPatient > 0 ? '<dt>Z winy pacjenta</dt><dd>' + cancelPatient + '</dd>' : '') +
-                  (cancelTherapist > 0 ? '<dt>Odwołane przez terapeutę</dt><dd>' + cancelTherapist + '</dd>' : '') +
-                  (cancelOther > 0 ? '<dt>Bez kategorii</dt><dd>' + cancelOther + '</dd>' : '') +
-                '</dl>' +
-              '</article>') : '') +
               '<article class="pv-panel-card pv-panel-card--wide">' +
                 '<h3>Rytm spotkań</h3>' +
                 this._renderScheduleSection(patient) +
@@ -469,8 +458,16 @@ const PatientViews = {
             '<h2 class="pv-section-title">Historia</h2>' +
             '<div class="pv-workspace-grid">' +
               '<article class="pv-panel-card">' +
-                '<h3>Oś postępów</h3>' +
-                this._renderProgressSection(patient) +
+                '<h3>Odwołane sesje</h3>' +
+                (cancelTotal > 0
+                  ? '<dl class="pv-dl">' +
+                      '<dt>Łącznie</dt><dd>' + cancelTotal + '</dd>' +
+                      (cancelVacation > 0 ? '<dt>Urlop pacjenta</dt><dd>' + cancelVacation + '</dd>' : '') +
+                      (cancelPatient > 0 ? '<dt>Odwołane przez pacjenta</dt><dd>' + cancelPatient + '</dd>' : '') +
+                      (cancelTherapist > 0 ? '<dt>Odwołane przez terapeutę</dt><dd>' + cancelTherapist + '</dd>' : '') +
+                      (cancelOther > 0 ? '<dt>Bez kategorii</dt><dd>' + cancelOther + '</dd>' : '') +
+                    '</dl>'
+                  : '<p class="pv-empty-msg" style="padding:8px 0">Brak odwołanych sesji.</p>') +
               '</article>' +
               '<article class="pv-panel-card">' +
                 '<h3>Cykle terapii</h3>' +
@@ -485,7 +482,6 @@ const PatientViews = {
                 'Usu\u0144 pacjenta' +
               '</button>' +
             '</div>' +
-            '<div class="pv-history-footnote">Wpisy postępów: ' + progressCount + '. Historia pozostaje częścią spokojnego kontekstu pacjenta, a nie osobną wyspą nawigacji.</div>' +
           '</section>' +
 
         '</div>' +
