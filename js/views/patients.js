@@ -66,11 +66,8 @@ const PatientViews = {
 
   render(params) {
     params = params || {};
-    if (params.patientId) {
-      this._currentPatientId = params.patientId;
-      this._renderDetailPage(params.patientId);
-      return;
-    }
+    // view-specific routes must be checked before patientId,
+    // because edit passes both { view:'edit', patientId }
     if (params.view === 'archive') {
       this._renderArchivePage();
       return;
@@ -78,6 +75,11 @@ const PatientViews = {
     if (params.view === 'add' || params.view === 'edit') {
       this._currentPatientId = params.patientId || null;
       this._renderFormPage(params.patientId || null);
+      return;
+    }
+    if (params.patientId) {
+      this._currentPatientId = params.patientId;
+      this._renderDetailPage(params.patientId);
       return;
     }
     if (params.q !== undefined) {
