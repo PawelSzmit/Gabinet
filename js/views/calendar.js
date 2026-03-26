@@ -109,24 +109,18 @@ const CalendarViews = {
 
     return (
       '<section class="cal-focus-panel">'
-      + '<div class="cal-focus-copy">'
-        + '<span class="cal-focus-kicker">Dzisiaj</span>'
-        + '<h1 class="cal-focus-title">Plan dnia dla Twojego gabinetu</h1>'
-        + '<p class="cal-focus-text">' + this._escapeHtml(dayLabel) + '. Zobacz najbliższe sesje, zaległości i rzeczy wymagające spokojnej reakcji.</p>'
-        + '<div class="cal-focus-actions">'
-          + '<button class="cal-focus-action cal-focus-action--primary" id="today-btn-add-session">Dodaj sesję</button>'
-          + '<button class="cal-focus-action" id="today-btn-add-payment">Zarejestruj płatność</button>'
-          + '<button class="cal-focus-action" id="today-btn-open-patients">Pacjenci</button>'
+      + '<div class="cal-focus-top">'
+        + '<div class="cal-focus-copy">'
+          + '<span class="cal-focus-kicker">Dzisiaj</span>'
+          + '<h1 class="cal-focus-title">Plan dnia dla Twojego gabinetu</h1>'
         + '</div>'
-      + '</div>'
-      + '<div class="cal-focus-aside">'
         + nextSessionHtml
-        + '<div class="cal-focus-stats">'
-          + '<article class="cal-focus-stat"><span>Sesje dziś</span><strong>' + todaySessions.length + '</strong><small>' + completedToday + ' odbytych</small></article>'
-          + '<article class="cal-focus-stat"><span>Należności</span><strong>' + formatPLN(unpaidTotal) + '</strong><small>' + debtPatients + ' pacjentów</small></article>'
-          + '<article class="cal-focus-stat"><span>Aktywni pacjenci</span><strong>' + AppState.activePatients.length + '</strong><small>bieżący cykl terapii</small></article>'
-          + '<article class="cal-focus-stat"><span>Tryb dnia</span><strong>' + (blockedToday ? 'Blokada' : 'Otwarte') + '</strong><small>' + (blockedToday ? 'Masz zablokowany termin.' : 'Brak blokady na dziś.') + '</small></article>'
-        + '</div>'
+      + '</div>'
+      + '<div class="cal-focus-stats">'
+        + '<article class="cal-focus-stat"><span>Sesje dziś</span><strong>' + todaySessions.length + '</strong><small>' + completedToday + ' odbytych</small></article>'
+        + '<article class="cal-focus-stat"><span>Należności</span><strong>' + formatPLN(unpaidTotal) + '</strong><small>' + debtPatients + ' pacjentów</small></article>'
+        + '<article class="cal-focus-stat"><span>Aktywni pacjenci</span><strong>' + AppState.activePatients.length + '</strong><small>bieżący cykl terapii</small></article>'
+        + '<article class="cal-focus-stat"><span>Tryb dnia</span><strong>' + (blockedToday ? 'Blokada' : 'Otwarte') + '</strong><small>' + (blockedToday ? 'Masz zablokowany termin.' : 'Brak blokady na dziś.') + '</small></article>'
       + '</div>'
       + '</section>'
     );
@@ -1084,25 +1078,23 @@ const CalendarViews = {
       '.cal-mhs-next-label{font-weight:700;color:var(--text,#243126)}',
       '.cal-month-header-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}',
       '.cal-month-header-actions .cal-focus-action{padding:9px 14px;font-size:.8rem}',
-      '.cal-focus-panel{display:grid;grid-template-columns:1.2fr .9fr;gap:16px;padding:22px 24px;margin-bottom:14px;border-radius:28px;background:color-mix(in srgb,var(--surface-raised,#f7f2eb) 92%, transparent);border:1px solid var(--border,rgba(73,102,79,.14));box-shadow:var(--shadow-md)}',
-      '.cal-focus-kicker{display:inline-block;margin-bottom:12px;font-size:.72rem;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:var(--blue,#49664f)}',
-      '.cal-focus-title{margin:0;font-family:var(--font-display,"Fraunces",serif);font-size:clamp(2rem,4vw,3rem);line-height:.96;letter-spacing:-.05em;color:var(--text,#243126);max-width:11ch}',
-      '.cal-focus-text{margin:14px 0 0;max-width:42rem;color:var(--text-secondary,rgba(36,49,38,.68));font-size:.98rem;line-height:1.7}',
-      '.cal-focus-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px}',
+      '.cal-focus-panel{display:flex;flex-direction:column;gap:16px;padding:22px 24px;margin-bottom:14px;border-radius:28px;background:color-mix(in srgb,var(--surface-raised,#f7f2eb) 92%, transparent);border:1px solid var(--border,rgba(73,102,79,.14));box-shadow:var(--shadow-md)}',
+      '.cal-focus-top{display:grid;grid-template-columns:1fr 1.1fr;gap:16px;align-items:start}',
+      '.cal-focus-kicker{display:inline-block;margin-bottom:10px;font-size:.72rem;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:var(--blue,#49664f)}',
+      '.cal-focus-title{margin:0;font-family:var(--font-display,"Fraunces",serif);font-size:clamp(1.6rem,3vw,2.4rem);line-height:.96;letter-spacing:-.05em;color:var(--text,#243126);max-width:14ch}',
       '.cal-focus-action{border:1px solid var(--border,rgba(73,102,79,.12));border-radius:999px;padding:12px 16px;background:rgba(255,255,255,.65);color:var(--blue,#49664f);font-size:.85rem;font-weight:800;cursor:pointer;transition:transform .18s ease,background .18s ease,color .18s ease}',
       '.cal-focus-action:hover{transform:translateY(-1px)}',
       '.cal-focus-action--primary{background:linear-gradient(135deg,var(--blue,#49664f),#617f68);color:var(--text-inverse,#f6f0e6);border-color:transparent;box-shadow:0 14px 30px rgba(73,102,79,.22)}',
-      '.cal-focus-aside{display:flex;flex-direction:column;gap:12px}',
       '.cal-focus-next{display:flex;flex-direction:column;gap:6px;padding:18px;border-radius:22px;background:rgba(255,255,255,.6);border:1px solid var(--border,rgba(73,102,79,.12))}',
       '.cal-focus-next__eyebrow{font-size:.72rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--text-secondary,rgba(36,49,38,.68))}',
-      '.cal-focus-next strong{font-size:1.15rem;color:var(--text,#243126)}',
+      '.cal-focus-next strong{font-size:1.1rem;color:var(--text,#243126)}',
       '.cal-focus-next span{color:var(--text-secondary,rgba(36,49,38,.68));line-height:1.6}',
-      '.cal-focus-next--empty{justify-content:center;min-height:120px}',
-      '.cal-focus-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}',
-      '.cal-focus-stat{padding:16px;border-radius:20px;background:rgba(255,255,255,.62);border:1px solid var(--border,rgba(73,102,79,.12));display:flex;flex-direction:column;gap:6px}',
-      '.cal-focus-stat span{font-size:.74rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--text-secondary,rgba(36,49,38,.68))}',
-      '.cal-focus-stat strong{font-size:1.35rem;color:var(--text,#243126)}',
-      '.cal-focus-stat small{font-size:.8rem;color:var(--text-secondary,rgba(36,49,38,.68));line-height:1.5}',
+      '.cal-focus-next--empty{justify-content:center}',
+      '.cal-focus-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}',
+      '.cal-focus-stat{padding:14px 16px;border-radius:18px;background:rgba(255,255,255,.62);border:1px solid var(--border,rgba(73,102,79,.12));display:flex;flex-direction:column;gap:4px}',
+      '.cal-focus-stat span{font-size:.7rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--text-secondary,rgba(36,49,38,.68))}',
+      '.cal-focus-stat strong{font-size:1.25rem;color:var(--text,#243126)}',
+      '.cal-focus-stat small{font-size:.78rem;color:var(--text-secondary,rgba(36,49,38,.68));line-height:1.4}',
       '.cal-toolbar{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:color-mix(in srgb,var(--surface-raised,#f7f2eb) 92%, transparent);border:1px solid var(--border,rgba(73,102,79,.14));border-radius:24px;gap:8px;flex-wrap:wrap;flex-shrink:0;box-shadow:var(--shadow-sm);margin-bottom:12px}',
       '.cal-toolbar-left,.cal-toolbar-right{display:flex;align-items:center;gap:8px}',
       '.cal-nav{display:flex;align-items:center;gap:4px}',
@@ -1234,8 +1226,8 @@ const CalendarViews = {
       '.cal-action-absent{background:#FF3B30;color:#fff}',
       '.cal-action-reschedule{background:#FF9500;color:#fff}',
       '.cal-edit-notes-btn{border:none;background:transparent;color:#007AFF;font-size:.85rem;font-weight:600;cursor:pointer;padding:0}',
-      '@media (max-width: 880px){.cal-wrapper{padding:14px 14px calc(var(--tab-bar-height) + 24px)}.cal-focus-panel{grid-template-columns:1fr}.cal-focus-stats{grid-template-columns:1fr 1fr}}',
-      '@media (max-width: 640px){.cal-focus-stats{grid-template-columns:1fr}.cal-focus-actions{flex-direction:column}.cal-focus-action{width:100%}}',
+      '@media (max-width: 880px){.cal-wrapper{padding:14px 14px calc(var(--tab-bar-height) + 24px)}.cal-focus-stats{grid-template-columns:repeat(2,1fr)}}',
+      '@media (max-width: 600px){.cal-focus-top{grid-template-columns:1fr}.cal-focus-stats{grid-template-columns:repeat(2,1fr)}}',
       '@media (prefers-color-scheme: dark){.cal-wrapper{background:transparent}.cal-focus-panel,.cal-toolbar,.cal-day-sessions{background:color-mix(in srgb,var(--surface-raised,#223128) 88%, transparent)}.cal-focus-next,.cal-focus-stat,.cal-add-menu{background:rgba(255,255,255,.04)}.cal-focus-title,.cal-title,.cal-row-name,.cal-daily-event-name,.cal-daily-event-time,.cal-sessions-list-title,.cal-detail-value,.cal-detail-notes-text,.cal-detail-patient-name{color:var(--text,#f4ede4)}.cal-focus-text,.cal-focus-next span,.cal-focus-stat span,.cal-focus-stat small,.cal-add-menu-item,.cal-detail-label,.cal-detail-muted,.cal-header-cell,.cal-week-header-cell,.cal-week-event-name,.cal-row-time{color:var(--text-secondary,rgba(244,237,228,.72))}.cal-segment{background:rgba(255,255,255,.05)}.cal-seg-btn.active{background:rgba(255,255,255,.08);color:var(--blue,#dcc29d)}.cal-btn,.cal-form-control,.cal-detail-section,.cal-modal-header{background:rgba(255,255,255,.04);color:var(--text,#f4ede4);border-color:var(--border,rgba(220,194,157,.12))}.cal-week-body,.cal-week-header,.cal-daily-header,.cal-grid-headers,.cal-grid,.cal-cell,.cal-cell-other,.cal-week-slot,.cal-daily-row,.cal-session-row{border-color:var(--separator,rgba(220,194,157,.08))}.cal-cell{background:#213027}.cal-cell-other{background:#1b271f}.cal-cell-selected{background:rgba(220,194,157,.08)!important}.cal-session-row:hover{background:rgba(255,255,255,.04)}}',
       '.hidden{display:none!important}',
     ];
