@@ -284,6 +284,8 @@ const App = {
     document.querySelectorAll('.tab-btn').forEach(btn => {
       const isActive = btn.dataset.view === activeView;
       btn.classList.toggle('active', isActive);
+      // Remove the static HTML class that was only used for initial render
+      btn.classList.remove('tab-btn--active');
       btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
     });
   },

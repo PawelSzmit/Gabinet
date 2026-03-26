@@ -192,7 +192,6 @@ const PatientViews = {
         '<button class="pv-btn pv-btn-add" id="pv-btn-add" title="Dodaj pacjenta">' +
           '<span class="pv-btn-icon">+</span> Nowy' +
         '</button>' +
-        '<button class="pv-btn pv-btn-icon-only" id="pv-btn-archive" title="Archiwum">&#128451;</button>' +
         '<div class="pv-sort-wrap">' +
           '<button class="pv-btn pv-btn-sort" id="pv-btn-sort">' +
             escHtml(sortLabel) + ' &#9660;' +
@@ -202,6 +201,7 @@ const PatientViews = {
           '</div>' +
         '</div>' +
         '<button class="pv-btn pv-btn-debt' + debtActive + '" id="pv-btn-debt" title="Tylko zad\u0142u\u017ceni">D\u0142ug</button>' +
+        '<button class="pv-btn pv-btn-archive-link" id="pv-btn-archive">Archiwum</button>' +
       '</div>'
     );
   },
@@ -1500,6 +1500,7 @@ const PatientViews = {
       '.pv-btn:hover{transform:translateY(-1px);background:rgba(255,255,255,.9)}',
       '.pv-btn-add,.pv-btn-primary{background:linear-gradient(135deg,var(--blue,#49664f),#617f68);color:var(--text-inverse,#f6f0e6)}',
       '.pv-btn-icon-only{padding:.75rem .9rem;font-size:1.05rem}',
+      '.pv-btn-archive-link{margin-left:auto;color:var(--text-secondary,rgba(36,49,38,.6));font-weight:600;font-size:.8rem}',
       '.pv-btn--active{background:var(--blue,#49664f)!important;color:var(--text-inverse,#f6f0e6)!important}',
       '.pv-btn-danger{background:linear-gradient(135deg,var(--red,#bf6152),#a95246);color:#fff}',
       '.pv-btn-restore{background:linear-gradient(135deg,var(--green,#6b9073),#7ca484);color:#fff}',
