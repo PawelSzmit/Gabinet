@@ -13,7 +13,8 @@ const FinanceViews = (() => {
     const style = document.createElement('style');
     style.id = 'fin-styles';
     style.textContent = [
-      '.fin-view{display:flex;flex-direction:column;gap:14px;padding:18px 18px calc(var(--tab-bar-height) + 30px);font-family:var(--font-sans,"Manrope",sans-serif)}',
+      '.fin-view{display:flex;flex-direction:column;gap:14px;padding:18px 18px calc(var(--tab-bar-height) + 30px);font-family:var(--font-sans,"Manrope",sans-serif);scrollbar-width:none}',
+      '.fin-view::-webkit-scrollbar{display:none}',
       '.fin-shell,.fin-tabs,.fin-section,.fin-payment-row,.fin-sheet-panel{background:color-mix(in srgb,var(--surface-raised,#f7f2eb) 92%, transparent);border:1px solid var(--border,rgba(73,102,79,.14));box-shadow:var(--shadow-sm)}',
       '.fin-shell{border-radius:30px;padding:24px}',
       '.fin-hero{display:grid;grid-template-columns:1.1fr .9fr;gap:16px;align-items:start}',
@@ -45,10 +46,10 @@ const FinanceViews = (() => {
       '.fin-section-title{margin:0 0 14px;font-size:1rem;font-weight:800;color:var(--text,#243126)}',
       '.fin-split{display:grid;grid-template-columns:1.1fr .9fr;gap:14px}',
       '.fin-method-list,.fin-debt-list,.fin-actions-list{display:grid;gap:10px}',
-      '.fin-method-row,.fin-debt-row,.fin-action-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;border-radius:20px;background:rgba(255,255,255,.62);border:1px solid var(--border,rgba(73,102,79,.1))}',
+      '.fin-method-row,.fin-debt-row,.fin-action-row{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:10px;padding:14px 16px;border-radius:20px;background:rgba(255,255,255,.62);border:1px solid var(--border,rgba(73,102,79,.1))}',
       '.fin-method-label,.fin-debt-name,.fin-action-row strong{color:var(--text,#243126);font-weight:700}',
-      '.fin-method-amount,.fin-debt-amount{color:var(--text,#243126);font-weight:800}',
-      '.fin-debt-count,.fin-action-row span{color:var(--text-secondary,rgba(36,49,38,.68));font-size:.82rem}',
+      '.fin-method-amount,.fin-debt-amount{color:var(--text,#243126);font-weight:800;text-align:right;white-space:nowrap}',
+      '.fin-debt-count,.fin-action-row span{color:var(--text-secondary,rgba(36,49,38,.68));font-size:.82rem;text-align:right;white-space:nowrap}',
       '.fin-method-badge{display:inline-flex;align-items:center;padding:.35rem .7rem;border-radius:999px;font-size:.74rem;font-weight:800}',
       '.fin-method-badge.badge-alior{background:rgba(191,97,82,.12);color:var(--red,#bf6152)}',
       '.fin-method-badge.badge-ing{background:rgba(204,139,86,.14);color:var(--orange,#cc8b56)}',
