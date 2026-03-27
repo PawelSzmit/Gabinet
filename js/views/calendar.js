@@ -1160,7 +1160,8 @@ const CalendarViews = {
     const rules = [
       '.cal-wrapper{display:flex;flex-direction:column;min-height:100%;background:transparent;font-family:var(--font-sans,"Manrope",sans-serif);padding:18px 18px calc(var(--tab-bar-height) + 30px)}',
       '.cal-wrapper--monthly{height:auto;overflow:visible}',
-      '.cal-wrapper--daily,.cal-wrapper--weekly{height:100%;overflow:hidden}',
+      '.cal-wrapper--daily{min-height:100%;overflow:visible}',
+      '.cal-wrapper--weekly{height:100%;overflow:hidden}',
       '.cal-wrapper--weekly .cal-focus-panel{display:none}',
       '.cal-focus-panel{display:flex;flex-direction:column;gap:16px;padding:22px 24px;margin-bottom:14px;border-radius:28px;background:color-mix(in srgb,var(--surface-raised,#f7f2eb) 92%, transparent);border:1px solid var(--border,rgba(73,102,79,.14));box-shadow:var(--shadow-md)}',
       '.cal-focus-top{display:grid;grid-template-columns:1fr 1.1fr;gap:16px;align-items:start}',
@@ -1198,7 +1199,7 @@ const CalendarViews = {
       '.cal-add-menu-item{display:block;width:100%;padding:14px 16px;border:none;background:transparent;text-align:left;font-size:.9rem;cursor:pointer;color:var(--text,#243126);border-bottom:1px solid var(--separator,rgba(73,102,79,.12))}',
       '.cal-add-menu-item:last-child{border-bottom:none}.cal-add-menu-item:hover{background:rgba(255,255,255,.6)}',
       '.cal-body{flex:1;overflow-y:auto;overflow-x:hidden;min-height:0}',
-      '.cal-wrapper--monthly .cal-body{flex:none;overflow:visible}',
+      '.cal-wrapper--monthly .cal-body,.cal-wrapper--daily .cal-body{flex:none;overflow:visible}',
       '.cal-monthly{display:flex;flex-direction:column}',
       '.cal-grid-headers{display:none}',
       '.cal-header-cell{text-align:center;font-size:.72rem;font-weight:600;color:#8e8e93;padding:6px 0;text-transform:uppercase;letter-spacing:.03em}',
