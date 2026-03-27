@@ -1657,8 +1657,8 @@ const PatientViews = {
     const style = document.createElement('style');
     style.id = 'pv-styles';
     style.textContent = [
-      '.pv-page{display:flex;flex-direction:column;height:100%;overflow:hidden;background:transparent;padding:18px 18px calc(var(--tab-bar-height) + 30px);font-family:var(--font-sans,"Manrope",sans-serif)}',
-      '.pv-list-wrap{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}',
+      '.pv-page{display:flex;flex-direction:column;background:transparent;padding:18px 18px calc(var(--tab-bar-height) + 30px);font-family:var(--font-sans,"Manrope",sans-serif)}',
+      '.pv-list-wrap{}',
       '.pv-search-bar,.pv-section,.pv-form-section,.pv-modal-box,.pv-ctx-menu{background:color-mix(in srgb,var(--surface-raised,#f7f2eb) 92%, transparent);border:1px solid var(--border,rgba(73,102,79,.14));box-shadow:var(--shadow-sm)}',
       '.pv-search-bar{display:flex;align-items:center;gap:.75rem;padding:16px 18px;border-radius:24px}',
       '.pv-search-icon{font-size:1.1rem;color:var(--text-secondary,rgba(36,49,38,.68))}',
