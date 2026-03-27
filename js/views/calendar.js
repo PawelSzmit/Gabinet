@@ -1236,7 +1236,7 @@ const CalendarViews = {
       '.cal-daily-header{background:#fff;border-bottom:1px solid #e0e0e5;padding:10px 16px;font-size:.88rem;font-weight:600;color:#1c1c1e;text-transform:capitalize;display:flex;align-items:center;gap:10px;flex-shrink:0;position:sticky;top:0;z-index:5}',
       '.cal-daily-header.today{color:#007AFF}',
       '.cal-blocked-badge{background:rgba(255,59,48,.08);color:#FF3B30;border:1px solid rgba(255,59,48,.25);border-radius:6px;padding:2px 8px;font-size:.72rem;font-weight:500}',
-      '.cal-daily-slots{overflow-y:auto}',
+      '.cal-daily-slots{overflow:visible}',
       '.cal-daily-row{display:grid;grid-template-columns:50px 1fr;border-bottom:1px solid #f2f2f7;min-height:52px;align-items:stretch}',
       '.cal-daily-time{font-size:.68rem;color:#8e8e93;padding:6px 4px 0 8px;border-right:1px solid #e0e0e5;align-self:flex-start}',
       '.cal-daily-events{padding:4px 8px;display:flex;flex-direction:column;gap:4px;min-height:52px}',
