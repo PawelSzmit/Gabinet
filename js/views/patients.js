@@ -1283,14 +1283,34 @@ const PatientViews = {
         }
         const patient = getPatient(pid);
         if (!patient) return;
+        const vpStart = new Date(start);
+        const vpEnd   = new Date(end);
+        vpStart.setHours(0, 0, 0, 0);
+        vpEnd.setHours(23, 59, 59, 999);
+
         patient.vacationPeriods.push({
           id: uuid(),
-          startDate: new Date(start).toISOString(),
-          endDate:   new Date(end).toISOString()
+          startDate: vpStart.toISOString(),
+          endDate:   vpEnd.toISOString()
         });
+
+        // Cancel existing scheduled sessions within vacation range
+        let cancelled = 0;
+        getSessions().forEach(s => {
+          if (s.patientId !== patient.id) return;
+          if (s.status !== 'scheduled') return;
+          const sd = new Date(s.date);
+          if (sd >= vpStart && sd <= vpEnd) {
+            s.status = 'cancelled';
+            s.cancellationReason = 'patient_vacation';
+            s.isPaymentRequired = false;
+            cancelled++;
+          }
+        });
+
         persistData();
         if (modal) modal.classList.add('hidden');
-        toast('Urlop dodany.', 'success');
+        toast('Urlop dodany.' + (cancelled > 0 ? ' Odwo\u0142ano ' + cancelled + ' sesji.' : ''), 'success');
         this._renderDetailPage(pid);
       });
     }
@@ -1313,7 +1333,27 @@ const PatientViews = {
         const vpid = btn.dataset.vpid;
         const p    = getPatient(pid);
         if (!p) return;
+        const removed = p.vacationPeriods.find(v => v.id === vpid);
         p.vacationPeriods = p.vacationPeriods.filter(v => v.id !== vpid);
+
+        // Restore cancelled-by-vacation sessions within the removed period
+        if (removed) {
+          const vpStart = new Date(removed.startDate);
+          const vpEnd   = new Date(removed.endDate);
+          vpStart.setHours(0, 0, 0, 0);
+          vpEnd.setHours(23, 59, 59, 999);
+          getSessions().forEach(s => {
+            if (s.patientId !== pid) return;
+            if (s.status !== 'cancelled' || s.cancellationReason !== 'patient_vacation') return;
+            const sd = new Date(s.date);
+            if (sd >= vpStart && sd <= vpEnd) {
+              s.status = 'scheduled';
+              s.cancellationReason = null;
+              s.isPaymentRequired = true;
+            }
+          });
+        }
+
         persistData();
         toast('Urlop usuni\u0119ty.', 'success');
         this._renderDetailPage(pid);
