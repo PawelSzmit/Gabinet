@@ -54,6 +54,14 @@ const FinanceViews = (() => {
       '.fin-method-badge.badge-alior{background:rgba(191,97,82,.12);color:var(--red,#bf6152)}',
       '.fin-method-badge.badge-ing{background:rgba(204,139,86,.14);color:var(--orange,#cc8b56)}',
       '.fin-method-badge.badge-cash{background:rgba(107,144,115,.14);color:var(--green,#6b9073)}',
+      '.fin-method-badge.badge-split{background:rgba(73,102,79,.1);color:var(--blue,#49664f)}',
+      '.fin-split-label{display:flex;align-items:center;gap:.5rem;font-size:.88rem;font-weight:600;cursor:pointer;color:var(--text,#243126)}',
+      '.fin-split-label input[type=checkbox]{width:17px;height:17px;accent-color:var(--blue,#49664f);cursor:pointer}',
+      '.fin-split-amount-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}',
+      '.fin-split-amount-item{display:flex;flex-direction:column;gap:6px}',
+      '.fin-split-amount-label{font-size:.78rem;font-weight:700;color:var(--text-secondary,rgba(36,49,38,.68));text-transform:uppercase;letter-spacing:.06em}',
+      '.fin-split-amount-readonly{background:var(--surface-raised,#f7f2eb)!important;color:var(--text-secondary,rgba(36,49,38,.68))!important;cursor:default}',
+      '.fin-detail-split{padding-left:24px;border-left:2px solid var(--border,rgba(73,102,79,.14))}',
       '.fin-bar-chart{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;align-items:end;min-height:220px}',
       '.fin-bar{display:flex;flex-direction:column;justify-content:flex-end;gap:8px;min-height:220px}',
       '.fin-bar__value{font-size:.76rem;color:var(--text-secondary,rgba(36,49,38,.68));min-height:18px}',
@@ -158,21 +166,19 @@ const FinanceViews = (() => {
       : (patient ? patient.sessionRate : 0);
   }
 
+  const METHOD_LABELS = { aliorBank: 'Alior Bank', ingBank: 'ING Bank', cash: 'Gotówka' };
+
   function paymentMethodLabel(method) {
-    const labels = {
-      aliorBank: 'Alior Bank',
-      ingBank: 'ING Bank',
-      cash: 'Gotówka',
-    };
-    return labels[method] || method || '—';
+    if (!method) return '—';
+    if (method.indexOf('+') !== -1) {
+      return method.split('+').map(m => METHOD_LABELS[m] || m).join(' + ');
+    }
+    return METHOD_LABELS[method] || method;
   }
 
   function paymentMethodClass(method) {
-    const map = {
-      aliorBank: 'badge-alior',
-      ingBank: 'badge-ing',
-      cash: 'badge-cash',
-    };
+    const map = { aliorBank: 'badge-alior', ingBank: 'badge-ing', cash: 'badge-cash' };
+    if (!method || method.indexOf('+') !== -1) return 'badge-split';
     return map[method] || 'badge-cash';
   }
 
@@ -208,14 +214,26 @@ const FinanceViews = (() => {
     const totals = { aliorBank: 0, ingBank: 0, cash: 0 };
     periodSessions.forEach((session) => {
       if (!session.isPaid) return;
-      // Prefer session.paymentMethod; fall back to linked payment record's method
-      let method = session.paymentMethod;
-      if (!method && session.paymentId) {
-        const payment = AppState.payments.find(p => p.id === session.paymentId);
-        if (payment) method = payment.method;
+      const sessAmt = sessionAmount(session);
+      // Look up the payment record for split logic
+      const payment = session.paymentId
+        ? AppState.payments.find(p => p.id === session.paymentId)
+        : null;
+
+      if (payment && payment.isSplit && payment.splitAmounts && payment.amount > 0) {
+        // Distribute proportionally: session's share of total payment
+        const fraction = sessAmt / payment.amount;
+        const m1 = payment.method || 'cash';
+        const m2 = payment.splitMethod || 'cash';
+        totals[m1] = (totals[m1] || 0) + parseFloat((payment.splitAmounts.primary * fraction).toFixed(2));
+        totals[m2] = (totals[m2] || 0) + parseFloat((payment.splitAmounts.secondary * fraction).toFixed(2));
+      } else {
+        let method = session.paymentMethod;
+        if (method && method.indexOf('+') !== -1) method = method.split('+')[0]; // fallback: use primary
+        if (!method && payment) method = payment.method;
+        method = method || 'cash';
+        totals[method] = (totals[method] || 0) + sessAmt;
       }
-      method = method || 'cash';
-      totals[method] = (totals[method] || 0) + sessionAmount(session);
     });
     return totals;
   }
@@ -536,10 +554,23 @@ const FinanceViews = (() => {
     }, 0);
   }
 
+  function renderMethodToggle(id, selected) {
+    return (
+      '<div class="fin-method-toggle" id="' + id + '">' +
+        '<button class="fin-method-btn ' + (selected === 'aliorBank' ? 'active' : '') + '" type="button" data-method="aliorBank">Alior Bank</button>' +
+        '<button class="fin-method-btn ' + (selected === 'ingBank' ? 'active' : '') + '" type="button" data-method="ingBank">ING Bank</button>' +
+        '<button class="fin-method-btn ' + (selected === 'cash' ? 'active' : '') + '" type="button" data-method="cash">Gotówka</button>' +
+      '</div>'
+    );
+  }
+
   function renderPaymentSheet(payment, prefill) {
     const isEdit = Boolean(payment);
     const patients = AppState.activePatients.slice().sort((a, b) => displayPatientName(a).localeCompare(displayPatientName(b), 'pl'));
-    const selectedMethod = payment ? payment.method : 'cash';
+    const isSplit = payment ? Boolean(payment.isSplit) : false;
+    const selectedMethod  = payment ? payment.method : 'cash';
+    const selectedMethod2 = (payment && payment.splitMethod) ? payment.splitMethod : 'cash';
+    const splitAmount2    = (payment && payment.splitAmounts) ? payment.splitAmounts.secondary : '';
     const patientId = payment ? payment.patientId : (prefill ? (prefill.patientId || '') : '');
     const selectedIds = payment ? (payment.sessionIds || []) : (prefill ? (prefill.sessionIds || []) : []);
     return (
@@ -566,12 +597,31 @@ const FinanceViews = (() => {
             '</div>' +
             '<div class="fin-form-group fin-form-group--full">' +
               '<label>Metoda płatności</label>' +
-              '<div class="fin-method-toggle" id="fin-method-toggle">' +
-                '<button class="fin-method-btn ' + (selectedMethod === 'aliorBank' ? 'active' : '') + '" type="button" data-method="aliorBank">Alior Bank</button>' +
-                '<button class="fin-method-btn ' + (selectedMethod === 'ingBank' ? 'active' : '') + '" type="button" data-method="ingBank">ING Bank</button>' +
-                '<button class="fin-method-btn ' + (selectedMethod === 'cash' ? 'active' : '') + '" type="button" data-method="cash">Gotówka</button>' +
-              '</div>' +
+              renderMethodToggle('fin-method-toggle', selectedMethod) +
               '<input type="hidden" id="fin-sheet-method" value="' + escHtml(selectedMethod) + '">' +
+            '</div>' +
+            // Split toggle
+            '<div class="fin-form-group fin-form-group--full">' +
+              '<label class="fin-split-label">' +
+                '<input type="checkbox" id="fin-split-toggle"' + (isSplit ? ' checked' : '') + '>' +
+                ' Podziel na dwie formy płatności' +
+              '</label>' +
+            '</div>' +
+            // Second method row (hidden unless split)
+            '<div class="fin-form-group fin-form-group--full" id="fin-split-row" style="' + (isSplit ? '' : 'display:none') + '">' +
+              '<label>Druga forma płatności</label>' +
+              renderMethodToggle('fin-method2-toggle', selectedMethod2) +
+              '<input type="hidden" id="fin-sheet-method2" value="' + escHtml(selectedMethod2) + '">' +
+              '<div class="fin-split-amount-row">' +
+                '<div class="fin-split-amount-item">' +
+                  '<span class="fin-split-amount-label" id="fin-split-label1">Kwota — pierwsza forma</span>' +
+                  '<input class="fin-input fin-split-amount-readonly" type="text" id="fin-split-amount1" readonly placeholder="auto">' +
+                '</div>' +
+                '<div class="fin-split-amount-item">' +
+                  '<span class="fin-split-amount-label">Kwota — druga forma (zł)</span>' +
+                  '<input class="fin-input" type="number" id="fin-split-amount2" min="0.01" step="0.01" value="' + escHtml(String(splitAmount2)) + '" placeholder="0.00">' +
+                '</div>' +
+              '</div>' +
             '</div>' +
             '<div class="fin-form-group fin-form-group--full">' +
               '<label>Sesje do rozliczenia</label>' +
@@ -580,7 +630,7 @@ const FinanceViews = (() => {
               '</div>' +
             '</div>' +
             '<div class="fin-form-group">' +
-              '<label for="fin-sheet-amount">Wpłacona kwota (zł)</label>' +
+              '<label for="fin-sheet-amount">Łączna kwota (zł)</label>' +
               '<input class="fin-input" type="number" id="fin-sheet-amount" min="0" step="0.01" value="' + escHtml(String((payment && payment.amount) || '0')) + '" placeholder="0.00">' +
               '<div id="fin-sheet-balance-info" class="fin-balance-info" style="display:none"></div>' +
             '</div>' +
@@ -669,6 +719,7 @@ const FinanceViews = (() => {
         amountInput.value = expected > 0 ? expected.toFixed(2) : '0.00';
       }
       updateBalanceInfo();
+      updateSplitAmount1();
     }
 
     function bindCheckboxes() {
@@ -687,13 +738,54 @@ const FinanceViews = (() => {
       });
     }
 
-    sheet.querySelectorAll('.fin-method-btn').forEach((button) => {
-      button.addEventListener('click', () => {
-        sheet.querySelectorAll('.fin-method-btn').forEach((item) => item.classList.remove('active'));
-        button.classList.add('active');
-        methodInput.value = button.dataset.method;
+    // Primary method toggle
+    const methodToggle = sheet.querySelector('#fin-method-toggle');
+    if (methodToggle) {
+      methodToggle.querySelectorAll('.fin-method-btn').forEach((button) => {
+        button.addEventListener('click', () => {
+          methodToggle.querySelectorAll('.fin-method-btn').forEach((item) => item.classList.remove('active'));
+          button.classList.add('active');
+          methodInput.value = button.dataset.method;
+        });
       });
-    });
+    }
+
+    // Second method toggle (split)
+    const methodInput2 = sheet.querySelector('#fin-sheet-method2');
+    const method2Toggle = sheet.querySelector('#fin-method2-toggle');
+    if (method2Toggle) {
+      method2Toggle.querySelectorAll('.fin-method-btn').forEach((button) => {
+        button.addEventListener('click', () => {
+          method2Toggle.querySelectorAll('.fin-method-btn').forEach((item) => item.classList.remove('active'));
+          button.classList.add('active');
+          if (methodInput2) methodInput2.value = button.dataset.method;
+        });
+      });
+    }
+
+    // Split toggle: show/hide second method row
+    const splitToggle = sheet.querySelector('#fin-split-toggle');
+    const splitRow    = sheet.querySelector('#fin-split-row');
+    const splitAmt2   = sheet.querySelector('#fin-split-amount2');
+    const splitAmt1   = sheet.querySelector('#fin-split-amount1');
+
+    function updateSplitAmount1() {
+      if (!splitAmt1 || !splitAmt2) return;
+      const total = parseFloat(amountInput.value) || 0;
+      const amt2  = parseFloat(splitAmt2.value) || 0;
+      const amt1  = Math.max(0, total - amt2);
+      splitAmt1.value = amt1 > 0 ? amt1.toFixed(2) : '';
+    }
+
+    if (splitToggle && splitRow) {
+      splitToggle.addEventListener('change', () => {
+        splitRow.style.display = splitToggle.checked ? '' : 'none';
+        if (splitToggle.checked) updateSplitAmount1();
+      });
+    }
+    if (splitAmt2) {
+      splitAmt2.addEventListener('input', updateSplitAmount1);
+    }
 
     if (amountInput) {
       amountInput.addEventListener('input', () => {
@@ -737,6 +829,12 @@ const FinanceViews = (() => {
     const note = sheet.querySelector('#fin-sheet-note').value.trim();
     const sessionIds = selectedSessionIds(sheet);
 
+    // Split fields
+    const splitToggle = sheet.querySelector('#fin-split-toggle');
+    const isSplit = splitToggle ? splitToggle.checked : false;
+    const splitMethod = isSplit ? (sheet.querySelector('#fin-sheet-method2').value || 'cash') : null;
+    const splitAmt2Raw = isSplit ? parseFloat(sheet.querySelector('#fin-split-amount2').value) : 0;
+
     if (!patientId) {
       toast('Wybierz pacjenta.', 'warning');
       return;
@@ -751,6 +849,27 @@ const FinanceViews = (() => {
     }
 
     const amount = parseFloat(sheet.querySelector('#fin-sheet-amount').value) || selectedTotal(sheet);
+
+    // Validate split
+    if (isSplit) {
+      if (!splitMethod || splitMethod === method) {
+        toast('Wybierz dwie różne metody płatności.', 'warning');
+        return;
+      }
+      if (!splitAmt2Raw || splitAmt2Raw <= 0) {
+        toast('Podaj kwotę dla drugiej formy płatności.', 'warning');
+        return;
+      }
+      if (splitAmt2Raw >= amount) {
+        toast('Kwota drugiej formy nie może być równa ani większa od łącznej kwoty.', 'warning');
+        return;
+      }
+    }
+
+    const splitAmounts = isSplit
+      ? { primary: parseFloat((amount - splitAmt2Raw).toFixed(2)), secondary: parseFloat(splitAmt2Raw.toFixed(2)) }
+      : null;
+
     const previous = existingId ? getPayments().find((payment) => payment.id === existingId) : null;
 
     if (previous) {
@@ -764,6 +883,8 @@ const FinanceViews = (() => {
       });
     }
 
+    const effectiveMethod = isSplit ? method + '+' + splitMethod : method;
+
     let paymentRecord = previous;
     if (!paymentRecord) {
       paymentRecord = createPayment({
@@ -771,6 +892,9 @@ const FinanceViews = (() => {
         date,
         amount,
         method,
+        isSplit,
+        splitMethod,
+        splitAmounts,
         sessionIds,
         sessionsCount: sessionIds.length,
         note,
@@ -781,16 +905,15 @@ const FinanceViews = (() => {
       paymentRecord.date = date;
       paymentRecord.amount = amount;
       paymentRecord.method = method;
+      paymentRecord.isSplit = isSplit;
+      paymentRecord.splitMethod = splitMethod;
+      paymentRecord.splitAmounts = splitAmounts;
       paymentRecord.sessionIds = sessionIds;
       paymentRecord.sessionsCount = sessionIds.length;
       paymentRecord.note = note;
     }
 
     // Sort sessions by date so we pay oldest first
-    const expectedTotal = sessionIds.reduce((sum, id) => {
-      const s = getSessions().find(item => item.id === id);
-      return sum + (s ? sessionAmount(s) : 0);
-    }, 0);
     const sortedSessions = sessionIds
       .map(id => getSessions().find(item => item.id === id))
       .filter(Boolean)
@@ -800,7 +923,7 @@ const FinanceViews = (() => {
     sortedSessions.forEach((session) => {
       const rate = sessionAmount(session);
       session.paymentId = paymentRecord.id;
-      session.paymentMethod = method;
+      session.paymentMethod = effectiveMethod;
       session.paymentDate = date;
       if (remaining >= rate) {
         session.isPaid = true;
@@ -879,8 +1002,12 @@ const FinanceViews = (() => {
           '<div class="fin-detail-stack">' +
             '<div class="fin-detail-row"><span>Pacjent</span><strong>' + escHtml(display + (fullName ? ` (${fullName})` : '')) + '</strong></div>' +
             '<div class="fin-detail-row"><span>Data płatności</span><strong>' + escHtml(formatDateLong(payment.date)) + '</strong></div>' +
-            '<div class="fin-detail-row"><span>Metoda</span><strong class="fin-method-badge ' + paymentMethodClass(payment.method) + '">' + escHtml(paymentMethodLabel(payment.method)) + '</strong></div>' +
-            '<div class="fin-detail-row"><span>Kwota</span><strong>' + escHtml(formatCurrency(payment.amount)) + '</strong></div>' +
+            (payment.isSplit
+              ? '<div class="fin-detail-row"><span>Metoda</span><strong class="fin-method-badge badge-split">' + escHtml(paymentMethodLabel(payment.method)) + ' + ' + escHtml(paymentMethodLabel(payment.splitMethod)) + '</strong></div>' +
+                '<div class="fin-detail-row fin-detail-split"><span>' + escHtml(paymentMethodLabel(payment.method)) + '</span><strong>' + escHtml(formatCurrency(payment.splitAmounts ? payment.splitAmounts.primary : 0)) + '</strong></div>' +
+                '<div class="fin-detail-row fin-detail-split"><span>' + escHtml(paymentMethodLabel(payment.splitMethod)) + '</span><strong>' + escHtml(formatCurrency(payment.splitAmounts ? payment.splitAmounts.secondary : 0)) + '</strong></div>'
+              : '<div class="fin-detail-row"><span>Metoda</span><strong class="fin-method-badge ' + paymentMethodClass(payment.method) + '">' + escHtml(paymentMethodLabel(payment.method)) + '</strong></div>') +
+            '<div class="fin-detail-row"><span>Kwota łączna</span><strong>' + escHtml(formatCurrency(payment.amount)) + '</strong></div>' +
             (payment.note ? '<div class="fin-detail-row"><span>Notatka</span><strong>' + escHtml(payment.note) + '</strong></div>' : '') +
             '<div class="fin-detail-sessions">' +
               (payment.sessionIds || []).map((sessionId) => {

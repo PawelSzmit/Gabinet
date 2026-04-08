@@ -106,11 +106,23 @@ function createPayment(data = {}) {
     amount:        data.amount        || 0,
     // aliorBank | ingBank | cash
     method:        data.method        || 'cash',
+    // Split payment fields
+    isSplit:       data.isSplit       || false,
+    splitMethod:   data.splitMethod   || null,  // second method when isSplit=true
+    splitAmounts:  data.splitAmounts  || null,  // {primary: number, secondary: number}
     sessionsCount: data.sessionsCount || 0,
     sessionIds:    Array.isArray(data.sessionIds) ? data.sessionIds : [],
     note:          data.note          || '',
     createdAt:     data.createdAt     || new Date().toISOString(),
   };
+}
+
+/**
+ * Returns true if a paymentMethod string represents a split (compound) payment.
+ * e.g. 'aliorBank+cash' → true, 'cash' → false
+ */
+function isCompoundMethod(str) {
+  return typeof str === 'string' && str.indexOf('+') !== -1;
 }
 
 /**
@@ -652,7 +664,9 @@ function reconcilePaymentStatus() {
         : (patient ? patient.sessionRate : 0);
 
       session.paymentId     = payment.id;
-      session.paymentMethod = payment.method;
+      session.paymentMethod = payment.isSplit
+        ? payment.method + '+' + payment.splitMethod
+        : payment.method;
       session.paymentDate   = payment.date;
 
       if (remaining >= rate) {
