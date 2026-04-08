@@ -1119,6 +1119,10 @@ const CalendarViews = {
 
   _paymentMethodName(method) {
     const map = { aliorBank: 'Alior Bank', ingBank: 'ING Bank', cash: 'Gotówka' };
+    if (!method) return '—';
+    if (method.indexOf('+') !== -1) {
+      return method.split('+').map(m => map[m] || m).join(' + ');
+    }
     return map[method] || method;
   },
 
