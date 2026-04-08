@@ -2,7 +2,7 @@
 
 > Dokument źródłowy dla AI do przygotowania raportu rozwojowo-marketingowego.
 > Zawiera pełny opis funkcji, architektury, designu, modelu danych i stanu aplikacji.
-> Ostatnia aktualizacja: 2026-03-26 | Cache: gabinet-v19
+> Ostatnia aktualizacja: 2026-04-08 | Cache: gabinet-v48
 
 ---
 
@@ -53,18 +53,21 @@ Jedna aplikacja dedykowana psychoterapeutom, która:
 
 **Trzy widoki:**
 - **Miesięczny (domyślny)** — siatka z chipami sesji w kolorach statusu, duże komórki (min. 80px), pełna wysokość bez scrollowania
-- **Tygodniowy** (Pn–Pt) — siatka godzinowa z podświetleniem godzin pracy
-- **Dzienny** — szczegółowy plan dnia z godzinami i statusami
+- **Tygodniowy** (Pn–Nd) — siatka godzinowa z minimalną szerokością kolumny 110px; przy dużej liczbie sesji pojawia się poziomy scroll. Nagłówek sticky, jeden wspólny kontener scroll (`.cal-week-scroll`). Slot 40px — 6-8 godzin widocznych bez scrollowania
+- **Dzienny** — szczegółowy plan dnia z godzinami i statusami; scroll obsługiwany przez `#view-container` (nie wewnętrzny overflow)
 
-**Panel skupienia (Focus Panel) — jednolity nagłówek dla wszystkich widoków:**
+**Panel skupienia (Focus Panel):**
 - Górna linia: kicker „Twój gabinet" + tytuł z datą (po lewej), następna sesja (po prawej)
 - Dolna linia: 4 kafelki statystyk w jednym rzędzie — sesje dziś, należności, aktywni pacjenci, tryb dnia
 - Brak przycisków akcji w panelu (dodawanie przez modal kalendarza)
-- Panel wygląda identycznie niezależnie od wybranego widoku (M/T/D)
+- **Widoczny w widoku miesięcznym i dziennym; ukryty w tygodniowym** (aby zmaksymalizować widoczność siatki godzin)
 
 **Automatyzacja:**
 - Sesje generowane automatycznie na bieżący miesiąc przy pierwszym logowaniu w danym miesiącu
 - Algorytm uwzględnia: dni sesji pacjenta, datę rozpoczęcia terapii, urlopy pacjenta, urlopy terapeuty (blokowane okresy)
+- **Dodanie urlopu pacjenta automatycznie odwołuje** istniejące zaplanowane sesje w zakresie dat (status `cancelled`, powód `patient_vacation`, `isPaymentRequired=false`)
+- **Usunięcie urlopu przywraca** odwołane sesje do statusu `scheduled`
+- Wygenerowane miesiące zapisywane w `generatedMonths[]` (persystowane na Drive), aby uniknąć duplikacji po przeładowaniu
 - Regeneracja kalendarza na wybrany miesiąc (z zachowaniem sesji odbytych i odwołanych)
 
 **Nawigacja:**
@@ -75,8 +78,13 @@ Jedna aplikacja dedykowana psychoterapeutom, która:
 **Kolory sesji:**
 - Niebieski — zaplanowana
 - Zielony — odbyta
-- Pomarańczowy — odwołana, płatna
+- Pomarańczowy — odwołana, płatna / częściowo opłacona
 - Czerwony — odwołana, niepłatna
+
+**Częściowe płatności:**
+- Sesja może być oznaczona jako `isPartiallyPaid` z kwotą `partialPaymentAmount`
+- W kalendarzu i na liście pacjenta: pomarańczowy tekst „Częściowo opłacona (X zł)" zamiast ikony ½
+- Zaległość = pełna stawka − wpłacona kwota (spójna we wszystkich widokach: kalendarz, finanse, pacjenci)
 
 ### 3.2. Zarządzanie pacjentami
 
@@ -156,7 +164,8 @@ Sekcja **Historia:**
 - Opcje odwołania: toggle „Sesja płatna" + powód odwołania
 - Informacja o płatności (status, kwota, metoda)
 - **Notatka do sesji** (textarea, szyfrowana AES-256-GCM) — po zapisie automatycznie widoczna w widoku pacjenta w sekcji „Notatki i obserwacje" z datą sesji jako nagłówkiem
-- Formularz przeniesienia (nowa data + godzina)
+- Formularz przeniesienia (nowa data + godzina) — przeniesienie zachowuje status płatności (`isPaid`, `paymentId`, `paymentAmount`, `paymentDate`, `paymentMethod`) i aktualizuje datę w powiązanej płatności (`payment.sessionIds`)
+- **Usuwanie sesji** — opcja dostępna w menu kontekstowym sesji
 
 **Numeracja sesji:**
 - `cycleSessionNumber` — numer w bieżącej terapii (1, 2, 3...)
@@ -379,6 +388,8 @@ Moduł `DataRecovery` w `drive.js`:
     paymentDate:          ISO|null,
     paymentAmount:        Number|null,
     paymentId:            UUID|null,
+    isPartiallyPaid:      Boolean,
+    partialPaymentAmount: Number|null,
     isManuallyCreated:    Boolean,
     sessionNumber:        Number|null,
     globalSessionNumber:  Number|null,
@@ -405,7 +416,9 @@ Moduł `DataRecovery` w `drive.js`:
     startDate: ISO,
     endDate:   ISO,
     reason:    String
-  }]
+  }],
+
+  generatedMonths: ["YYYY-MM"]  // miesiące, dla których już wygenerowano sesje
 }
 // * = szyfrowane AES-256-GCM przed zapisem
 ```
@@ -435,7 +448,7 @@ Kluczowe cechy:
 - **Zaokrąglenia** — duże promienie (16–28px) na kartach, przyciskach, formularzach
 - **Minimalizm** — czyste powierzchnie, dużo białej przestrzeni
 - **Responsywność** — mobile-first z breakpointami na tablet (768px), desktop (1024px), wide (1440px)
-- **Dark mode** — automatyczny na podstawie `prefers-color-scheme`, ciemnozielone tła (#223128)
+- **Dark mode** — automatyczny na podstawie `prefers-color-scheme`, ciemnozielone tła (#223128). Pełne nadpisania kolorów dla kalendarza (numery dni, etykiety godzin, nagłówki tygodnia, scrollbary, blokady)
 
 ### 6.2. Paleta kolorów
 
@@ -461,7 +474,7 @@ Gotówka:      #34C759 (zielony)
 ### 6.3. Typografia
 
 - **Interfejs:** Manrope (sans-serif) — czcionka główna, font-weight 600–800
-- **Ekran logowania:** Playfair Display (serif) — nagłówek z gradientowym tekstem
+- **Ekran logowania / landing page:** Fraunces (serif) — nagłówek hero (left-aligned, editorial layout)
 - **Rozmiar bazowy:** clamp()-based fluid sizing
 - **Nagłówki sekcji:** uppercase, letter-spacing 0.08–0.18em, font-weight 800, mały rozmiar (0.72–0.82rem)
 
@@ -547,7 +560,7 @@ Gotówka:      #34C759 (zielony)
 ## 8. Przepływ użytkownika (User Flow)
 
 ### 8.1. Pierwsze uruchomienie
-1. Otwórz URL → ekran logowania (Playfair Display, szklane orby w tle)
+1. Otwórz URL → landing page z editorial hero (2-kolumnowy layout: tekst lewo + CSS mockupy prawo), sekcje: Korzyści, Prywatność, Podgląd (mockupy UI), Cennik (79 zł/mies.), FAQ (accordion), CTA closing
 2. Kliknij „Zaloguj przez Google" → consent screen Google
 3. Zatwierdzenie → aplikacja tworzy `gabinet-data.json` na Google Drive
 4. Ustawienia: wpisz dane terapeuty
@@ -629,7 +642,9 @@ VPS OVH Cloud → Nginx reverse proxy → domena.pl
 
 ---
 
-## 11. Ostatnie zmiany (changelog v9 → v19)
+## 11. Ostatnie zmiany (changelog v9 → v48)
+
+### v9 → v19 (marzec 2026 — przebudowa UI)
 
 | Zmiana | Opis |
 |--------|------|
@@ -650,8 +665,28 @@ VPS OVH Cloud → Nginx reverse proxy → domena.pl
 | AutoLock | 2 min → 15 min timeout bezczynności |
 | Service Worker | Strategia: network-first (HTML) + cache-first (assets), wersjonowanie cache |
 
+### v19 → v48 (marzec–kwiecień 2026 — bug-fixy, landing page, scroll, urlopy)
+
+| Zmiana | Opis |
+|--------|------|
+| Landing page | Editorial 2-kolumnowy hero (Fraunces serif), CSS mockupy zamiast screenów, USP checklisty, sekcja cennika (79 zł/mies.), FAQ accordion, 3 CTA z `data-action="google-signin"` |
+| Cennik | Pojedynczy plan miesięczny 79 zł/mies., lista 10 cech, 3 bloki kontekstowe obok |
+| Częściowe płatności | Tekst „Częściowo opłacona (X zł)" zamiast ikony ½; zaległość = pełna stawka − wpłacona kwota |
+| Spójność zaległości | Jedna formuła `full - partialPaymentAmount` we wszystkich widokach (kalendarz focus, finanse, pacjent) |
+| Przenoszenie sesji | Status płatności (`isPaid`, `paymentId`, `paymentAmount` itp.) zachowywany po przeniesieniu; data aktualizowana w powiązanej płatności |
+| Usuwanie sesji | Dodana opcja „Usuń sesję" w modalu szczegółów sesji |
+| Dark mode — kalendarz | Pełne nadpisania kolorów: `.cal-day-num`, `.cal-week-time-label`, `.cal-daily-header`, `.cal-cell-blocked`, scrollbary |
+| Usunięte belki | `.cal-grid-headers` i `.cal-sessions-list-header` ukryte (`display:none`) — nie niosły informacji i robiły jasne pasy w dark mode |
+| Tygodniowy — kolumny | Minimalna szerokość kolumny 110px, poziomy scroll gdy ekran za wąski. Jeden kontener `.cal-week-scroll` (overflow:auto) zamiast podwójnego overflow-y hack |
+| Tygodniowy — wysokość | Focus panel ukryty w widoku tygodniowym; slot 52px→40px — 6-8 godzin widocznych bez scrollowania |
+| Dzienny — scroll iOS | Usunięty `overflow:hidden` z `.cal-wrapper--daily`; scroll obsługiwany przez `#view-container` (naprawiony zablokowany scroll na iOS) |
+| Pacjenci — układ mobile | Toolbar bez stylu karty (bez tła/cienia), usunięty pusty prostokąt pod listą pacjentów |
+| Urlopy pacjentów | Dodanie urlopu automatycznie odwołuje zaplanowane sesje w zakresie dat; usunięcie urlopu przywraca sesje do stanu `scheduled` |
+| generatedMonths | Persystowane na Google Drive — zapobiega duplikacji sesji po przeładowaniu (szczególnie dla przeniesionych terminów) |
+| Poprzednie terapie | Cykle terapii w widoku pacjenta pokazują daty rozpoczęcia i zakończenia; etykieta „Poprzednia terapia" zamiast „Przed aplikacją" |
+
 ---
 
-*Dokument wygenerowany: 2026-03-23, zaktualizowany: 2026-03-26*
-*Wersja cache: gabinet-v19*
-*Łączna liczba linii kodu: ~11 000*
+*Dokument wygenerowany: 2026-03-23, zaktualizowany: 2026-04-08*
+*Wersja cache: gabinet-v48*
+*Łączna liczba linii kodu: ~11 500*

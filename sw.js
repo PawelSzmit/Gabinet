@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gabinet-v48';
+const CACHE_NAME = 'gabinet-v49';
 const ASSETS = [
   '/',
   '/index.html',
