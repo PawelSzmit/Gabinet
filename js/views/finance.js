@@ -170,7 +170,7 @@ const FinanceViews = (() => {
 
   function paymentMethodLabel(method) {
     if (!method) return '—';
-    if (method.indexOf('+') !== -1) {
+    if (isCompoundMethod(method)) {
       return method.split('+').map(m => METHOD_LABELS[m] || m).join(' + ');
     }
     return METHOD_LABELS[method] || method;
@@ -178,7 +178,7 @@ const FinanceViews = (() => {
 
   function paymentMethodClass(method) {
     const map = { aliorBank: 'badge-alior', ingBank: 'badge-ing', cash: 'badge-cash' };
-    if (!method || method.indexOf('+') !== -1) return 'badge-split';
+    if (!method || isCompoundMethod(method)) return 'badge-split';
     return map[method] || 'badge-cash';
   }
 
@@ -212,13 +212,12 @@ const FinanceViews = (() => {
 
   function revenueByMethod(periodSessions) {
     const totals = { aliorBank: 0, ingBank: 0, cash: 0 };
+    const payMap = new Map(AppState.payments.map(p => [p.id, p]));
     periodSessions.forEach((session) => {
       if (!session.isPaid) return;
       const sessAmt = sessionAmount(session);
       // Look up the payment record for split logic
-      const payment = session.paymentId
-        ? AppState.payments.find(p => p.id === session.paymentId)
-        : null;
+      const payment = session.paymentId ? payMap.get(session.paymentId) : null;
 
       if (payment && payment.isSplit && payment.splitAmounts && payment.amount > 0) {
         // Distribute proportionally: session's share of total payment
@@ -229,10 +228,18 @@ const FinanceViews = (() => {
         totals[m2] = (totals[m2] || 0) + parseFloat((payment.splitAmounts.secondary * fraction).toFixed(2));
       } else {
         let method = session.paymentMethod;
-        if (method && method.indexOf('+') !== -1) method = method.split('+')[0]; // fallback: use primary
+        // If split payment but splitAmounts missing or amount=0, fall back to primary method
+        if (payment && payment.isSplit && (!payment.splitAmounts || payment.amount === 0)) {
+          method = payment.method || 'cash';
+        } else if (isCompoundMethod(method)) {
+          method = method.split('+')[0]; // fallback: use primary
+        }
         if (!method && payment) method = payment.method;
         method = method || 'cash';
-        totals[method] = (totals[method] || 0) + sessAmt;
+        // Only add to known buckets — skip unknown compound strings
+        if (Object.prototype.hasOwnProperty.call(totals, method)) {
+          totals[method] = (totals[method] || 0) + sessAmt;
+        }
       }
     });
     return totals;
@@ -712,6 +719,20 @@ const FinanceViews = (() => {
       }
     }
 
+    // Split toggle: show/hide second method row
+    const splitToggle = sheet.querySelector('#fin-split-toggle');
+    const splitRow    = sheet.querySelector('#fin-split-row');
+    const splitAmt2   = sheet.querySelector('#fin-split-amount2');
+    const splitAmt1   = sheet.querySelector('#fin-split-amount1');
+
+    function updateSplitAmount1() {
+      if (!splitAmt1 || !splitAmt2) return;
+      const total = parseFloat(amountInput.value) || 0;
+      const amt2  = parseFloat(splitAmt2.value) || 0;
+      const amt1  = Math.max(0, total - amt2);
+      splitAmt1.value = amt1 > 0 ? amt1.toFixed(2) : '';
+    }
+
     function refreshTotal() {
       const expected = selectedTotal(sheet);
       // Only auto-fill if user hasn't manually changed the amount
@@ -761,20 +782,6 @@ const FinanceViews = (() => {
           if (methodInput2) methodInput2.value = button.dataset.method;
         });
       });
-    }
-
-    // Split toggle: show/hide second method row
-    const splitToggle = sheet.querySelector('#fin-split-toggle');
-    const splitRow    = sheet.querySelector('#fin-split-row');
-    const splitAmt2   = sheet.querySelector('#fin-split-amount2');
-    const splitAmt1   = sheet.querySelector('#fin-split-amount1');
-
-    function updateSplitAmount1() {
-      if (!splitAmt1 || !splitAmt2) return;
-      const total = parseFloat(amountInput.value) || 0;
-      const amt2  = parseFloat(splitAmt2.value) || 0;
-      const amt1  = Math.max(0, total - amt2);
-      splitAmt1.value = amt1 > 0 ? amt1.toFixed(2) : '';
     }
 
     if (splitToggle && splitRow) {
@@ -835,6 +842,11 @@ const FinanceViews = (() => {
     const splitMethod = isSplit ? (sheet.querySelector('#fin-sheet-method2').value || 'cash') : null;
     const splitAmt2Raw = isSplit ? parseFloat(sheet.querySelector('#fin-split-amount2').value) : 0;
 
+    if (isSplit && splitMethod && !['aliorBank', 'ingBank', 'cash'].includes(splitMethod)) {
+      toast('Nieprawidłowa metoda płatności', 'warning');
+      return;
+    }
+
     if (!patientId) {
       toast('Wybierz pacjenta.', 'warning');
       return;
@@ -849,6 +861,12 @@ const FinanceViews = (() => {
     }
 
     const amount = parseFloat(sheet.querySelector('#fin-sheet-amount').value) || selectedTotal(sheet);
+
+    // Validate amount when split
+    if (isSplit && amount <= 0) {
+      toast('Kwota płatności musi być większa od zera.', 'warning');
+      return;
+    }
 
     // Validate split
     if (isSplit) {
