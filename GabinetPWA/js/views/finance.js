@@ -201,22 +201,31 @@ const FinanceViews = (() => {
     const paymentMap = new Map(getPayments().map(function(p) { return [p.id, p]; }));
     periodSessions.forEach(function(session) {
       if (!session.isPaid || !session.paymentId) return;
+      if (seen.has(session.paymentId)) return;
       var payment = paymentMap.get(session.paymentId);
-
-      if (payment && payment.isSplit && payment.splitAmounts) {
-        // Split payment: count full split amounts once (not proportionally)
-        if (seen.has(payment.id)) return;
-        seen.add(payment.id);
-        var m1 = payment.method || 'cash';
-        var m2 = payment.splitMethod || 'cash';
-        totals[m1] = (totals[m1] || 0) + payment.splitAmounts.primary;
-        totals[m2] = (totals[m2] || 0) + payment.splitAmounts.secondary;
-      } else {
-        // Non-split: attribute session amount to its method
+      if (!payment) {
+        // Fallback: no payment record, attribute full amount to session method
         var method = session.paymentMethod || 'cash';
         if (method.indexOf('+') !== -1) method = method.split('+')[0];
-        if (!method && payment) method = payment.method || 'cash';
         totals[method] = (totals[method] || 0) + sessionAmount(session);
+        return;
+      }
+      seen.add(payment.id);
+      // Only count sessions within the period
+      var periodSessionIds = new Set(periodSessions.filter(function(s) { return s.isPaid && s.paymentId === payment.id; }).map(function(s) { return s.id; }));
+      var periodAmount = 0;
+      (payment.sessionIds || []).forEach(function(sid) {
+        if (periodSessionIds.has(sid)) {
+          var s = getSessions().find(function(item) { return item.id === sid; });
+          if (s) periodAmount += sessionAmount(s);
+        }
+      });
+      if (payment.isSplit && payment.splitAmounts && payment.amount > 0) {
+        var fraction = periodAmount / payment.amount;
+        totals[payment.method] = (totals[payment.method] || 0) + payment.splitAmounts.primary * fraction;
+        totals[payment.splitMethod] = (totals[payment.splitMethod] || 0) + payment.splitAmounts.secondary * fraction;
+      } else {
+        totals[payment.method] = (totals[payment.method] || 0) + periodAmount;
       }
     });
     return totals;
