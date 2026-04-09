@@ -5,15 +5,85 @@ const SettingsView = (() => {
 
   // ─── helpers ─────────────────────────────────────────────────────────────
 
-  function esc(s) {
-    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
+  // Alias do globalnego escapeHtml z utils.js
+  function esc(s) { return escapeHtml(s); }
 
   function formatDateRange(start, end) {
     const opts = { day: 'numeric', month: 'long', year: 'numeric' };
     const s = new Date(start).toLocaleDateString('pl-PL', opts);
     const e = new Date(end).toLocaleDateString('pl-PL', opts);
     return s + ' – ' + e;
+  }
+
+  function getClinicalSecuritySummary() {
+    if (typeof SecurityService === 'undefined') {
+      return {
+        status: 'Ochrona niedostępna',
+        note: 'Nie udało się wczytać modułu ochrony danych klinicznych.',
+        primaryLabel: null,
+        changeLabel: null,
+      };
+    }
+
+    const status = SecurityService.getStatus();
+    if (status === 'unlocked') {
+      return {
+        status: 'Dane kliniczne odblokowane',
+        note: 'Notatki, cele i wpisy kliniczne są dostępne w tej sesji pracy.',
+        primaryLabel: 'Zablokuj notatki',
+        changeLabel: 'Zmień hasło',
+      };
+    }
+
+    if (status === 'locked') {
+      return {
+        status: 'Dane kliniczne zablokowane',
+        note: 'Hasło jest już ustawione. Podaj je tylko wtedy, gdy chcesz zobaczyć albo edytować treści kliniczne.',
+        primaryLabel: 'Odblokuj notatki',
+        changeLabel: 'Zmień hasło',
+      };
+    }
+
+    if (status === 'migration-required') {
+      return {
+        status: 'Wymagana ochrona notatek',
+        note: 'Masz już notatki kliniczne. Ustaw hasło, aby zabezpieczyć je przed kolejnym zapisem i eksportem.',
+        primaryLabel: 'Ustaw hasło',
+        changeLabel: null,
+      };
+    }
+
+    return {
+      status: 'Hasło nie jest ustawione',
+      note: 'Hasło chroni tylko dane kliniczne. Kalendarz, pacjenci i finanse nadal działają normalnie.',
+      primaryLabel: 'Ustaw hasło',
+      changeLabel: null,
+    };
+  }
+
+  function getSyncSummary() {
+    if (typeof LocalStore === 'undefined' || typeof LocalStore.getSyncStatusSummary !== 'function') {
+      return {
+        status: 'Stan synchronizacji niedostępny',
+        note: 'Ta przeglądarka nie udostępnia lokalnego snapshotu offline.',
+        actionLabel: null,
+        actionId: null,
+        actionClass: 'blue',
+      };
+    }
+
+    const summary = LocalStore.getSyncStatusSummary();
+    const connected = typeof DriveService !== 'undefined' &&
+      typeof DriveService.isSignedIn === 'function' &&
+      DriveService.isSignedIn();
+
+    return {
+      status: summary.status,
+      note: summary.note,
+      actionLabel: connected ? 'Odłącz Google Drive' : (summary.actionLabel || 'Połącz z Google'),
+      actionId: connected ? 'sv-signout-btn' : 'sv-connect-btn',
+      actionClass: connected ? 'danger' : 'blue',
+    };
   }
 
   // ─── Styles ──────────────────────────────────────────────────────────────
@@ -63,6 +133,9 @@ const SettingsView = (() => {
       .sv-account-name { font-size: 15px; font-weight: 600; }
       .sv-account-email { font-size: 13px; color: #8e8e93; }
       .sv-regen-ok { font-size: 13px; color: #34c759; padding: 4px 16px 12px; display: none; }
+      .sv-row-note { align-items: flex-start; }
+      .sv-row-note span { font-size: 13px; line-height: 1.5; color: #5d6a60; }
+      .sv-security-status { font-size: 15px; font-weight: 600; color: #243126; text-align: right; }
 
       /* Block period sheet */
       .sv-sheet-bg { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 900;
@@ -117,6 +190,8 @@ const SettingsView = (() => {
     injectStyles();
     const settings = (typeof AppState !== 'undefined' && AppState.settings) ? AppState.settings : {};
     const userInfo = _getUserInfo();
+    const securitySummary = getClinicalSecuritySummary();
+    const syncSummary = getSyncSummary();
 
     container.innerHTML = `
       <div class="sv-wrap">
@@ -148,9 +223,39 @@ const SettingsView = (() => {
               <div class="sv-account-email">${esc(userInfo.email || 'Dane na Google Drive')}</div>
             </div>
           </div>
-          <div class="sv-row sv-row-btn danger" id="sv-signout-btn">
-            <span>Wyloguj się</span>
+          <div class="sv-row">
+            <label>Stan danych</label>
+            <div class="sv-value sv-security-status">${esc(syncSummary.status)}</div>
           </div>
+          <div class="sv-row sv-row-note">
+            <span>${esc(syncSummary.note)}</span>
+          </div>
+          ${syncSummary.actionLabel ? `
+            <div class="sv-row sv-row-btn ${esc(syncSummary.actionClass)}" id="${esc(syncSummary.actionId)}">
+              <span>${esc(syncSummary.actionLabel)}</span>
+            </div>
+          ` : ''}
+        </div>
+
+        <div class="sv-section-title">Ochrona danych klinicznych</div>
+        <div class="sv-section">
+          <div class="sv-row">
+            <label>Status</label>
+            <div class="sv-value sv-security-status">${esc(securitySummary.status)}</div>
+          </div>
+          <div class="sv-row sv-row-note">
+            <span>${esc(securitySummary.note)}</span>
+          </div>
+          ${securitySummary.primaryLabel ? `
+            <div class="sv-row sv-row-btn blue" id="sv-clinical-primary-btn">
+              <span>${esc(securitySummary.primaryLabel)}</span>
+            </div>
+          ` : ''}
+          ${securitySummary.changeLabel ? `
+            <div class="sv-row sv-row-btn blue" id="sv-clinical-change-btn">
+              <span>${esc(securitySummary.changeLabel)}</span>
+            </div>
+          ` : ''}
         </div>
 
         <!-- BLOCKED PERIODS -->
@@ -172,10 +277,6 @@ const SettingsView = (() => {
           <div class="sv-row sv-row-btn blue" id="sv-export-btn">
             <span>⬇️ Eksportuj dane (JSON)</span>
           </div>
-          <div class="sv-row sv-row-btn orange" id="sv-recover-btn">
-            <span>🔧 Odzyskaj czasy sesji z historii Drive</span>
-          </div>
-          <div id="sv-recover-log" style="padding:8px 16px;font-size:13px;color:#8e8e93;display:none;max-height:200px;overflow-y:auto;white-space:pre-line;"></div>
         </div>
 
         <!-- ABOUT -->
@@ -189,8 +290,8 @@ const SettingsView = (() => {
           </div>
           <div class="sv-feature-row"><span class="sv-ficon">☁️</span><span class="sv-ftext">Dane przechowywane na Twoim Google Drive</span></div>
           <div class="sv-feature-row"><span class="sv-ficon">🔒</span><span class="sv-ftext">Brak zewnętrznych serwerów i baz danych</span></div>
-          <div class="sv-feature-row"><span class="sv-ficon">📵</span><span class="sv-ftext">Działa offline po pierwszym uruchomieniu</span></div>
-          <div class="sv-feature-row"><span class="sv-ficon">💳</span><span class="sv-ftext">Obsługa gotówki i przelewów bankowych</span></div>
+      <div class="sv-feature-row"><span class="sv-ficon">📵</span><span class="sv-ftext">Lokalna kopia danych pozwala wrócić do pracy po odświeżeniu offline</span></div>
+      <div class="sv-feature-row"><span class="sv-ficon">💳</span><span class="sv-ftext">Obsługa gotówki i przelewów bankowych</span></div>
         </div>
 
       </div>
@@ -238,13 +339,44 @@ const SettingsView = (() => {
       if (input) input.addEventListener('input', saveDebounced);
     });
 
+    const clinicalPrimaryBtn = document.getElementById('sv-clinical-primary-btn');
+    if (clinicalPrimaryBtn) {
+      clinicalPrimaryBtn.addEventListener('click', async () => {
+        if (typeof SecurityService === 'undefined') return;
+        if (SecurityService.isUnlocked()) {
+          await SecurityService.lockClinicalData({ silent: false });
+          render(container);
+          return;
+        }
+        const ok = await SecurityService.requestClinicalAccess();
+        if (ok) render(container);
+      });
+    }
+
+    const clinicalChangeBtn = document.getElementById('sv-clinical-change-btn');
+    if (clinicalChangeBtn) {
+      clinicalChangeBtn.addEventListener('click', async () => {
+        if (typeof SecurityService === 'undefined') return;
+        const changed = await SecurityService.openChangePasswordFlow();
+        if (changed) render(container);
+      });
+    }
+
     // Sign out
     const signOutBtn = document.getElementById('sv-signout-btn');
     if (signOutBtn) {
       signOutBtn.addEventListener('click', () => {
-        if (confirm('Czy na pewno chcesz się wylogować? Dane pozostaną na Google Drive.')) {
-          if (typeof DriveService !== 'undefined') DriveService.signOut();
-          location.reload();
+        if (typeof App !== 'undefined' && typeof App._handleSignOut === 'function') {
+          App._handleSignOut();
+        }
+      });
+    }
+
+    const connectBtn = document.getElementById('sv-connect-btn');
+    if (connectBtn) {
+      connectBtn.addEventListener('click', () => {
+        if (typeof App !== 'undefined' && typeof App._handleSignInClick === 'function') {
+          App._handleSignInClick();
         }
       });
     }
@@ -253,12 +385,14 @@ const SettingsView = (() => {
     const addBtn = document.getElementById('sv-add-blocked-btn');
     if (addBtn) addBtn.addEventListener('click', showBlockPeriodSheet);
 
-    // Delete blocked period (event delegation)
+    // Blocked periods (event delegation — obsluguje zarowno delete jak i add)
     const blockedList = document.getElementById('sv-blocked-list');
     if (blockedList) {
       blockedList.addEventListener('click', e => {
         const delBtn = e.target.closest('[data-del]');
-        if (delBtn) deleteBlockedPeriod(delBtn.dataset.del);
+        if (delBtn) { deleteBlockedPeriod(delBtn.dataset.del); return; }
+        const addBtn2 = e.target.closest('#sv-add-blocked-btn');
+        if (addBtn2) showBlockPeriodSheet();
       });
     }
 
@@ -277,47 +411,14 @@ const SettingsView = (() => {
       });
     }
 
-    // Recover data from Drive history
-    const recoverBtn = document.getElementById('sv-recover-btn');
-    if (recoverBtn) {
-      recoverBtn.addEventListener('click', async () => {
-        if (!confirm('Czy chcesz spróbować odzyskać oryginalne czasy sesji i harmonogramy pacjentów z historii wersji Google Drive?')) return;
-
-        const logEl = document.getElementById('sv-recover-log');
-        if (logEl) { logEl.style.display = 'block'; logEl.textContent = ''; }
-
-        const addLog = (msg) => {
-          if (logEl) logEl.textContent += msg + '\n';
-          console.log('[Recovery]', msg);
-        };
-
-        recoverBtn.style.pointerEvents = 'none';
-        recoverBtn.style.opacity = '0.5';
-
-        try {
-          if (typeof DataRecovery === 'undefined') throw new Error('DataRecovery nie jest dostępny.');
-          const result = await DataRecovery.recoverFromHistory(addLog);
-          if (result.sessionsFixed > 0 || result.patientsFixed > 0) {
-            if (typeof toast === 'function') toast('Dane odzyskane!', 'success');
-          } else {
-            if (typeof toast === 'function') toast('Nie znaleziono danych do naprawienia.', 'warning');
-          }
-        } catch (err) {
-          addLog('❌ Błąd: ' + err.message);
-          if (typeof toast === 'function') toast('Błąd odzyskiwania: ' + err.message, 'error');
-        } finally {
-          recoverBtn.style.pointerEvents = '';
-          recoverBtn.style.opacity = '';
-        }
-      });
-    }
-
     // Export data
     const exportBtn = document.getElementById('sv-export-btn');
     if (exportBtn) {
-      exportBtn.addEventListener('click', () => {
+      exportBtn.addEventListener('click', async () => {
         try {
-          const json = typeof serializeAppData === 'function' ? serializeAppData() : JSON.stringify(AppState, null, 2);
+          const json = typeof serializeAppData === 'function'
+            ? await serializeAppData()
+            : JSON.stringify(AppState, null, 2);
           const blob = new Blob([json], { type: 'application/json' });
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
@@ -351,19 +452,17 @@ const SettingsView = (() => {
       AppState.blockedPeriods = (AppState.blockedPeriods || []).filter(p => p.id !== id);
       if (typeof persistData !== 'undefined') persistData();
     }
-    // Refresh list
-    const list = document.getElementById('sv-blocked-list');
-    if (list) {
-      const addBtn = list.querySelector('#sv-add-blocked-btn');
-      list.innerHTML = renderBlockedList() + (addBtn ? addBtn.outerHTML : '');
-      const newAddBtn = list.querySelector('#sv-add-blocked-btn');
-      if (newAddBtn) newAddBtn.addEventListener('click', showBlockPeriodSheet);
-      list.addEventListener('click', e => {
-        const delBtn = e.target.closest('[data-del]');
-        if (delBtn) deleteBlockedPeriod(delBtn.dataset.del);
-      });
-    }
+    _refreshBlockedList();
     if (typeof toast === 'function') toast('Termin usunięty', 'success');
+  }
+
+  /** Odswieza liste zablokowanych terminow bez dodawania nowych listenerow. */
+  function _refreshBlockedList() {
+    const list = document.getElementById('sv-blocked-list');
+    if (!list) return;
+    list.innerHTML = renderBlockedList() +
+      '<div class="sv-row sv-row-btn blue" id="sv-add-blocked-btn"><span>+ Dodaj zablokowany termin</span></div>';
+    // Nie dodajemy nowych listenerow — delegacja na kontenerze (bindBlockedListEvents).
   }
 
   // ─── Block Period Sheet ───────────────────────────────────────────────────
@@ -424,18 +523,7 @@ const SettingsView = (() => {
       }
 
       bg.remove();
-
-      // Refresh blocked list in DOM
-      const list = document.getElementById('sv-blocked-list');
-      if (list) {
-        list.innerHTML = renderBlockedList() +
-          '<div class="sv-row sv-row-btn blue" id="sv-add-blocked-btn"><span>+ Dodaj zablokowany termin</span></div>';
-        list.querySelector('#sv-add-blocked-btn').addEventListener('click', showBlockPeriodSheet);
-        list.addEventListener('click', e => {
-          const delBtn = e.target.closest('[data-del]');
-          if (delBtn) deleteBlockedPeriod(delBtn.dataset.del);
-        });
-      }
+      _refreshBlockedList();
 
       if (typeof toast === 'function') toast('Termin zablokowany', 'success');
     });
@@ -443,13 +531,8 @@ const SettingsView = (() => {
 
   // ─── Debounce (local fallback) ────────────────────────────────────────────
 
-  function _debounce(fn, ms) {
-    let t;
-    return function() {
-      clearTimeout(t);
-      t = setTimeout(() => fn.apply(this, arguments), ms);
-    };
-  }
+  // Alias do globalnego debounce z drive.js
+  function _debounce(fn, ms) { return debounce(fn, ms); }
 
   // ─── Public API ───────────────────────────────────────────────────────────
 
