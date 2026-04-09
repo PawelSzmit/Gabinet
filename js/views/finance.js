@@ -376,10 +376,21 @@ const FinanceViews = (() => {
     );
   }
 
+  function paymentDisplayAmount(payment, filterMethod) {
+    if (filterMethod === 'all' || !payment.isSplit || !payment.splitAmounts) return payment.amount;
+    if (payment.method === filterMethod) return payment.splitAmounts.primary;
+    if (payment.splitMethod === filterMethod) return payment.splitAmounts.secondary;
+    return payment.amount;
+  }
+
   function filteredPayments() {
     return getPayments()
       .filter((payment) => {
-        if (paymentFilters.method !== 'all' && payment.method !== paymentFilters.method) return false;
+        if (paymentFilters.method !== 'all') {
+          var matchesPrimary = payment.method === paymentFilters.method;
+          var matchesSplit = payment.isSplit && payment.splitMethod === paymentFilters.method;
+          if (!matchesPrimary && !matchesSplit) return false;
+        }
         if (paymentFilters.from && payment.date < paymentFilters.from) return false;
         if (paymentFilters.to && payment.date > paymentFilters.to) return false;
         return true;
@@ -389,7 +400,7 @@ const FinanceViews = (() => {
 
   function renderPayments() {
     const payments = filteredPayments();
-    const total = payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+    const total = payments.reduce((sum, payment) => sum + paymentDisplayAmount(payment, paymentFilters.method), 0);
     return (
       '<div class="fin-payments">' +
         '<section class="fin-shell">' +
@@ -418,8 +429,8 @@ const FinanceViews = (() => {
                 '<div class="fin-payment-main" data-payment-detail="' + escHtml(payment.id) + '">' +
                   '<div class="fin-payment-top">' +
                     '<span class="fin-payment-date">' + escHtml(formatDateLong(payment.date)) + '</span>' +
-                    '<span class="fin-method-badge ' + paymentMethodClass(payment.method) + '">' + escHtml(paymentMethodLabel(payment.method)) + '</span>' +
-                    '<span class="fin-payment-amount">' + escHtml(formatCurrency(payment.amount)) + '</span>' +
+                    '<span class="fin-method-badge ' + paymentMethodClass(payment.isSplit ? payment.method + '+' + payment.splitMethod : payment.method) + '">' + escHtml(paymentMethodLabel(payment.isSplit ? payment.method + '+' + payment.splitMethod : payment.method)) + '</span>' +
+                    '<span class="fin-payment-amount">' + escHtml(formatCurrency(paymentDisplayAmount(payment, paymentFilters.method))) + '</span>' +
                   '</div>' +
                   '<span class="fin-payment-patient">' + escHtml(display) + '</span>' +
                   '<div class="fin-payment-sub">' +
@@ -427,6 +438,12 @@ const FinanceViews = (() => {
                     '<span>' + (payment.sessionIds || []).length + ' sesji</span>' +
                   '</div>' +
                   (payment.note ? '<div class="fin-payment-note">' + escHtml(payment.note) + '</div>' : '') +
+                  (payment.isSplit && payment.splitAmounts
+                    ? '<div class="fin-payment-note" style="margin-top:6px;font-weight:700">'
+                      + escHtml(paymentMethodLabel(payment.method)) + ': ' + escHtml(formatCurrency(payment.splitAmounts.primary))
+                      + ' · ' + escHtml(paymentMethodLabel(payment.splitMethod)) + ': ' + escHtml(formatCurrency(payment.splitAmounts.secondary))
+                      + '</div>'
+                    : '') +
                 '</div>' +
                 '<div class="fin-payment-actions">' +
                   '<button class="fin-btn-icon" data-payment-edit="' + escHtml(payment.id) + '" aria-label="Edytuj">✎</button>' +
