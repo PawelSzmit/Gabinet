@@ -3,7 +3,8 @@
 // ─── AutoLock ─────────────────────────────────────────────────────────────────
 const AutoLock = {
   timer:   null,
-  timeout: 900_000, // 15 minutes
+  timeout: 120_000, // 2 minutes
+  _initialized: false,
 
   start() {
     clearTimeout(this.timer);
@@ -17,34 +18,29 @@ const AutoLock = {
   lock() {
     clearTimeout(this.timer);
     this.timer = null;
-    // Re-use a dedicated lock screen element if available; otherwise fall
-    // back to showing the auth screen (token stays in memory).
-    const lockScreen = document.getElementById('lock-screen');
-    if (lockScreen) {
-      lockScreen.hidden = false;
-      lockScreen.classList.remove('hidden');
-      const pinInput = document.getElementById('lock-pin-input');
-      if (pinInput) pinInput.focus();
-    } else {
-      App.hideApp();
-      App.showAuth(true /* isLock */);
+    if (typeof SecurityService !== 'undefined') {
+      SecurityService.lockClinicalData();
     }
   },
 
   unlock() {
-    const lockScreen = document.getElementById('lock-screen');
-    if (lockScreen) {
-      lockScreen.hidden = true;
-      lockScreen.classList.add('hidden');
-    }
     this.start();
   },
 
   init() {
+    const timeoutSeconds = AppState.settings && AppState.settings.autoLockTimeout
+      ? AppState.settings.autoLockTimeout
+      : 120;
+    this.timeout = timeoutSeconds * 1000;
+    if (this._initialized) {
+      this.start();
+      return;
+    }
     const events = ['click', 'keydown', 'touchstart', 'mousemove', 'scroll'];
     events.forEach(evt =>
       document.addEventListener(evt, () => this.reset(), { passive: true })
     );
+    this._initialized = true;
     this.start();
   },
 };
@@ -52,11 +48,13 @@ const AutoLock = {
 // ─── Router ───────────────────────────────────────────────────────────────────
 const Router = {
   currentView: 'calendar',
+  currentParams: {},
   _history:    [],
 
   navigate(view, params = {}) {
-    this._history.push({ view: this.currentView });
+    this._history.push({ view: this.currentView, params: this.currentParams });
     this.currentView = view;
+    this.currentParams = { ...params };
     App.showView(view, params);
     App._updateTabBar(view);
   },
@@ -65,8 +63,41 @@ const Router = {
     const prev = this._history.pop();
     if (prev) {
       this.currentView = prev.view;
-      App.showView(prev.view, {});
+      this.currentParams = prev.params || {};
+      App.showView(prev.view, this.currentParams);
       App._updateTabBar(prev.view);
+    }
+  },
+};
+
+// ─── TabGuard — ochrona przed wieloma zakladkami ─────────────────────────────
+const TabGuard = {
+  _channel: null,
+  _tabId: Date.now() + '-' + Math.random().toString(36).slice(2),
+
+  init() {
+    if (typeof BroadcastChannel === 'undefined') return;
+    this._channel = new BroadcastChannel('gabinet-tab-sync');
+    this._channel.onmessage = (e) => this._onMessage(e.data);
+    // Oglos swoja obecnosc
+    this._send({ type: 'tab-open', tabId: this._tabId });
+  },
+
+  notifyDataSaved() {
+    if (!this._channel) return;
+    this._send({ type: 'data-saved', tabId: this._tabId, ts: Date.now() });
+  },
+
+  _send(msg) {
+    try { this._channel.postMessage(msg); } catch (_) { /* ignore */ }
+  },
+
+  _onMessage(msg) {
+    if (msg.tabId === this._tabId) return;
+    if (msg.type === 'data-saved') {
+      if (typeof toast === 'function') {
+        toast('Dane zostaly zmienione w innej zakladce. Odswiez strone, aby zobaczyc aktualne dane.', 'warning', 6000);
+      }
     }
   },
 };
@@ -78,44 +109,51 @@ const App = {
   // ── init ──────────────────────────────────────────────────────────────────
   async init() {
     this.showSplash();
-
-    // One-time migration: clear stale tokens/fileId from the appdata-scope era.
-    if (!localStorage.getItem('gabinet_scope_v2_migrated')) {
-      localStorage.removeItem('gabinet_access_token');
-      localStorage.removeItem('gabinet_token_expiry');
-      localStorage.removeItem('gabinet_drive_file_id');
-      localStorage.setItem('gabinet_scope_v2_migrated', '1');
-    }
-
-    // Initialise encryption key (generates or loads from localStorage).
-    await Encryption.init();
+    TabGuard.init();
 
     // Wait for Google Identity Services script, then init DriveService.
     await this._waitForGIS();
     DriveService.init();
 
+    let bootedFromLocalSnapshot = false;
+    if (typeof LocalStore !== 'undefined' && typeof LocalStore.init === 'function') {
+      try {
+        await LocalStore.init();
+        const snapshot = await LocalStore.loadSnapshot();
+        if (snapshot && snapshot.serializedData) {
+          try {
+            deserializeAppData(snapshot.serializedData);
+            bootedFromLocalSnapshot = true;
+          } catch (snapshotError) {
+            console.warn('[App] Local snapshot could not be restored:', snapshotError);
+            if (typeof LocalStore.clear === 'function') {
+              await LocalStore.clear();
+            }
+            if (typeof initDefaultAppState === 'function') {
+              initDefaultAppState();
+            }
+          }
+        }
+      } catch (localError) {
+        console.warn('[App] Local snapshot init failed:', localError);
+      }
+    }
+
     // Minimum splash display time (UX).
     await this._sleep(1500);
 
-    const hasToken = DriveService.loadStoredToken();
-    if (hasToken) {
-      try {
-        await DriveService.loadData();
-        this._afterSignIn();
-      } catch (err) {
-        console.warn('[App] Could not load Drive data on startup:', err);
-        // Still show the app with whatever local state we have.
-        this._afterSignIn();
-      }
-    } else {
-      this.hideSplash();
-      this.showAuth(false);
+    // Wire up the Google sign-in button.
+    const signInBtn = document.getElementById('btn-google-signin');
+    if (signInBtn) {
+      signInBtn.addEventListener('click', () => this._handleSignInClick());
     }
 
-    // Wire up all Google sign-in buttons (nav + hero + closing CTA).
-    document.querySelectorAll('[data-action="google-signin"]').forEach((btn) => {
-      btn.addEventListener('click', () => this._handleSignInClick());
-    });
+    const syncActionBtn = document.getElementById('sync-status-action');
+    if (syncActionBtn) {
+      syncActionBtn.addEventListener('click', () => this._handleSignInClick());
+    }
+
+    document.addEventListener('local-store:change', () => this.refreshSyncStatusUi());
 
     document.querySelectorAll('[data-auth-scroll]').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -138,6 +176,18 @@ const App = {
     if (signOutBtn) {
       signOutBtn.addEventListener('click', () => this._handleSignOut());
     }
+
+    if (bootedFromLocalSnapshot) {
+      this._afterSignIn({ source: 'local-snapshot' });
+      if (typeof toast === 'function') {
+        toast('Wczytano lokalną kopię danych z tego urządzenia.', 'info', 3500);
+      }
+      return;
+    }
+
+    this.hideSplash();
+    this.showAuth(false);
+    this.refreshSyncStatusUi();
   },
 
   // ── _waitForGIS ───────────────────────────────────────────────────────────
@@ -160,30 +210,64 @@ const App = {
   },
 
   // ── _afterSignIn ──────────────────────────────────────────────────────────
-  _afterSignIn() {
+  _afterSignIn(options = {}) {
+    const preserveView = options.preserveView === true;
     this.hideSplash();
     this.hideAuth();
     this.showApp();
-    this._generateSessionsIfNeeded();
+    if (typeof SecurityService !== 'undefined') {
+      SecurityService.bootstrapFromLoadedState();
+    }
+    if (!(typeof SecurityService !== 'undefined' &&
+          SecurityService.getStatus &&
+          SecurityService.getStatus() === 'migration-required')) {
+      this._generateSessionsIfNeeded();
+    }
     AutoLock.init();
-    Router.navigate('calendar', { viewMode: 'monthly', focusDate: new Date().toISOString() });
+    if (preserveView) {
+      this.refreshCurrentView();
+    } else {
+      Router.navigate('calendar', { viewMode: 'daily', focusDate: new Date().toISOString() });
+    }
+    if (typeof SecurityService !== 'undefined' &&
+        SecurityService.getStatus &&
+        SecurityService.getStatus() === 'migration-required') {
+      toast('Aby bezpiecznie zapisac istniejace notatki kliniczne, ustaw haslo.', 'warning', 5000);
+    }
+    this.refreshSyncStatusUi();
   },
 
   // ── onSignIn ──────────────────────────────────────────────────────────────
   async onSignIn(token) {
+    const preserveView = this._isVisible('app-shell');
     this.showSplash();
     try {
-      await DriveService.loadData();
+      if (typeof LocalStore !== 'undefined' &&
+          typeof LocalStore.shouldPreferLocalSnapshot === 'function' &&
+          LocalStore.shouldPreferLocalSnapshot()) {
+        await DriveService.saveData();
+        if (typeof toast === 'function') {
+          toast('Lokalne dane zostały zsynchronizowane z Google Drive.', 'success', 3500);
+        }
+      } else {
+        await DriveService.loadData();
+      }
     } catch (err) {
-      console.warn('[App] Drive load after sign-in failed:', err);
+      console.warn('[App] Drive sync after sign-in failed:', err);
     }
-    this._afterSignIn();
+    this._afterSignIn({ preserveView });
   },
 
   // ── _handleSignInClick ────────────────────────────────────────────────────
   async _handleSignInClick() {
-    const btn = document.getElementById('btn-google-signin');
-    if (btn) { btn.disabled = true; btn.textContent = 'Łączenie\u2026'; }
+    const authBtn = document.getElementById('btn-google-signin');
+    const syncBtn = document.getElementById('sync-status-action');
+    const settingsBtn = document.getElementById('sv-connect-btn');
+    [authBtn, syncBtn, settingsBtn].forEach((button) => {
+      if (!button) return;
+      button.disabled = true;
+      button.textContent = 'Łączenie\u2026';
+    });
 
     try {
       const token = await DriveService.requestToken();
@@ -191,16 +275,21 @@ const App = {
     } catch (err) {
       console.error('[App] Sign-in failed:', err);
       const authError = document.getElementById('auth-error');
-      if (authError) {
+      if (this._isVisible('auth-screen') && authError) {
         authError.textContent = 'Logowanie nie powiodło się. Spróbuj ponownie.';
         authError.hidden = false;
         authError.classList.remove('hidden');
+      } else if (typeof DriveService !== 'undefined' && typeof DriveService._showError === 'function') {
+        DriveService._showError('Nie udało się połączyć z Google Drive.');
+      } else if (typeof toast === 'function') {
+        toast('Nie udało się połączyć z Google Drive.', 'error');
       }
     } finally {
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = 'Zaloguj się';
-      }
+      [authBtn, syncBtn, settingsBtn].forEach((button) => {
+        if (!button) return;
+        button.disabled = false;
+        button.textContent = 'Połącz z Google';
+      });
     }
   },
 
@@ -208,23 +297,33 @@ const App = {
   _handleSignOut() {
     Modal.confirm(
       'Wylogowanie',
-      'Czy na pewno chcesz się wylogować? Dane lokalne zostaną zachowane na Drive.',
-      () => {
+      'Czy na pewno chcesz odłączyć Google Drive? Lokalne dane na tym urządzeniu pozostaną dostępne.',
+      async () => {
         DriveService.signOut();
-        this.hideApp();
-        this.showAuth(false);
+        if (typeof SecurityService !== 'undefined') {
+          SecurityService.handleSignOut();
+        }
+        this.showApp();
+        this.hideAuth();
+        this.refreshCurrentView();
+        this.refreshSyncStatusUi();
+        if (typeof toast === 'function') {
+          toast('Google Drive został odłączony. Możesz dalej pracować na danych lokalnych.', 'info', 4500);
+        }
       }
     );
   },
 
   // ── _handlePinSubmit ──────────────────────────────────────────────────────
-  // Uses Google token refresh as the "unlock" mechanism instead of a PIN.
   _handlePinSubmit() {
-    DriveService.requestToken()
-      .then(() => AutoLock.unlock())
+    if (typeof SecurityService === 'undefined') return;
+    SecurityService.requestClinicalAccess()
+      .then((ok) => {
+        if (ok) AutoLock.unlock();
+      })
       .catch(() => {
         const msg = document.getElementById('lock-error-msg');
-        if (msg) { msg.textContent = 'Nie udało się zweryfikować tożsamości.'; }
+        if (msg) { msg.textContent = 'Nie udało się odblokować danych klinicznych.'; }
       });
   },
 
@@ -238,18 +337,79 @@ const App = {
     if (screen) {
       screen.hidden = false;
       screen.classList.remove('hidden');
-      const title = screen.querySelector('.auth-hero__title');
+      const title = screen.querySelector('.auth-screen__title');
       if (title) {
         title.textContent = isLock
           ? 'Zaloguj się ponownie, aby wrócić do spokojnej pracy.'
           : 'Cyfrowy porządek dla gabinetu psychoterapeutycznego.';
       }
     }
+    const authError = document.getElementById('auth-error');
+    if (authError) {
+      authError.hidden = true;
+      authError.classList.add('hidden');
+      authError.textContent = '';
+    }
+    const signInBtn = document.getElementById('btn-google-signin');
+    if (signInBtn) {
+      signInBtn.disabled = false;
+      signInBtn.textContent = 'Połącz z Google';
+    }
+    this.refreshSyncStatusUi();
   },
   hideAuth() { this._hide('auth-screen'); },
 
   showApp()  { this._show('app-shell'); },
   hideApp()  { this._hide('app-shell'); },
+
+  refreshCurrentView() {
+    if (!this._isVisible('app-shell')) return;
+
+    if (Router.currentView === 'calendar' && typeof CalendarViews !== 'undefined') {
+      CalendarViews.render();
+      return;
+    }
+
+    if (Router.currentView === 'patients' && typeof PatientViews !== 'undefined') {
+      const params = (Router.currentParams && Object.keys(Router.currentParams).length > 0)
+        ? Router.currentParams
+        : (PatientViews._currentPatientId ? { patientId: PatientViews._currentPatientId } : {});
+      PatientViews.render(params);
+      this._updateTabBar('patients');
+      return;
+    }
+
+    this.showView(Router.currentView, Router.currentParams || {});
+    this._updateTabBar(Router.currentView);
+  },
+
+  refreshSyncStatusUi() {
+    const banner = document.getElementById('sync-status-banner');
+    const text = document.getElementById('sync-status-text');
+    const action = document.getElementById('sync-status-action');
+    if (!banner || !text || !action) return;
+
+    if (typeof LocalStore === 'undefined' || typeof LocalStore.getSyncStatusSummary !== 'function') {
+      banner.hidden = true;
+      banner.classList.add('hidden');
+      return;
+    }
+
+    const summary = LocalStore.getSyncStatusSummary();
+    if (!summary || !summary.bannerVisible) {
+      banner.hidden = true;
+      banner.classList.add('hidden');
+      text.textContent = '';
+      action.hidden = true;
+      return;
+    }
+
+    text.textContent = summary.note || summary.status || '';
+    action.textContent = summary.actionLabel || 'Połącz z Google';
+    action.hidden = !summary.actionLabel;
+    banner.hidden = false;
+    banner.classList.remove('hidden');
+  },
 
   // ── showView ──────────────────────────────────────────────────────────────
   showView(name, params = {}) {
@@ -283,8 +443,6 @@ const App = {
     document.querySelectorAll('.tab-btn').forEach(btn => {
       const isActive = btn.dataset.view === activeView;
       btn.classList.toggle('active', isActive);
-      // Remove the static HTML class that was only used for initial render
-      btn.classList.remove('tab-btn--active');
       btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
     });
   },
@@ -335,6 +493,11 @@ const App = {
     }
   },
 
+  _isVisible(id) {
+    const el = document.getElementById(id);
+    return !!(el && !el.hidden);
+  },
+
   _sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
   },
@@ -361,7 +524,7 @@ function renderCalendar(params) {
     if (params.viewMode) {
       CalendarViews.viewMode = params.viewMode;
     } else if (!CalendarViews.viewMode) {
-      CalendarViews.viewMode = 'monthly';
+      CalendarViews.viewMode = 'daily';
     }
     CalendarViews.render();
     return;
@@ -499,20 +662,22 @@ function _showSessionsForDay(dateStr) {
     const name    = patient
       ? patient.firstName + ' ' + patient.lastName
       : 'Nieznany pacjent';
-    const status  = _sessionStatusLabel(s.status);
+    const time    = _getSessionTimeValue(s) || '--:--';
+    const status  = s.isPaid ? 'Opłacona' : _sessionStatusLabel(s.status);
+    const amount  = _getSessionAmountValue(s, patient);
     return (
       '<article class="session-item session-item--' + (s.status || 'scheduled') + '"' +
                ' data-id="' + s.id + '"' +
                ' tabindex="0"' +
                ' role="button"' +
-               ' aria-label="Wizyta: ' + _escapeHtml(name) + ' o ' + (s.time || '') + '">' +
-        '<div class="session-item__time">' + (s.time || '--:--') + '</div>' +
+               ' aria-label="Wizyta: ' + _escapeHtml(name) + ' o ' + time + '">' +
+        '<div class="session-item__time">' + time + '</div>' +
         '<div class="session-item__info">' +
           '<span class="session-item__patient">' + _escapeHtml(name) + '</span>' +
           '<span class="session-item__status">' + status + '</span>' +
         '</div>' +
         '<div class="session-item__fee">' +
-          (s.fee != null ? s.fee + ' zł' : '') +
+          _formatAmountLabel(amount) +
         '</div>' +
       '</article>'
     );
@@ -651,9 +816,9 @@ function renderFinance(params) {
     return d.getFullYear() === year && d.getMonth() === month;
   });
 
-  const paid   = monthSess.filter(function(s) { return s.status === 'paid'; });
+  const paid   = monthSess.filter(function(s) { return s.isPaid || !!s.paymentId; });
   const income = paid.reduce(function(sum, s) {
-    return sum + (parseFloat(s.fee) || 0);
+    return sum + _getSessionAmountValue(s);
   }, 0);
 
   var detailRows;
@@ -671,10 +836,10 @@ function renderFinance(params) {
             '<span class="finance-item__date">' + _formatDatePL(s.date) + '</span>' +
             '<span class="finance-item__patient">' + _escapeHtml(name) + '</span>' +
             '<span class="finance-item__status">' +
-              _sessionStatusLabel(s.status) +
+              (s.isPaid ? 'Opłacona' : _sessionStatusLabel(s.status)) +
             '</span>' +
             '<span class="finance-item__fee">' +
-              (s.fee != null ? s.fee + ' zł' : '\u2014') +
+              _formatAmountLabel(_getSessionAmountValue(s, patient)) +
             '</span>' +
           '</li>'
         );
@@ -746,26 +911,28 @@ function renderSettings(params) {
                  ' placeholder="Jan Kowalski" />' +
         '</label>' +
         '<label class="settings-field">' +
-          '<span>Domy\u015blna stawka (z\u0142 / sesja)</span>' +
-          '<input type="number" id="set-default-fee"' +
-                 ' value="' + (settings.defaultFee != null ? settings.defaultFee : '') + '"' +
-                 ' min="0" step="10" placeholder="200" />' +
+          '<span>Adres gabinetu</span>' +
+          '<input type="text" id="set-therapist-address"' +
+                 ' value="' + _escapeHtml(settings.therapistAddress || '') + '"' +
+                 ' placeholder="ul. Przyk\u0142adowa 1, Warszawa" />' +
         '</label>' +
         '<label class="settings-field">' +
-          '<span>Czas trwania sesji (min)</span>' +
-          '<input type="number" id="set-session-duration"' +
-                 ' value="' + (settings.sessionDuration || 50) + '"' +
-                 ' min="15" step="5" />' +
+          '<span>NIP</span>' +
+          '<input type="text" id="set-therapist-nip"' +
+                 ' value="' + _escapeHtml(settings.therapistNIP || '') + '"' +
+                 ' placeholder="opcjonalnie" />' +
         '</label>' +
       '</section>' +
 
       '<section class="settings-section">' +
         '<h3 class="settings-section__title">Bezpiecze\u0144stwo</h3>' +
-        '<label class="settings-field settings-field--row">' +
-          '<span>Automatyczna blokada (2 min)</span>' +
-          '<input type="checkbox" id="set-autolock"' +
-                 (settings.autoLockEnabled !== false ? ' checked' : '') + ' />' +
+        '<label class="settings-field">' +
+          '<span>Auto-lock danych klinicznych (minuty)</span>' +
+          '<input type="number" id="set-autolock-timeout"' +
+                 ' value="' + _getAutoLockTimeoutMinutes(settings) + '"' +
+                 ' min="1" step="1" />' +
         '</label>' +
+        '<p class="settings-field__hint">To jest uproszczony ekran awaryjny. Pe\u0142ne ustawienia ochrony danych s\u0105 dost\u0119pne w g\u0142\u00f3wnym widoku ustawie\u0144.</p>' +
       '</section>' +
 
       '<section class="settings-section">' +
@@ -798,22 +965,27 @@ function _openSessionSheet(sessionId) {
     ? patient.firstName + ' ' + patient.lastName
     : '\u2014';
 
-  const STATUSES = ['scheduled', 'completed', 'paid', 'cancelled', 'no-show'];
+  const STATUSES = ['scheduled', 'completed', 'cancelled'];
+  const currentStatus = session.status || 'scheduled';
+  const allowedStatuses = STATUSES.includes(currentStatus)
+    ? STATUSES
+    : STATUSES.concat([currentStatus]);
+  const currentAmount = _getSessionAmountInputValue(session, patient);
 
   Sheet.open('sheet-container',
     '<div class="sheet-session">' +
       '<h3 class="sheet-title">Wizyta</h3>' +
       '<p><strong>Pacjent:</strong> ' + _escapeHtml(name) + '</p>' +
       '<p><strong>Data:</strong> '    + _formatDatePL(session.date) + '</p>' +
-      '<p><strong>Godzina:</strong> ' + (session.time || '\u2014') + '</p>' +
-      '<p><strong>Status:</strong> '  + _sessionStatusLabel(session.status) + '</p>' +
+      '<p><strong>Godzina:</strong> ' + (_getSessionTimeValue(session) || '\u2014') + '</p>' +
+      '<p><strong>Status:</strong> '  + (session.isPaid ? 'Op\u0142acona' : _sessionStatusLabel(session.status)) + '</p>' +
       '<p><strong>Op\u0142ata:</strong> ' +
-        (session.fee != null ? session.fee + ' z\u0142' : '\u2014') + '</p>' +
+        _formatAmountLabel(_getSessionAmountValue(session, patient)) + '</p>' +
 
       '<label class="sheet-field">' +
         '<span>Status</span>' +
         '<select id="session-status-sel">' +
-          STATUSES.map(function(v) {
+          allowedStatuses.map(function(v) {
             return '<option value="' + v + '"' +
               (session.status === v ? ' selected' : '') + '>' +
               _sessionStatusLabel(v) + '</option>';
@@ -823,15 +995,10 @@ function _openSessionSheet(sessionId) {
       '<label class="sheet-field">' +
         '<span>Op\u0142ata (z\u0142)</span>' +
         '<input type="number" id="session-fee-inp"' +
-               ' value="' + (session.fee != null ? session.fee : '') + '"' +
+               ' value="' + _escapeHtml(currentAmount) + '"' +
                ' min="0" step="10" />' +
       '</label>' +
-      '<label class="sheet-field">' +
-        '<span>Notatka</span>' +
-        '<textarea id="session-note-inp" rows="3">' +
-          _escapeHtml(session.note || '') +
-        '</textarea>' +
-      '</label>' +
+      '<p class="sheet-helper-text">Notatki kliniczne s\u0105 dost\u0119pne tylko w pe\u0142nym widoku kalendarza, gdzie dzia\u0142a blokada has\u0142em.</p>' +
 
       '<div class="sheet-actions">' +
         '<button class="btn btn--primary" id="btn-session-save">Zapisz</button>' +
@@ -843,8 +1010,8 @@ function _openSessionSheet(sessionId) {
 
   document.getElementById('btn-session-save').addEventListener('click', function() {
     session.status = document.getElementById('session-status-sel').value;
-    session.fee    = parseFloat(document.getElementById('session-fee-inp').value) || session.fee;
-    session.note   = document.getElementById('session-note-inp').value.trim();
+    session.paymentAmount = _readNullableNumber(document.getElementById('session-fee-inp').value);
+    _syncFallbackSessionPayment(session);
     persistData();
     Sheet.close();
     renderCalendar({ date: session.date });
@@ -854,6 +1021,7 @@ function _openSessionSheet(sessionId) {
     Modal.confirm('Usu\u0144 wizyt\u0119', 'Czy na pewno chcesz usun\u0105\u0107 t\u0119 wizyt\u0119?',
       function() {
         if (typeof AppState !== 'undefined') {
+          _removeSessionFromPaymentRegistry(session);
           AppState.sessions = AppState.sessions.filter(function(s) {
             return s.id !== sessionId;
           });
@@ -873,8 +1041,6 @@ function _openSessionSheet(sessionId) {
 function _openNewSessionSheet(dateStr) {
   const patients = (typeof AppState !== 'undefined' && AppState.patients)
     ? AppState.patients : [];
-  const settings = (typeof AppState !== 'undefined' && AppState.settings)
-    ? AppState.settings : {};
 
   var patientOptions = patients.map(function(p) {
     return '<option value="' + p.id + '">' +
@@ -899,9 +1065,10 @@ function _openNewSessionSheet(dateStr) {
       '<label class="sheet-field">' +
         '<span>Op\u0142ata (z\u0142)</span>' +
         '<input type="number" id="new-sess-fee"' +
-               ' value="' + (settings.defaultFee || '') + '"' +
+               ' value=""' +
                ' min="0" step="10" />' +
       '</label>' +
+      '<p class="sheet-helper-text">Domy\u015blnie wpiszemy stawk\u0119 wybranego pacjenta. Notatki kliniczne dodasz p\u00f3\u017aniej w pe\u0142nym widoku kalendarza.</p>' +
       '<div class="sheet-actions">' +
         '<button class="btn btn--primary" id="btn-new-sess-save">Dodaj wizyt\u0119</button>' +
         '<button class="btn btn--ghost"   id="btn-new-sess-close">Anuluj</button>' +
@@ -909,19 +1076,43 @@ function _openNewSessionSheet(dateStr) {
     '</div>'
   );
 
+  const patientSelect = document.getElementById('new-sess-patient');
+  const feeInput = document.getElementById('new-sess-fee');
+
+  function syncFeeWithSelectedPatient() {
+    const selectedPatient = _findPatient(patientSelect.value);
+    feeInput.value = selectedPatient && selectedPatient.sessionRate != null
+      ? String(selectedPatient.sessionRate)
+      : '';
+  }
+
+  patientSelect.addEventListener('change', syncFeeWithSelectedPatient);
+  syncFeeWithSelectedPatient();
+
   document.getElementById('btn-new-sess-save').addEventListener('click', function() {
-    const patientId = document.getElementById('new-sess-patient').value;
+    const patientId = patientSelect.value;
     if (!patientId) { alert('Wybierz pacjenta.'); return; }
 
-    const newSession = {
-      id:        _uuid(),
+    const sessionData = {
       patientId: patientId,
-      date:      dateStr,
-      time:      document.getElementById('new-sess-time').value,
-      fee:       parseFloat(document.getElementById('new-sess-fee').value) || null,
-      status:    'scheduled',
-      note:      '',
+      date: dateStr,
+      time: document.getElementById('new-sess-time').value,
+      paymentAmount: _readNullableNumber(feeInput.value),
+      status: 'scheduled',
+      isManuallyCreated: true,
+      sessionNotes: '',
     };
+    const newSession = typeof createSession === 'function'
+      ? createSession(sessionData)
+      : {
+          id: _uuid(),
+          patientId: sessionData.patientId,
+          date: sessionData.date,
+          paymentAmount: sessionData.paymentAmount,
+          status: sessionData.status,
+          isManuallyCreated: true,
+          sessionNotes: '',
+        };
 
     if (typeof AppState !== 'undefined') {
       AppState.sessions = AppState.sessions || [];
@@ -945,6 +1136,11 @@ function _openPatientSheet(patientId) {
     ? patients.find(function(p) { return p.id === patientId; })
     : null;
   const isNew    = !patient;
+  const fallbackSchedule = _getFallbackScheduleConfig(patient);
+  const therapyStartValue = _getDateInputValue(
+    patient && patient.therapyStartDate ? patient.therapyStartDate : new Date().toISOString()
+  );
+  const weekdayOptions = _getWeekdayOptions(fallbackSchedule.weekday);
 
   Sheet.open('sheet-container',
     '<div class="sheet-patient">' +
@@ -962,27 +1158,34 @@ function _openPatientSheet(patientId) {
                ' value="' + _escapeHtml(patient ? patient.lastName : '') + '" />' +
       '</label>' +
       '<label class="sheet-field">' +
-        '<span>Telefon</span>' +
-        '<input type="tel" id="pat-phone"' +
-               ' value="' + _escapeHtml(patient ? (patient.phone || '') : '') + '" />' +
+        '<span>Pseudonim</span>' +
+        '<input type="text" id="pat-pseudonym"' +
+               ' value="' + _escapeHtml(patient ? (patient.pseudonym || '') : '') + '"' +
+               ' placeholder="Opcjonalny pseudonim" />' +
       '</label>' +
       '<label class="sheet-field">' +
-        '<span>Email</span>' +
-        '<input type="email" id="pat-email"' +
-               ' value="' + _escapeHtml(patient ? (patient.email || '') : '') + '" />' +
+        '<span>Data rozpoczęcia terapii</span>' +
+        '<input type="date" id="pat-therapy-start"' +
+               ' value="' + _escapeHtml(therapyStartValue) + '" />' +
       '</label>' +
       '<label class="sheet-field">' +
         '<span>Stawka indywidualna (z\u0142)</span>' +
-        '<input type="number" id="pat-fee"' +
-               ' value="' + (patient && patient.fee != null ? patient.fee : '') + '"' +
+        '<input type="number" id="pat-session-rate"' +
+               ' value="' + (patient && patient.sessionRate != null ? patient.sessionRate : '') + '"' +
                ' min="0" step="10" />' +
       '</label>' +
       '<label class="sheet-field">' +
-        '<span>Notatki</span>' +
-        '<textarea id="pat-notes" rows="4">' +
-          _escapeHtml(patient ? (patient.notes || '') : '') +
-        '</textarea>' +
+        '<span>Dzień sesji</span>' +
+        '<select id="pat-session-weekday">' +
+          weekdayOptions +
+        '</select>' +
       '</label>' +
+      '<label class="sheet-field">' +
+        '<span>Godzina sesji</span>' +
+        '<input type="time" id="pat-session-time"' +
+               ' value="' + _escapeHtml(fallbackSchedule.sessionTime) + '" />' +
+      '</label>' +
+      '<p class="sheet-helper-text">To jest uproszczony formularz awaryjny. Zapisuje tylko pola zgodne z nowym modelem pacjenta. Notatki kliniczne, cele i rozbudowany harmonogram edytujesz w pełnym widoku pacjenta.</p>' +
       '<div class="sheet-actions">' +
         '<button class="btn btn--primary" id="btn-pat-save">Zapisz</button>' +
         (!isNew
@@ -996,22 +1199,53 @@ function _openPatientSheet(patientId) {
   document.getElementById('btn-pat-save').addEventListener('click', function() {
     const firstName = document.getElementById('pat-first').value.trim();
     const lastName  = document.getElementById('pat-last').value.trim();
+    const pseudonym = document.getElementById('pat-pseudonym').value.trim();
+    const therapyStartRaw = document.getElementById('pat-therapy-start').value;
+    const sessionRate = _readNullableNumber(document.getElementById('pat-session-rate').value);
+    const weekday = parseInt(document.getElementById('pat-session-weekday').value, 10);
+    const sessionTime = document.getElementById('pat-session-time').value || '10:00';
     if (!firstName || !lastName) {
       alert('Imi\u0119 i nazwisko s\u0105 wymagane.');
       return;
     }
+    if (!therapyStartRaw) {
+      alert('Data rozpocz\u0119cia terapii jest wymagana.');
+      return;
+    }
+
+    const therapyStartDate = new Date(therapyStartRaw).toISOString();
+    const fallbackSessionDayConfigs = [{
+      weekday: Number.isFinite(weekday) && weekday > 0 ? weekday : fallbackSchedule.weekday,
+      sessionTime: sessionTime,
+    }];
+    const sessionDayConfigs = (patient && Array.isArray(patient.sessionDayConfigs) && patient.sessionDayConfigs.length > 0)
+      ? patient.sessionDayConfigs
+      : fallbackSessionDayConfigs;
 
     if (isNew) {
-      const newPatient = {
-        id:        _uuid(),
+      const patientData = {
         firstName: firstName,
-        lastName:  lastName,
-        phone:     document.getElementById('pat-phone').value.trim(),
-        email:     document.getElementById('pat-email').value.trim(),
-        fee:       parseFloat(document.getElementById('pat-fee').value) || null,
-        notes:     document.getElementById('pat-notes').value.trim(),
+        lastName: lastName,
+        pseudonym: pseudonym,
+        therapyStartDate: therapyStartDate,
+        sessionRate: sessionRate,
+        sessionsPerWeek: sessionDayConfigs.length,
+        sessionDayConfigs: sessionDayConfigs,
         createdAt: new Date().toISOString(),
       };
+      const newPatient = typeof createPatient === 'function'
+        ? createPatient(patientData)
+        : {
+            id: _uuid(),
+            firstName: patientData.firstName,
+            lastName: patientData.lastName,
+            pseudonym: patientData.pseudonym,
+            therapyStartDate: patientData.therapyStartDate,
+            sessionRate: patientData.sessionRate,
+            sessionsPerWeek: patientData.sessionsPerWeek,
+            sessionDayConfigs: patientData.sessionDayConfigs,
+            createdAt: patientData.createdAt,
+          };
       if (typeof AppState !== 'undefined') {
         AppState.patients = AppState.patients || [];
         AppState.patients.push(newPatient);
@@ -1019,10 +1253,11 @@ function _openPatientSheet(patientId) {
     } else {
       patient.firstName = firstName;
       patient.lastName  = lastName;
-      patient.phone     = document.getElementById('pat-phone').value.trim();
-      patient.email     = document.getElementById('pat-email').value.trim();
-      patient.fee       = parseFloat(document.getElementById('pat-fee').value) || null;
-      patient.notes     = document.getElementById('pat-notes').value.trim();
+      patient.pseudonym = pseudonym;
+      patient.therapyStartDate = therapyStartDate;
+      patient.sessionRate = sessionRate ?? patient.sessionRate;
+      patient.sessionsPerWeek = sessionDayConfigs.length;
+      patient.sessionDayConfigs = sessionDayConfigs;
     }
 
     persistData();
@@ -1061,14 +1296,17 @@ function _saveSettings() {
   AppState.settings                 = AppState.settings || {};
   AppState.settings.therapistName   =
     document.getElementById('set-therapist-name').value.trim();
-  AppState.settings.defaultFee      =
-    parseFloat(document.getElementById('set-default-fee').value) || null;
-  AppState.settings.sessionDuration =
-    parseInt(document.getElementById('set-session-duration').value, 10) || 50;
-  AppState.settings.autoLockEnabled =
-    document.getElementById('set-autolock').checked;
+  AppState.settings.therapistAddress =
+    document.getElementById('set-therapist-address').value.trim();
+  AppState.settings.therapistNIP =
+    document.getElementById('set-therapist-nip').value.trim();
+  AppState.settings.autoLockTimeout =
+    _getAutoLockTimeoutSeconds(document.getElementById('set-autolock-timeout').value);
 
   persistData();
+  if (typeof AutoLock !== 'undefined' && typeof AutoLock.init === 'function') {
+    AutoLock.init();
+  }
 
   const btn = document.getElementById('btn-save-settings');
   if (btn) {
@@ -1247,6 +1485,158 @@ function _formatDatePL(dateStr) {
   if (!dateStr) return '\u2014';
   const parts = dateStr.slice(0, 10).split('-');
   return parts[2] + '.' + parts[1] + '.' + parts[0];
+}
+
+function _getSessionTimeValue(session) {
+  if (!session) return '';
+  if (typeof session.time === 'string' && session.time) return session.time;
+  if (!session.date) return '';
+  const parsed = new Date(session.date);
+  if (isNaN(parsed.getTime())) return '';
+  return String(parsed.getHours()).padStart(2, '0') + ':' +
+         String(parsed.getMinutes()).padStart(2, '0');
+}
+
+function _readNullableNumber(value) {
+  if (typeof normalizeNullableNumber === 'function') {
+    return normalizeNullableNumber(value);
+  }
+  if (value === undefined || value === null || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function _findPaymentForSession(session) {
+  if (!session || typeof AppState === 'undefined' || !Array.isArray(AppState.payments)) return null;
+  return AppState.payments.find(function(payment) {
+    return payment.id === session.paymentId ||
+      Array.isArray(payment.sessionIds) && payment.sessionIds.indexOf(session.id) !== -1;
+  }) || null;
+}
+
+function _syncFallbackSessionPayment(session) {
+  if (!session || !session.isPaid || typeof recordPaymentForSessions !== 'function') return;
+  const payment = _findPaymentForSession(session);
+  const paymentId = payment ? payment.id : (session.paymentId || null);
+  const sessionIds = payment && Array.isArray(payment.sessionIds) && payment.sessionIds.length > 0
+    ? payment.sessionIds.slice()
+    : [session.id];
+
+  recordPaymentForSessions({
+    id: paymentId,
+    patientId: session.patientId,
+    date: payment ? payment.date : (session.paymentDate || session.date),
+    method: payment ? payment.method : (session.paymentMethod || 'cash'),
+    note: payment ? (payment.note || '') : '',
+    sessionIds: sessionIds,
+  });
+}
+
+function _removeSessionFromPaymentRegistry(session) {
+  if (!session) return;
+  const payment = _findPaymentForSession(session);
+  if (!payment) return;
+
+  const remainingSessionIds = (payment.sessionIds || []).filter(function(sessionId) {
+    return sessionId !== session.id;
+  });
+
+  if (remainingSessionIds.length === 0) {
+    if (typeof detachPaymentFromSessions === 'function') {
+      detachPaymentFromSessions(payment.id);
+    }
+    return;
+  }
+
+  if (typeof recordPaymentForSessions === 'function') {
+    recordPaymentForSessions({
+      id: payment.id,
+      patientId: payment.patientId,
+      date: payment.date,
+      method: payment.method,
+      note: payment.note || '',
+      sessionIds: remainingSessionIds,
+    });
+  }
+}
+
+function _getDateInputValue(dateValue) {
+  if (!dateValue) return '';
+  const parsed = new Date(dateValue);
+  if (isNaN(parsed.getTime())) return '';
+  return parsed.toISOString().split('T')[0];
+}
+
+function _getFallbackScheduleConfig(patient) {
+  const defaultWeekday = typeof getISOWeekday === 'function'
+    ? getISOWeekday(new Date())
+    : 1;
+  const configs = patient && Array.isArray(patient.sessionDayConfigs)
+    ? patient.sessionDayConfigs
+    : [];
+  const firstConfig = configs.length > 0 ? configs[0] : null;
+
+  return {
+    weekday: firstConfig && firstConfig.weekday ? firstConfig.weekday : defaultWeekday,
+    sessionTime: firstConfig && firstConfig.sessionTime ? firstConfig.sessionTime : '10:00',
+  };
+}
+
+function _getWeekdayOptions(selectedWeekday) {
+  const labels = {
+    1: 'Poniedziałek',
+    2: 'Wtorek',
+    3: 'Środa',
+    4: 'Czwartek',
+    5: 'Piątek',
+    6: 'Sobota',
+    7: 'Niedziela',
+  };
+
+  return Object.keys(labels).map(function(key) {
+    return '<option value="' + key + '"' +
+      (Number(key) === Number(selectedWeekday) ? ' selected' : '') + '>' +
+      labels[key] +
+      '</option>';
+  }).join('');
+}
+
+function _getSessionAmountValue(session, patient) {
+  if (typeof getSessionAmount === 'function') {
+    return getSessionAmount(session, patient);
+  }
+  const amount = _readNullableNumber(session && session.paymentAmount);
+  if (amount !== null) return amount;
+  const legacyAmount = _readNullableNumber(session && session.fee);
+  if (legacyAmount !== null) return legacyAmount;
+  const rate = _readNullableNumber(patient && patient.sessionRate);
+  return rate !== null ? rate : 0;
+}
+
+function _getSessionAmountInputValue(session, patient) {
+  const amount = _readNullableNumber(session && session.paymentAmount);
+  if (amount !== null) return String(amount);
+  const legacyAmount = _readNullableNumber(session && session.fee);
+  if (legacyAmount !== null) return String(legacyAmount);
+  const rate = _readNullableNumber(patient && patient.sessionRate);
+  return rate !== null ? String(rate) : '';
+}
+
+function _formatAmountLabel(amount) {
+  const normalized = _readNullableNumber(amount);
+  return normalized === null ? '\u2014' : normalized + ' zł';
+}
+
+function _getAutoLockTimeoutMinutes(settings) {
+  const seconds = _readNullableNumber(settings && settings.autoLockTimeout);
+  if (seconds === null || seconds <= 0) return 2;
+  return Math.max(1, Math.round(seconds / 60));
+}
+
+function _getAutoLockTimeoutSeconds(value) {
+  const minutes = _readNullableNumber(value);
+  if (minutes === null || minutes <= 0) return 120;
+  return Math.round(minutes * 60);
 }
 
 function _initials(first, last) {

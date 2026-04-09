@@ -7,7 +7,7 @@
 const CalendarViews = {
   currentDate:  new Date(),
   selectedDate: new Date(),
-  viewMode:     'monthly',
+  viewMode:     'daily',
 
   render() {
     const container = document.getElementById('view-container');
@@ -20,14 +20,13 @@ const CalendarViews = {
           this._renderCurrentView(),
         '</div>',
         '<div class="cal-day-sessions" id="cal-day-sessions">',
-          this.viewMode === 'monthly' ? this.renderDaySessionsList(this.selectedDate) : '',
+          this.renderDaySessionsList(this.selectedDate),
         '</div>',
       '</div>',
     ].join('');
     this._injectStyles();
     this.bindEvents();
   },
-
 
   renderFocusPanel() {
     const focusDate = this.selectedDate instanceof Date ? this.selectedDate : new Date();
@@ -40,14 +39,7 @@ const CalendarViews = {
       return session.status === 'completed' || session.status === 'cancelled';
     });
     const unpaidTotal = unpaidSessions.reduce((sum, session) => {
-      const patient = getPatient(session.patientId);
-      const full = session.paymentAmount !== null
-        ? session.paymentAmount
-        : (patient ? patient.sessionRate : 0);
-      const owed = session.isPartiallyPaid && session.partialPaymentAmount
-        ? full - session.partialPaymentAmount
-        : full;
-      return sum + owed;
+      return sum + getSessionAmount(session);
     }, 0);
     const upcoming = AppState.sessions
       .filter((session) => session.status === 'scheduled' && new Date(session.date) >= new Date())
@@ -75,18 +67,24 @@ const CalendarViews = {
 
     return (
       '<section class="cal-focus-panel">'
-      + '<div class="cal-focus-top">'
-        + '<div class="cal-focus-copy">'
-          + '<span class="cal-focus-kicker">Dzisiaj</span>'
-          + '<h1 class="cal-focus-title">Plan dnia dla Twojego gabinetu</h1>'
+      + '<div class="cal-focus-copy">'
+        + '<span class="cal-focus-kicker">Dzisiaj</span>'
+        + '<h1 class="cal-focus-title">Plan dnia dla Twojego gabinetu</h1>'
+        + '<p class="cal-focus-text">' + this._escapeHtml(dayLabel) + '. Zobacz najbliższe sesje, zaległości i rzeczy wymagające spokojnej reakcji.</p>'
+        + '<div class="cal-focus-actions">'
+          + '<button class="cal-focus-action cal-focus-action--primary" id="today-btn-add-session">Dodaj sesję</button>'
+          + '<button class="cal-focus-action" id="today-btn-add-payment">Zarejestruj płatność</button>'
+          + '<button class="cal-focus-action" id="today-btn-open-patients">Pacjenci</button>'
         + '</div>'
-        + nextSessionHtml
       + '</div>'
-      + '<div class="cal-focus-stats">'
-        + '<article class="cal-focus-stat"><span>Sesje dziś</span><strong>' + todaySessions.length + '</strong><small>' + completedToday + ' odbytych</small></article>'
-        + '<article class="cal-focus-stat"><span>Należności</span><strong>' + formatPLN(unpaidTotal) + '</strong><small>' + debtPatients + ' pacjentów</small></article>'
-        + '<article class="cal-focus-stat"><span>Aktywni pacjenci</span><strong>' + AppState.activePatients.length + '</strong><small>bieżący cykl terapii</small></article>'
-        + '<article class="cal-focus-stat"><span>Tryb dnia</span><strong>' + (blockedToday ? 'Blokada' : 'Otwarte') + '</strong><small>' + (blockedToday ? 'Masz zablokowany termin.' : 'Brak blokady na dziś.') + '</small></article>'
+      + '<div class="cal-focus-aside">'
+        + nextSessionHtml
+        + '<div class="cal-focus-stats">'
+          + '<article class="cal-focus-stat"><span>Sesje dziś</span><strong>' + todaySessions.length + '</strong><small>' + completedToday + ' odbytych</small></article>'
+          + '<article class="cal-focus-stat"><span>Należności</span><strong>' + formatPLN(unpaidTotal) + '</strong><small>' + debtPatients + ' pacjentów</small></article>'
+          + '<article class="cal-focus-stat"><span>Aktywni pacjenci</span><strong>' + AppState.activePatients.length + '</strong><small>bieżący cykl terapii</small></article>'
+          + '<article class="cal-focus-stat"><span>Tryb dnia</span><strong>' + (blockedToday ? 'Blokada' : 'Otwarte') + '</strong><small>' + (blockedToday ? 'Masz zablokowany termin.' : 'Brak blokady na dziś.') + '</small></article>'
+        + '</div>'
       + '</div>'
       + '</section>'
     );
@@ -241,7 +239,7 @@ const CalendarViews = {
           return '<div class="cal-week-event" style="background:' + color
             + '20;border-left:3px solid ' + color + '" data-session-id="' + s.id + '" role="button">'
             + '<span class="cal-week-event-time">' + formatTime(new Date(s.date)) + '</span>'
-            + '<span class="cal-week-event-name">' + name + '</span>'
+            + '<span class="cal-week-event-name">' + this._escapeHtml(name) + '</span>'
             + '</div>';
         }).join('');
         slots += '<div class="cal-week-slot" data-hour="' + hour
@@ -253,14 +251,11 @@ const CalendarViews = {
       '<div class="cal-week-time-label">' + String(h).padStart(2, '0') + ':00</div>'
     ).join('');
     return '<div class="cal-weekly">'
-      + '<div class="cal-week-scroll">'
-        + '<div class="cal-week-header">' + headerHtml + '</div>'
-        + '<div class="cal-week-body">'
-          + '<div class="cal-week-time-col">' + timeLabels + '</div>'
-          + colsHtml
-        + '</div>'
-      + '</div>'
-    + '</div>';
+      + '<div class="cal-week-header">' + headerHtml + '</div>'
+      + '<div class="cal-week-body">'
+        + '<div class="cal-week-time-col">' + timeLabels + '</div>'
+        + colsHtml
+      + '</div></div>';
   },
 
   renderDaily() {
@@ -288,7 +283,7 @@ const CalendarViews = {
             + '<span class="cal-daily-event-time">' + formatTime(new Date(s.date)) + '</span>'
             + badge
           + '</div>'
-          + '<div class="cal-daily-event-name">' + name + '</div>'
+          + '<div class="cal-daily-event-name">' + this._escapeHtml(name) + '</div>'
           + (s.wasRescheduled ? '<div class="cal-daily-event-flag">Przełożona</div>' : '')
           + '</div>';
       }).join('');
@@ -324,10 +319,7 @@ const CalendarViews = {
     const totalUnpaid = sessions
       .filter(s => s.isPaymentRequired && !s.isPaid && s.status !== 'cancelled')
       .reduce((sum, s) => {
-        const patient = getPatient(s.patientId);
-        const amount  = s.paymentAmount !== null
-          ? s.paymentAmount : (patient ? patient.sessionRate : 0);
-        return sum + amount;
+        return sum + getSessionAmount(s);
       }, 0);
     const debtHtml = totalUnpaid > 0
       ? '<span class="cal-sessions-debt">Do zapłaty: ' + formatPLN(totalUnpaid) + '</span>' : '';
@@ -348,8 +340,7 @@ const CalendarViews = {
     const time    = formatTime(new Date(session.date));
     const color   = this._sessionColor(session);
     const badge   = this._statusBadge(session.status);
-    const rate    = patient ? patient.sessionRate : 0;
-    const amount  = session.paymentAmount !== null ? session.paymentAmount : rate;
+    const amount  = getSessionAmount(session, patient);
     const paidHtml = session.isPaid
       ? '<span class="cal-row-paid">Opłacona</span>'
       : (session.isPaymentRequired && session.status !== 'cancelled'
@@ -357,7 +348,8 @@ const CalendarViews = {
           : '');
     const reschedFlag = session.wasRescheduled
       ? '<span class="cal-row-flag" title="Przełożona">↩</span>' : '';
-    const noteFlag = session.sessionNotes && session.sessionNotes.trim()
+    const noteFlag = (typeof SecurityService !== 'undefined' && SecurityService.canReadClinicalData()) &&
+      session.sessionNotes && session.sessionNotes.trim()
       ? '<span class="cal-row-flag" title="Ma notatki">📝</span>' : '';
     const numLabel = session.sessionNumber
       ? '<span class="cal-row-num">#' + session.sessionNumber + '</span>' : '';
@@ -365,7 +357,7 @@ const CalendarViews = {
       + '" role="button" tabindex="0" style="border-left:3px solid ' + color + '">'
       + '<div class="cal-row-time">' + time + '</div>'
       + '<div class="cal-row-body">'
-        + '<div class="cal-row-name">' + name + ' ' + numLabel + ' ' + reschedFlag + ' ' + noteFlag + '</div>'
+        + '<div class="cal-row-name">' + this._escapeHtml(name) + ' ' + numLabel + ' ' + reschedFlag + ' ' + noteFlag + '</div>'
         + '<div class="cal-row-meta">' + badge + ' ' + paidHtml + '</div>'
       + '</div>'
       + '<div class="cal-row-chevron">›</div>'
@@ -409,7 +401,7 @@ const CalendarViews = {
     const patients       = AppState.activePatients;
     const patientOptions = patients.map(p =>
       '<option value="' + p.id + '">'
-        + (p.pseudonym || (p.firstName + ' ' + p.lastName))
+        + this._escapeHtml(p.pseudonym || (p.firstName + ' ' + p.lastName))
         + '</option>'
     ).join('');
     const defaultDate = this._dateKey(this.selectedDate);
@@ -569,11 +561,11 @@ const CalendarViews = {
     const patient = getPatient(session.patientId);
     if (!patient) return;
     this._removeExistingModal('modal-session-detail');
-    const name    = patient.firstName + ' ' + patient.lastName;
-    const pseudo  = patient.pseudonym || '—';
+    const name    = this._escapeHtml(patient.firstName + ' ' + patient.lastName);
+    const pseudo  = this._escapeHtml(patient.pseudonym || '—');
     const dateStr = formatDateTimeWithWeekday(new Date(session.date));
     const badge   = this._statusBadge(session.status);
-    const amount  = session.paymentAmount !== null ? session.paymentAmount : patient.sessionRate;
+    const amount  = getSessionAmount(session, patient);
     const color   = this._sessionColor(session);
     const numLabel = session.sessionNumber ? 'Sesja #' + session.sessionNumber : '';
     const paymentSection = session.isPaymentRequired
@@ -585,8 +577,8 @@ const CalendarViews = {
           + '</div>'
           + '<div class="cal-detail-row">'
             + '<span class="cal-detail-label">Status</span>'
-            + '<span class="cal-detail-value ' + (session.isPaid ? 'cal-paid' : session.isPartiallyPaid ? 'cal-partial' : 'cal-unpaid') + '">'
-              + (session.isPaid ? 'Opłacona' : session.isPartiallyPaid ? 'Częściowo opłacona (' + formatPLN(session.partialPaymentAmount) + ')' : 'Nieopłacona')
+            + '<span class="cal-detail-value ' + (session.isPaid ? 'cal-paid' : 'cal-unpaid') + '">'
+              + (session.isPaid ? 'Opłacona' : 'Nieopłacona')
             + '</span>'
           + '</div>'
           + (session.isPaid && session.paymentMethod
@@ -599,42 +591,36 @@ const CalendarViews = {
                 + '<span class="cal-detail-label">Data płatności</span>'
                 + '<span class="cal-detail-value">' + formatDateMedium(new Date(session.paymentDate)) + '</span>'
                 + '</div>' : '')
-          + '<div class="cal-detail-row" style="margin-top:4px">'
-            + '<button class="cal-edit-notes-btn" id="detail-btn-payment-menu">Zarządzaj płatnością ›</button>'
-          + '</div>'
           + '</div>')
       : '<div class="cal-detail-section"><p class="cal-detail-muted">Płatność nie jest wymagana.</p></div>';
-    const actionsSection = (
-      '<div class="cal-detail-section">'
-        + '<h4 class="cal-detail-section-title">Akcje</h4>'
-        + '<div class="cal-detail-actions">'
-          + (session.status !== 'completed'
-              ? '<button class="cal-action-btn cal-action-complete" id="detail-btn-complete">Oznacz jako odbyła się</button>'
-              : '<button class="cal-action-btn cal-action-complete cal-action-btn--active" id="detail-btn-complete">✓ Odbyła się — zmień</button>')
-          + (session.status !== 'cancelled'
-              ? '<button class="cal-action-btn cal-action-absent" id="detail-btn-absent">Nie odbyła się</button>'
-              : '<button class="cal-action-btn cal-action-absent cal-action-btn--active" id="detail-btn-absent">✕ Odwołana — zmień</button>')
-          + (session.status === 'scheduled'
-              ? '<button class="cal-action-btn cal-action-reschedule" id="detail-btn-reschedule">Przełóż sesję</button>'
-              : '')
-          + '<button class="cal-action-btn cal-action-delete" id="detail-btn-delete">Usuń sesję</button>'
-        + '</div>'
-      + '</div>'
-    );
-    const cancelReasonLabels = { patient_vacation: 'Urlop pacjenta', patient_late: 'Odwołana w ostatniej chwili', therapist: 'Odwołana przez terapeutę' };
-    const cancelReasonRow = session.status === 'cancelled' && session.cancellationReason
-      ? ('<div class="cal-detail-row">'
-          + '<span class="cal-detail-label">Powód</span>'
-          + '<span class="cal-detail-value">' + (cancelReasonLabels[session.cancellationReason] || session.cancellationReason) + '</span>'
+    const actionsSection = session.status === 'scheduled'
+      ? ('<div class="cal-detail-section">'
+          + '<h4 class="cal-detail-section-title">Akcje</h4>'
+          + '<div class="cal-detail-actions">'
+            + '<button class="cal-action-btn cal-action-complete" id="detail-btn-complete">Oznacz jako odbyła się</button>'
+            + '<button class="cal-action-btn cal-action-absent" id="detail-btn-absent">Nie odbyła się</button>'
+            + '<button class="cal-action-btn cal-action-reschedule" id="detail-btn-reschedule">Przełóż sesję</button>'
+          + '</div>'
           + '</div>') : '';
     const reschedInfo = session.wasRescheduled && session.originalDate
       ? ('<div class="cal-detail-row cal-detail-reschedule">'
           + '<span class="cal-detail-label">Pierwotna data</span>'
           + '<span class="cal-detail-value">' + formatDateMedium(new Date(session.originalDate)) + '</span>'
           + '</div>') : '';
-    const notesHtml = session.sessionNotes && session.sessionNotes.trim()
-      ? '<p class="cal-detail-notes-text">' + this._escapeHtml(session.sessionNotes) + '</p>'
-      : '<p class="cal-detail-muted">Brak notatek.</p>';
+    const clinicalUnlocked = typeof SecurityService !== 'undefined' && SecurityService.canReadClinicalData();
+    const clinicalAction = (typeof SecurityService !== 'undefined' && SecurityService.needsPasswordSetup())
+      ? 'Ustaw hasło'
+      : 'Odblokuj notatki';
+    const notesHtml = clinicalUnlocked
+      ? (session.sessionNotes && session.sessionNotes.trim()
+          ? '<p class="cal-detail-notes-text">' + this._formatMultiline(session.sessionNotes) + '</p>'
+          : '<p class="cal-detail-muted">Brak notatek.</p>')
+      : (
+          '<div class="cal-detail-locked">'
+          + '<p class="cal-detail-muted">Dane kliniczne są zablokowane.</p>'
+          + '<button class="cal-action-btn cal-action-complete" id="detail-btn-unlock-clinical">' + clinicalAction + '</button>'
+          + '</div>'
+        );
     const modal = document.createElement('div');
     modal.id        = 'modal-session-detail';
     modal.className = 'cal-modal-overlay';
@@ -663,7 +649,6 @@ const CalendarViews = {
               + '<span class="cal-detail-label">Numer</span>'
               + '<span class="cal-detail-value">' + numLabel + '</span>'
               + '</div>' : '')
-          + cancelReasonRow
           + reschedInfo
         + '</div>'
         + paymentSection
@@ -671,12 +656,14 @@ const CalendarViews = {
         + '<div class="cal-detail-section">'
           + '<div class="cal-detail-section-header">'
             + '<h4 class="cal-detail-section-title" style="margin-bottom:0">Notatki</h4>'
-            + '<button class="cal-edit-notes-btn" id="detail-btn-edit-notes">Edytuj</button>'
+            + (clinicalUnlocked
+                ? '<button class="cal-edit-notes-btn" id="detail-btn-edit-notes">Edytuj</button>'
+                : '')
           + '</div>'
           + '<div id="detail-notes-view">' + notesHtml + '</div>'
           + '<div id="detail-notes-edit" class="hidden">'
             + '<textarea class="cal-form-control cal-notes-textarea" id="detail-notes-input" rows="6" placeholder="Notatki z sesji…">'
-              + this._escapeHtml(session.sessionNotes || '')
+              + this._escapeHtml(clinicalUnlocked ? (session.sessionNotes || '') : '')
             + '</textarea>'
             + '<div class="cal-notes-edit-actions">'
               + '<button class="cal-action-btn" id="detail-notes-cancel">Anuluj</button>'
@@ -693,32 +680,41 @@ const CalendarViews = {
     const notesView  = modal.querySelector('#detail-notes-view');
     const notesEdit  = modal.querySelector('#detail-notes-edit');
     const notesInput = modal.querySelector('#detail-notes-input');
-
-    // Decrypt notes asynchronously and populate view + textarea
-    if (session.sessionNotes) {
-      Encryption.decrypt(session.sessionNotes).then(decrypted => {
-        notesInput.value = decrypted;
-        notesView.innerHTML = decrypted.trim()
-          ? '<p class="cal-detail-notes-text">' + this._escapeHtml(decrypted) + '</p>'
-          : '<p class="cal-detail-muted">Brak notatek.</p>';
+    const unlockBtn = modal.querySelector('#detail-btn-unlock-clinical');
+    if (unlockBtn) {
+      unlockBtn.addEventListener('click', async () => {
+        if (typeof SecurityService === 'undefined') return;
+        const ok = await SecurityService.requestClinicalAccess();
+        if (!ok) return;
+        modal.remove();
+        this.openSessionDetail(session.id);
       });
     }
-
-    modal.querySelector('#detail-btn-edit-notes').addEventListener('click', () => {
-      notesView.classList.add('hidden');
-      notesEdit.classList.remove('hidden');
-      notesInput.focus();
-    });
+    const editNotesBtn = modal.querySelector('#detail-btn-edit-notes');
+    if (editNotesBtn) {
+      editNotesBtn.addEventListener('click', async () => {
+        if (typeof SecurityService !== 'undefined') {
+          const ok = await SecurityService.requestClinicalAccess();
+          if (!ok) return;
+        }
+        notesView.classList.add('hidden');
+        notesEdit.classList.remove('hidden');
+        notesInput.focus();
+      });
+    }
     modal.querySelector('#detail-notes-cancel').addEventListener('click', () => {
       notesEdit.classList.add('hidden');
       notesView.classList.remove('hidden');
     });
     modal.querySelector('#detail-notes-save').addEventListener('click', async () => {
-      const plainText = notesInput.value;
-      session.sessionNotes = await Encryption.encrypt(plainText);
+      if (typeof SecurityService !== 'undefined') {
+        const ok = await SecurityService.requestClinicalAccess();
+        if (!ok) return;
+      }
+      session.sessionNotes = notesInput.value;
       if (typeof persistData === 'function') persistData();
-      notesView.innerHTML = plainText.trim()
-        ? '<p class="cal-detail-notes-text">' + this._escapeHtml(plainText) + '</p>'
+      notesView.innerHTML = session.sessionNotes.trim()
+        ? '<p class="cal-detail-notes-text">' + this._formatMultiline(session.sessionNotes) + '</p>'
         : '<p class="cal-detail-muted">Brak notatek.</p>';
       notesEdit.classList.add('hidden');
       notesView.classList.remove('hidden');
@@ -727,11 +723,7 @@ const CalendarViews = {
     const btnComplete = modal.querySelector('#detail-btn-complete');
     if (btnComplete) {
       btnComplete.addEventListener('click', () => {
-        session.status             = 'completed';
-        session.cancellationReason = null;
-        session.isPaymentRequired  = true;
-        const patient = getPatient(session.patientId);
-        if (patient) recalculateSessionNumbers(patient);
+        session.status = 'completed';
         if (typeof persistData === 'function') persistData();
         modal.remove();
         this._refresh();
@@ -742,90 +734,6 @@ const CalendarViews = {
     if (btnAbsent) btnAbsent.addEventListener('click', () => this._showAbsentDialog(session, modal));
     const btnReschedule = modal.querySelector('#detail-btn-reschedule');
     if (btnReschedule) btnReschedule.addEventListener('click', () => this._showRescheduleDialog(session, modal));
-    const btnDelete = modal.querySelector('#detail-btn-delete');
-    if (btnDelete) btnDelete.addEventListener('click', () => this._showDeleteSessionDialog(session, modal));
-    const btnPaymentMenu = modal.querySelector('#detail-btn-payment-menu');
-    if (btnPaymentMenu) btnPaymentMenu.addEventListener('click', () => this._showPaymentMenuDialog(session, modal));
-  },
-
-  _showPaymentMenuDialog(session, parentModal) {
-    const hasPayment = Boolean(session.paymentId);
-    const dialog = document.createElement('div');
-    dialog.className    = 'cal-modal-overlay';
-    dialog.style.zIndex = '10001';
-    dialog.innerHTML = (
-      '<div class="cal-modal-sheet" role="dialog" aria-modal="true">'
-      + '<div class="cal-modal-header">'
-        + '<button class="cal-modal-cancel" id="pay-menu-cancel">Anuluj</button>'
-        + '<h2 class="cal-modal-title">Zarządzaj płatnością</h2>'
-        + '<div></div>'
-      + '</div>'
-      + '<div class="cal-modal-body">'
-        + '<div class="cal-detail-actions">'
-          + '<button class="cal-action-btn" id="pay-menu-new">Zarejestruj nową płatność</button>'
-          + (hasPayment
-              ? '<button class="cal-action-btn" id="pay-menu-edit">Edytuj dokonaną płatność</button>'
-              : '')
-        + '</div>'
-      + '</div>'
-      + '</div>'
-    );
-    document.body.appendChild(dialog);
-    dialog.querySelector('#pay-menu-cancel').addEventListener('click', () => dialog.remove());
-    dialog.addEventListener('click', e => { if (e.target === dialog) dialog.remove(); });
-    dialog.querySelector('#pay-menu-new').addEventListener('click', () => {
-      dialog.remove();
-      parentModal.remove();
-      if (typeof FinanceViews !== 'undefined' && typeof FinanceViews.openAddPaymentForSession === 'function') {
-        FinanceViews.openAddPaymentForSession(session);
-      }
-    });
-    if (hasPayment) {
-      dialog.querySelector('#pay-menu-edit').addEventListener('click', () => {
-        dialog.remove();
-        parentModal.remove();
-        if (typeof FinanceViews !== 'undefined' && typeof FinanceViews.openEditPayment === 'function') {
-          FinanceViews.openEditPayment(session.paymentId);
-        }
-      });
-    }
-  },
-
-  _showDeleteSessionDialog(session, parentModal) {
-    const patient = getPatient(session.patientId);
-    const name    = patient ? patient.firstName + ' ' + patient.lastName : '—';
-    const dateStr = formatDateTimeWithWeekday(new Date(session.date));
-    const dialog  = document.createElement('div');
-    dialog.className    = 'cal-modal-overlay';
-    dialog.style.zIndex = '10001';
-    dialog.innerHTML = (
-      '<div class="cal-modal-sheet" role="dialog" aria-modal="true">'
-      + '<div class="cal-modal-header">'
-        + '<button class="cal-modal-cancel" id="delete-session-cancel">Anuluj</button>'
-        + '<h2 class="cal-modal-title">Usuń sesję</h2>'
-        + '<button class="cal-modal-save cal-modal-save--danger" id="delete-session-confirm">Usuń</button>'
-      + '</div>'
-      + '<div class="cal-modal-body">'
-        + '<p class="cal-detail-muted" style="margin-bottom:8px">Czy na pewno chcesz usunąć tę sesję? Tej operacji nie można cofnąć.</p>'
-        + '<div class="cal-detail-section" style="margin-top:0">'
-          + '<div class="cal-detail-row"><span class="cal-detail-label">Pacjent</span><span class="cal-detail-value">' + name + '</span></div>'
-          + '<div class="cal-detail-row"><span class="cal-detail-label">Data</span><span class="cal-detail-value">' + dateStr + '</span></div>'
-        + '</div>'
-      + '</div>'
-      + '</div>'
-    );
-    document.body.appendChild(dialog);
-    dialog.querySelector('#delete-session-cancel').addEventListener('click', () => dialog.remove());
-    dialog.addEventListener('click', e => { if (e.target === dialog) dialog.remove(); });
-    dialog.querySelector('#delete-session-confirm').addEventListener('click', () => {
-      AppState.sessions = AppState.sessions.filter(s => s.id !== session.id);
-      if (patient) recalculateSessionNumbers(patient);
-      if (typeof persistData === 'function') persistData();
-      dialog.remove();
-      parentModal.remove();
-      this._refresh();
-      toast('Sesja usunięta.', 'success');
-    });
   },
 
   _showAbsentDialog(session, parentModal) {
@@ -842,29 +750,22 @@ const CalendarViews = {
         + '<button class="cal-modal-save" id="absent-save">Zapisz</button>'
       + '</div>'
       + '<div class="cal-modal-body">'
-        + '<p class="cal-detail-muted">Wybierz powód odwołania sesji:</p>'
-        + '<div class="cal-absent-options">'
-          + '<label class="cal-absent-option">'
-            + '<input type="radio" name="absent-reason" value="patient_vacation">'
-            + '<div class="cal-absent-option-body">'
-              + '<strong>Urlop pacjenta</strong>'
-              + '<span class="cal-detail-muted">Zgłoszony wcześniej — sesja niepłatna</span>'
-            + '</div>'
+        + '<p class="cal-detail-muted">Sesja zostanie oznaczona jako odwołana.</p>'
+        + '<div class="cal-form-group cal-form-row">'
+          + '<label class="cal-form-label">Pobierz opłatę (' + formatPLN(rate) + ')</label>'
+          + '<label class="cal-toggle">'
+            + '<input type="checkbox" id="absent-payment-req"' + (session.isPaymentRequired ? ' checked' : '') + '>'
+            + '<span class="cal-toggle-slider"></span>'
           + '</label>'
-          + '<label class="cal-absent-option">'
-            + '<input type="radio" name="absent-reason" value="patient_late" checked>'
-            + '<div class="cal-absent-option-body">'
-              + '<strong>Odwołana w ostatniej chwili</strong>'
-              + '<span class="cal-detail-muted">Sesja płatna (' + formatPLN(rate) + ')</span>'
-            + '</div>'
-          + '</label>'
-          + '<label class="cal-absent-option">'
-            + '<input type="radio" name="absent-reason" value="therapist">'
-            + '<div class="cal-absent-option-body">'
-              + '<strong>Odwołana przez terapeutę</strong>'
-              + '<span class="cal-detail-muted">Sesja niepłatna</span>'
-            + '</div>'
-          + '</label>'
+        + '</div>'
+        + '<div class="cal-form-group">'
+          + '<label class="cal-form-label">Metoda płatności</label>'
+          + '<select class="cal-form-control" id="absent-payment-method">'
+            + '<option value="">Nie zapłacono jeszcze</option>'
+            + '<option value="cash">Gotówka</option>'
+            + '<option value="aliorBank">Alior Bank</option>'
+            + '<option value="ingBank">ING Bank</option>'
+          + '</select>'
         + '</div>'
       + '</div>'
       + '</div>'
@@ -873,25 +774,37 @@ const CalendarViews = {
     dialog.querySelector('#absent-cancel').addEventListener('click', () => dialog.remove());
     dialog.addEventListener('click', e => { if (e.target === dialog) dialog.remove(); });
     dialog.querySelector('#absent-save').addEventListener('click', () => {
-      const reason = dialog.querySelector('input[name="absent-reason"]:checked').value;
-      session.status             = 'cancelled';
-      session.cancellationReason = reason;
-      // Tylko "odwołana w ostatniej chwili" jest płatna i zaliczana do zobowiązań
-      if (reason === 'patient_late') {
-        session.isPaymentRequired = true;
-      } else {
-        session.isPaymentRequired = false;
-        session.isPaid            = false;
-        session.paymentMethod     = null;
-        session.paymentDate       = null;
+      const payReq = dialog.querySelector('#absent-payment-req').checked;
+      const method = dialog.querySelector('#absent-payment-method').value;
+      session.status            = 'cancelled';
+      session.isPaymentRequired = payReq;
+
+      if (payReq && method) {
+        try {
+          recordPaymentForSessions({
+            id: session.paymentId || null,
+            patientId: session.patientId,
+            date: new Date().toISOString(),
+            method,
+            note: '',
+            sessionIds: [session.id],
+          });
+        } catch (error) {
+          toast('Nie udało się zapisać płatności: ' + error.message, 'error');
+          return;
+        }
+      } else if (session.paymentId && typeof detachPaymentFromSessions === 'function') {
+        detachPaymentFromSessions(session.paymentId);
+      } else if (typeof clearSessionPaymentState === 'function') {
+        clearSessionPaymentState(session);
       }
+
       if (patient) recalculateSessionNumbers(patient);
       if (typeof persistData === 'function') persistData();
       dialog.remove();
       parentModal.remove();
       this._refresh();
-      const labels = { patient_vacation: 'Urlop pacjenta', patient_late: 'Odwołana w ostatniej chwili', therapist: 'Odwołana przez terapeutę' };
-      toast('Sesja: ' + (labels[reason] || 'odwołana'), 'info');
+      toast('Sesja oznaczona jako nie odbyła się.', 'info');
     });
   },
 
@@ -935,19 +848,9 @@ const CalendarViews = {
       const tp = timeVal.split(':').map(Number);
       const dp = dateVal.split('-').map(Number);
       const newDate = new Date(dp[0], dp[1] - 1, dp[2], tp[0], tp[1], 0, 0);
-      // Snapshot payment fields before mutation (safety — object is mutated in-place
-      // so these values are preserved, but being explicit prevents future regressions)
-      const paymentSnapshot = {
-        isPaid: session.isPaid, isPartiallyPaid: session.isPartiallyPaid,
-        partialPaymentAmount: session.partialPaymentAmount,
-        paymentAmount: session.paymentAmount, paymentMethod: session.paymentMethod,
-        paymentDate: session.paymentDate, paymentId: session.paymentId,
-      };
       session.originalDate   = session.date;
       session.wasRescheduled = true;
       session.date           = newDate.toISOString();
-      // Restore payment fields (guard against any accidental reset)
-      Object.assign(session, paymentSnapshot);
       if (typeof persistData === 'function') persistData();
       dialog.remove();
       parentModal.remove();
@@ -1029,13 +932,6 @@ const CalendarViews = {
   },
 
   _refresh() {
-    // Full re-render needed when switching view modes (wrapper class changes)
-    const wrapper = document.querySelector('.cal-wrapper');
-    if (wrapper && !wrapper.classList.contains('cal-wrapper--' + this.viewMode)) {
-      this.render();
-      return;
-    }
-
     const body = document.getElementById('cal-body');
     if (body) body.innerHTML = this._renderCurrentView();
     const title = document.getElementById('cal-title');
@@ -1100,7 +996,6 @@ const CalendarViews = {
   },
 
   _sessionColor(session) {
-    if (session.status === 'completed' && session.isPartiallyPaid) return '#FF9500';
     if (session.status === 'completed')                   return '#34C759';
     if (session.status === 'cancelled' && session.isPaid) return '#FF9500';
     if (session.status === 'cancelled')                   return '#FF3B30';
@@ -1118,12 +1013,11 @@ const CalendarViews = {
   },
 
   _paymentMethodName(method) {
-    const map = { aliorBank: 'Alior Bank', ingBank: 'ING Bank', cash: 'Gotówka' };
-    if (!method) return '—';
-    if (isCompoundMethod(method)) {
-      return method.split('+').map(m => map[m] || m).join(' + ');
+    const names = { cash: 'Gotówka', aliorBank: 'Alior Bank', ingBank: 'ING Bank' };
+    if (method && method.indexOf('+') !== -1) {
+      return method.split('+').map(function(m) { return names[m] || m; }).join(' + ');
     }
-    return map[method] || method;
+    return names[method] || method || '—';
   },
 
   _isDateBlocked(date) {
@@ -1147,14 +1041,14 @@ const CalendarViews = {
     el.classList.remove('hidden');
   },
 
+  // Deleguje do globalnego escapeHtml z utils.js
   _escapeHtml(str) {
-    return (str || '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;')
-      .replace(/\n/g, '<br>');
+    return escapeHtml(str);
+  },
+
+  /** Escapuje HTML i zamienia newline na <br> — do wyswietlania notatek. */
+  _formatMultiline(str) {
+    return this._escapeHtml(str).replace(/\n/g, '<br>');
   },
 
   _injectStyles() {
@@ -1162,28 +1056,26 @@ const CalendarViews = {
     const style = document.createElement('style');
     style.id = 'cal-styles';
     const rules = [
-      '.cal-wrapper{display:flex;flex-direction:column;min-height:100%;background:transparent;font-family:var(--font-sans,"Manrope",sans-serif);padding:18px 18px calc(var(--tab-bar-height) + 30px)}',
-      '.cal-wrapper--monthly{height:auto;overflow:visible}',
-      '.cal-wrapper--daily{min-height:100%;overflow:visible}',
-      '.cal-wrapper--weekly{height:100%;overflow:hidden}',
-      '.cal-wrapper--weekly .cal-focus-panel{display:none}',
-      '.cal-focus-panel{display:flex;flex-direction:column;gap:16px;padding:22px 24px;margin-bottom:14px;border-radius:28px;background:color-mix(in srgb,var(--surface-raised,#f7f2eb) 92%, transparent);border:1px solid var(--border,rgba(73,102,79,.14));box-shadow:var(--shadow-md)}',
-      '.cal-focus-top{display:grid;grid-template-columns:1fr 1.1fr;gap:16px;align-items:start}',
-      '.cal-focus-kicker{display:inline-block;margin-bottom:10px;font-size:.72rem;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:var(--blue,#49664f)}',
-      '.cal-focus-title{margin:0;font-family:var(--font-display,"Fraunces",serif);font-size:clamp(1.6rem,3vw,2.4rem);line-height:.96;letter-spacing:-.05em;color:var(--text,#243126);max-width:14ch}',
+      '.cal-wrapper{display:flex;flex-direction:column;height:100%;overflow:hidden;background:transparent;font-family:var(--font-sans,"Manrope",sans-serif);padding:18px 18px calc(var(--tab-bar-height) + 30px)}',
+      '.cal-focus-panel{display:grid;grid-template-columns:1.2fr .9fr;gap:16px;padding:22px 24px;margin-bottom:14px;border-radius:28px;background:color-mix(in srgb,var(--surface-raised,#f7f2eb) 92%, transparent);border:1px solid var(--border,rgba(73,102,79,.14));box-shadow:var(--shadow-md)}',
+      '.cal-focus-kicker{display:inline-block;margin-bottom:12px;font-size:.72rem;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:var(--blue,#49664f)}',
+      '.cal-focus-title{margin:0;font-family:var(--font-display,"Fraunces",serif);font-size:clamp(2rem,4vw,3rem);line-height:.96;letter-spacing:-.05em;color:var(--text,#243126);max-width:11ch}',
+      '.cal-focus-text{margin:14px 0 0;max-width:42rem;color:var(--text-secondary,rgba(36,49,38,.68));font-size:.98rem;line-height:1.7}',
+      '.cal-focus-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px}',
       '.cal-focus-action{border:1px solid var(--border,rgba(73,102,79,.12));border-radius:999px;padding:12px 16px;background:rgba(255,255,255,.65);color:var(--blue,#49664f);font-size:.85rem;font-weight:800;cursor:pointer;transition:transform .18s ease,background .18s ease,color .18s ease}',
       '.cal-focus-action:hover{transform:translateY(-1px)}',
       '.cal-focus-action--primary{background:linear-gradient(135deg,var(--blue,#49664f),#617f68);color:var(--text-inverse,#f6f0e6);border-color:transparent;box-shadow:0 14px 30px rgba(73,102,79,.22)}',
+      '.cal-focus-aside{display:flex;flex-direction:column;gap:12px}',
       '.cal-focus-next{display:flex;flex-direction:column;gap:6px;padding:18px;border-radius:22px;background:rgba(255,255,255,.6);border:1px solid var(--border,rgba(73,102,79,.12))}',
       '.cal-focus-next__eyebrow{font-size:.72rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--text-secondary,rgba(36,49,38,.68))}',
-      '.cal-focus-next strong{font-size:1.1rem;color:var(--text,#243126)}',
+      '.cal-focus-next strong{font-size:1.15rem;color:var(--text,#243126)}',
       '.cal-focus-next span{color:var(--text-secondary,rgba(36,49,38,.68));line-height:1.6}',
-      '.cal-focus-next--empty{justify-content:center}',
-      '.cal-focus-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}',
-      '.cal-focus-stat{padding:14px 16px;border-radius:18px;background:rgba(255,255,255,.62);border:1px solid var(--border,rgba(73,102,79,.12));display:flex;flex-direction:column;gap:4px}',
-      '.cal-focus-stat span{font-size:.7rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--text-secondary,rgba(36,49,38,.68))}',
-      '.cal-focus-stat strong{font-size:1.25rem;color:var(--text,#243126)}',
-      '.cal-focus-stat small{font-size:.78rem;color:var(--text-secondary,rgba(36,49,38,.68));line-height:1.4}',
+      '.cal-focus-next--empty{justify-content:center;min-height:120px}',
+      '.cal-focus-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}',
+      '.cal-focus-stat{padding:16px;border-radius:20px;background:rgba(255,255,255,.62);border:1px solid var(--border,rgba(73,102,79,.12));display:flex;flex-direction:column;gap:6px}',
+      '.cal-focus-stat span{font-size:.74rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--text-secondary,rgba(36,49,38,.68))}',
+      '.cal-focus-stat strong{font-size:1.35rem;color:var(--text,#243126)}',
+      '.cal-focus-stat small{font-size:.8rem;color:var(--text-secondary,rgba(36,49,38,.68));line-height:1.5}',
       '.cal-toolbar{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:color-mix(in srgb,var(--surface-raised,#f7f2eb) 92%, transparent);border:1px solid var(--border,rgba(73,102,79,.14));border-radius:24px;gap:8px;flex-wrap:wrap;flex-shrink:0;box-shadow:var(--shadow-sm);margin-bottom:12px}',
       '.cal-toolbar-left,.cal-toolbar-right{display:flex;align-items:center;gap:8px}',
       '.cal-nav{display:flex;align-items:center;gap:4px}',
@@ -1203,13 +1095,11 @@ const CalendarViews = {
       '.cal-add-menu-item{display:block;width:100%;padding:14px 16px;border:none;background:transparent;text-align:left;font-size:.9rem;cursor:pointer;color:var(--text,#243126);border-bottom:1px solid var(--separator,rgba(73,102,79,.12))}',
       '.cal-add-menu-item:last-child{border-bottom:none}.cal-add-menu-item:hover{background:rgba(255,255,255,.6)}',
       '.cal-body{flex:1;overflow-y:auto;overflow-x:hidden;min-height:0}',
-      '.cal-wrapper--monthly .cal-body,.cal-wrapper--daily .cal-body{flex:none;overflow:visible}',
       '.cal-monthly{display:flex;flex-direction:column}',
-      '.cal-grid-headers{display:none}',
+      '.cal-grid-headers{display:grid;grid-template-columns:repeat(7,1fr);background:#fff;border-bottom:1px solid #e0e0e5;position:sticky;top:0;z-index:5}',
       '.cal-header-cell{text-align:center;font-size:.72rem;font-weight:600;color:#8e8e93;padding:6px 0;text-transform:uppercase;letter-spacing:.03em}',
       '.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);background:#e0e0e5;gap:1px}',
-      '.cal-cell{background:#fff;min-height:80px;padding:6px 4px;cursor:pointer;position:relative;display:flex;flex-direction:column;align-items:flex-start;transition:background .12s;user-select:none}',
-      '@media (min-width:600px){.cal-cell{min-height:100px}}',
+      '.cal-cell{background:#fff;min-height:56px;padding:4px 3px;cursor:pointer;position:relative;display:flex;flex-direction:column;align-items:flex-start;transition:background .12s;user-select:none}',
       '.cal-cell:active{background:#eef5ff}',
       '.cal-cell-other{background:#fafafa;opacity:.55;cursor:default;pointer-events:none}',
       '.cal-cell-weekend .cal-day-num{color:#8e8e93}',
@@ -1223,16 +1113,15 @@ const CalendarViews = {
       '.cal-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}',
       '.cal-dot-more{font-size:.58rem;color:#8e8e93;line-height:1}',
       '.cal-weekly{display:flex;flex-direction:column;height:100%}',
-      '.cal-week-scroll{flex:1;min-height:0;overflow:auto;}',
-      '.cal-week-header{display:grid;grid-template-columns:50px repeat(7,minmax(110px,1fr));background:#fff;border-bottom:1px solid #e0e0e5;position:sticky;top:0;z-index:5;min-width:calc(50px + 7*110px)}',
+      '.cal-week-header{display:grid;grid-template-columns:50px repeat(7,1fr);background:#fff;border-bottom:1px solid #e0e0e5;position:sticky;top:0;z-index:5;flex-shrink:0}',
       '.cal-week-header .cal-week-time-col{border-right:1px solid #e0e0e5}',
       '.cal-week-header-cell{text-align:center;font-size:.75rem;font-weight:500;color:#3c3c43;padding:7px 2px;cursor:pointer;border-right:1px solid #f2f2f7;user-select:none}',
       '.cal-week-header-cell.today{color:#007AFF;font-weight:700}.cal-week-header-cell.selected{background:#EBF4FF}',
-      '.cal-week-body{display:grid;grid-template-columns:50px repeat(7,minmax(110px,1fr));min-width:calc(50px + 7*110px)}',
+      '.cal-week-body{display:grid;grid-template-columns:50px repeat(7,1fr);overflow-y:auto;flex:1;min-height:0}',
       '.cal-week-time-col{border-right:1px solid #e0e0e5}',
-      '.cal-week-time-label{font-size:.68rem;color:#8e8e93;padding:4px 4px 0;height:40px;border-bottom:1px solid #f2f2f7;display:flex;align-items:flex-start;box-sizing:border-box}',
+      '.cal-week-time-label{font-size:.68rem;color:#8e8e93;padding:4px 4px 0;height:52px;border-bottom:1px solid #f2f2f7;display:flex;align-items:flex-start;box-sizing:border-box}',
       '.cal-week-day-col{border-right:1px solid #f2f2f7}.cal-week-day-col.today{background:#f0f7ff}',
-      '.cal-week-slot{height:40px;border-bottom:1px solid #f2f2f7;padding:2px;overflow:hidden;box-sizing:border-box}',
+      '.cal-week-slot{height:52px;border-bottom:1px solid #f2f2f7;padding:2px;overflow:hidden;box-sizing:border-box}',
       '.cal-week-event{border-radius:4px;padding:2px 4px;margin-bottom:2px;cursor:pointer;font-size:.7rem;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;display:flex;align-items:center;gap:3px}',
       '.cal-week-event:hover{filter:brightness(.95)}',
       '.cal-week-event-time{font-weight:700;color:#1c1c1e;flex-shrink:0}',
@@ -1241,7 +1130,7 @@ const CalendarViews = {
       '.cal-daily-header{background:#fff;border-bottom:1px solid #e0e0e5;padding:10px 16px;font-size:.88rem;font-weight:600;color:#1c1c1e;text-transform:capitalize;display:flex;align-items:center;gap:10px;flex-shrink:0;position:sticky;top:0;z-index:5}',
       '.cal-daily-header.today{color:#007AFF}',
       '.cal-blocked-badge{background:rgba(255,59,48,.08);color:#FF3B30;border:1px solid rgba(255,59,48,.25);border-radius:6px;padding:2px 8px;font-size:.72rem;font-weight:500}',
-      '.cal-daily-slots{overflow:visible}',
+      '.cal-daily-slots{overflow-y:auto}',
       '.cal-daily-row{display:grid;grid-template-columns:50px 1fr;border-bottom:1px solid #f2f2f7;min-height:52px;align-items:stretch}',
       '.cal-daily-time{font-size:.68rem;color:#8e8e93;padding:6px 4px 0 8px;border-right:1px solid #e0e0e5;align-self:flex-start}',
       '.cal-daily-events{padding:4px 8px;display:flex;flex-direction:column;gap:4px;min-height:52px}',
@@ -1252,10 +1141,9 @@ const CalendarViews = {
       '.cal-daily-event-time{font-size:.78rem;font-weight:700;color:#1c1c1e}',
       '.cal-daily-event-name{font-size:.85rem;color:#1c1c1e;font-weight:500}',
       '.cal-daily-event-flag{font-size:.72rem;color:#FF9500;margin-top:2px}',
-      '.cal-day-sessions{border-top:1px solid var(--separator,rgba(73,102,79,.12));background:color-mix(in srgb,var(--surface-raised,#f7f2eb) 90%, transparent);flex-shrink:0;max-height:42vh;overflow-y:auto;border-radius:0 0 24px 24px;box-shadow:var(--shadow-sm);margin-top:12px}',
-      '.cal-wrapper--monthly .cal-day-sessions{max-height:none;overflow:visible;border-radius:20px;border-top:none}',
+      '.cal-day-sessions{border-top:1px solid var(--separator,rgba(73,102,79,.12));background:color-mix(in srgb,var(--surface-raised,#f7f2eb) 90%, transparent);flex-shrink:0;max-height:42vh;overflow-y:auto;border-radius:0 0 24px 24px;box-shadow:var(--shadow-sm)}',
       '.cal-sessions-list{padding-bottom:8px}',
-      '.cal-sessions-list-header{display:none}',
+      '.cal-sessions-list-header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px 6px;border-bottom:1px solid #f2f2f7;position:sticky;top:0;background:#fff;z-index:2}',
       '.cal-sessions-list-title{font-size:.88rem;font-weight:600;color:#1c1c1e;margin:0;text-transform:capitalize}',
       '.cal-sessions-debt{font-size:.75rem;color:#FF3B30;font-weight:600}',
       '.cal-sessions-empty{padding:18px 16px;text-align:center;color:#8e8e93;font-size:.85rem}',
@@ -1271,10 +1159,10 @@ const CalendarViews = {
       '.cal-row-unpaid{font-size:.72rem;color:#FF3B30;font-weight:600}',
       '.cal-row-chevron{color:#c7c7cc;font-size:1.1rem;flex-shrink:0}',
       '.cal-badge{display:inline-block;color:#fff;font-size:.68rem;font-weight:700;padding:2px 7px;border-radius:10px;vertical-align:middle}',
-      '.cal-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px}',
-      '.cal-modal-sheet{background:#f2f2f7;border-radius:16px;width:100%;max-width:600px;max-height:88vh;overflow-y:auto;animation:calFadeIn .22s ease}',
-      '.cal-modal-sheet-large{max-height:92vh}',
-      '@keyframes calFadeIn{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}',
+      '.cal-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9000;display:flex;align-items:flex-end;justify-content:center}',
+      '.cal-modal-sheet{background:#f2f2f7;border-radius:16px 16px 0 0;width:100%;max-width:600px;max-height:90vh;overflow-y:auto;animation:calSlideUp .28s cubic-bezier(.32,.72,0,1)}',
+      '.cal-modal-sheet-large{max-height:96vh}',
+      '@keyframes calSlideUp{from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}',
       '.cal-modal-header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:#fff;border-bottom:1px solid #e0e0e5;position:sticky;top:0;z-index:1}',
       '.cal-modal-title{font-size:.95rem;font-weight:700;color:#1c1c1e;margin:0}',
       '.cal-modal-cancel{border:none;background:transparent;color:#007AFF;font-size:.9rem;cursor:pointer;padding:0;min-width:48px}',
@@ -1307,40 +1195,19 @@ const CalendarViews = {
       '.cal-detail-patient-name{font-size:1.1rem;font-weight:700;color:#1c1c1e}',
       '.cal-detail-patient-pseudo{font-size:.85rem;color:#8e8e93;margin-top:4px}',
       '.cal-detail-muted{font-size:.85rem;color:#8e8e93;margin:4px 0 0}',
-      '.cal-absent-options{display:flex;flex-direction:column;gap:8px;margin-top:8px}',
-      '.cal-absent-option{display:flex;align-items:flex-start;gap:12px;padding:12px 14px;border-radius:14px;background:#f7f2eb;cursor:pointer;transition:background .15s}',
-      '.cal-absent-option:has(input:checked){background:#e8f0ea;outline:2px solid #49664f}',
-      '.cal-absent-option input[type="radio"]{margin-top:3px;accent-color:#49664f;flex-shrink:0}',
-      '.cal-absent-option-body{display:flex;flex-direction:column;gap:2px}',
-      '.cal-absent-option-body strong{font-size:.9rem;color:#1c1c1e}',
-      '.cal-absent-option-body .cal-detail-muted{margin:0;font-size:.8rem}',
       '.cal-detail-notes-text{font-size:.88rem;color:#1c1c1e;line-height:1.55;margin:4px 0 0}',
-      '.cal-paid{color:#34C759!important}.cal-unpaid{color:#FF3B30!important}.cal-partial{color:#FF9500!important}',
+      '.cal-detail-locked{display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding-top:4px}',
+      '.cal-paid{color:#34C759!important}.cal-unpaid{color:#FF3B30!important}',
       '.cal-detail-actions{display:flex;flex-direction:column;gap:8px}',
       '.cal-action-btn{border:none;border-radius:10px;padding:12px;font-size:.9rem;font-weight:600;cursor:pointer;text-align:center;background:#e5e5ea;color:#1c1c1e;transition:opacity .15s}',
       '.cal-action-btn:hover{opacity:.78}',
       '.cal-action-complete{background:#34C759;color:#fff}',
       '.cal-action-absent{background:#FF3B30;color:#fff}',
       '.cal-action-reschedule{background:#FF9500;color:#fff}',
-      '.cal-action-delete{background:transparent;color:#FF3B30;border:1.5px solid #FF3B30}',
-      '.cal-modal-save--danger{background:#FF3B30;color:#fff}',
-      '.cal-action-btn--active{opacity:.55;font-style:italic}',
       '.cal-edit-notes-btn{border:none;background:transparent;color:#007AFF;font-size:.85rem;font-weight:600;cursor:pointer;padding:0}',
-      '@media (max-width: 880px){.cal-wrapper{padding:14px 14px calc(var(--tab-bar-height) + 24px)}.cal-focus-stats{grid-template-columns:repeat(2,1fr)}}',
-      '@media (max-width: 600px){.cal-focus-top{grid-template-columns:1fr}.cal-focus-stats{grid-template-columns:repeat(2,1fr)}}',
-      '@media (prefers-color-scheme: dark){.cal-wrapper{background:transparent}.cal-focus-panel,.cal-toolbar,.cal-day-sessions{background:color-mix(in srgb,var(--surface-raised,#223128) 88%, transparent)}.cal-focus-next,.cal-focus-stat,.cal-add-menu{background:rgba(255,255,255,.04)}.cal-focus-title,.cal-title,.cal-row-name,.cal-daily-event-name,.cal-daily-event-time,.cal-sessions-list-title,.cal-detail-value,.cal-detail-notes-text,.cal-detail-patient-name{color:var(--text,#f4ede4)}.cal-focus-text,.cal-focus-next span,.cal-focus-stat span,.cal-focus-stat small,.cal-add-menu-item,.cal-detail-label,.cal-detail-muted,.cal-header-cell,.cal-week-header-cell,.cal-week-event-name,.cal-row-time{color:var(--text-secondary,rgba(244,237,228,.72))}.cal-segment{background:rgba(255,255,255,.05)}.cal-seg-btn.active{background:rgba(255,255,255,.08);color:var(--blue,#dcc29d)}.cal-btn,.cal-form-control,.cal-detail-section,.cal-modal-header{background:rgba(255,255,255,.04);color:var(--text,#f4ede4);border-color:var(--border,rgba(220,194,157,.12))}.cal-week-body,.cal-week-header,.cal-daily-header,.cal-grid-headers,.cal-grid,.cal-cell,.cal-cell-other,.cal-week-slot,.cal-daily-row,.cal-session-row{border-color:var(--separator,rgba(220,194,157,.08))}.cal-cell{background:#213027}.cal-cell-other{background:#1b271f}.cal-cell-selected{background:rgba(220,194,157,.08)!important}.cal-session-row:hover{background:rgba(255,255,255,.04)}' +
-        '.cal-day-num{color:rgba(244,237,228,.82)!important}' +
-        '.cal-cell-weekend .cal-day-num{color:rgba(244,237,228,.42)!important}' +
-        '.cal-cell-today .cal-day-num{background:#4a8cca;color:#fff!important}' +
-        '.cal-cell-blocked{background:rgba(255,59,48,.12)!important}' +
-        '.cal-week-header{background:#1e2d24}' +
-        '.cal-week-header-cell.selected{background:rgba(220,194,157,.08)}' +
-        '.cal-week-day-col.today{background:rgba(220,194,157,.05)}' +
-        '.cal-week-time-label,.cal-daily-time{color:rgba(244,237,228,.45)!important}' +
-        '.cal-daily-header{background:#1e2d24;color:rgba(244,237,228,.9)}' +
-        '.cal-daily-header.today{color:#6ab0f5}' +
-        '.cal-week-scroll::-webkit-scrollbar{width:6px;height:6px}.cal-week-scroll::-webkit-scrollbar-track{background:transparent}.cal-week-scroll::-webkit-scrollbar-thumb{background:rgba(220,194,157,.25);border-radius:3px}' +
-        '}',
+      '@media (max-width: 880px){.cal-wrapper{padding:14px 14px calc(var(--tab-bar-height) + 24px)}.cal-focus-panel{grid-template-columns:1fr}.cal-focus-stats{grid-template-columns:1fr 1fr}}',
+      '@media (max-width: 640px){.cal-focus-stats{grid-template-columns:1fr}.cal-focus-actions{flex-direction:column}.cal-focus-action{width:100%}}',
+      '@media (prefers-color-scheme: dark){.cal-wrapper{background:transparent}.cal-focus-panel,.cal-toolbar,.cal-day-sessions{background:color-mix(in srgb,var(--surface-raised,#223128) 88%, transparent)}.cal-focus-next,.cal-focus-stat,.cal-add-menu{background:rgba(255,255,255,.04)}.cal-focus-title,.cal-title,.cal-row-name,.cal-daily-event-name,.cal-daily-event-time,.cal-sessions-list-title,.cal-detail-value,.cal-detail-notes-text,.cal-detail-patient-name{color:var(--text,#f4ede4)}.cal-focus-text,.cal-focus-next span,.cal-focus-stat span,.cal-focus-stat small,.cal-add-menu-item,.cal-detail-label,.cal-detail-muted,.cal-header-cell,.cal-week-header-cell,.cal-week-event-name,.cal-row-time{color:var(--text-secondary,rgba(244,237,228,.72))}.cal-segment{background:rgba(255,255,255,.05)}.cal-seg-btn.active{background:rgba(255,255,255,.08);color:var(--blue,#dcc29d)}.cal-btn,.cal-form-control,.cal-detail-section,.cal-modal-header{background:rgba(255,255,255,.04);color:var(--text,#f4ede4);border-color:var(--border,rgba(220,194,157,.12))}.cal-week-body,.cal-week-header,.cal-daily-header,.cal-grid-headers,.cal-grid,.cal-cell,.cal-cell-other,.cal-week-slot,.cal-daily-row,.cal-session-row{border-color:var(--separator,rgba(220,194,157,.08))}.cal-cell{background:#213027}.cal-cell-other{background:#1b271f}.cal-cell-selected{background:rgba(220,194,157,.08)!important}.cal-session-row:hover{background:rgba(255,255,255,.04)}}',
       '.hidden{display:none!important}',
     ];
     style.textContent = rules.join('\n');

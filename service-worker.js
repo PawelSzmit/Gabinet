@@ -1,16 +1,11 @@
-const CACHE_NAME = 'gabinet-v53';
+const CACHE_NAME = 'gabinet-v4';
 const ASSETS = [
   '/',
   '/index.html',
   '/styles.css',
-  '/manifest.json',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png',
-  '/js/utils.js',
   '/js/data.js',
-  '/js/security.js',
-  '/js/local-store.js',
   '/js/drive.js',
+  '/js/utils.js',
   '/js/views/calendar.js',
   '/js/views/patients.js',
   '/js/views/finance.js',

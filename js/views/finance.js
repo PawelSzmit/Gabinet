@@ -6,24 +6,18 @@ const FinanceViews = (() => {
   let currentTab = 'dashboard';
   let containerRef = null;
   let paymentFilters = { method: 'all', from: '', to: '' };
-  let chartPeriod = 6;
 
   function injectStyles() {
     if (document.getElementById('fin-styles')) return;
     const style = document.createElement('style');
     style.id = 'fin-styles';
     style.textContent = [
-      '.fin-view{display:flex;flex-direction:column;gap:14px;padding:18px 18px calc(var(--tab-bar-height) + 30px);font-family:var(--font-sans,"Manrope",sans-serif);scrollbar-width:none}',
-      '.fin-view::-webkit-scrollbar{display:none}',
+      '.fin-view{display:flex;flex-direction:column;gap:14px;padding:18px 18px calc(var(--tab-bar-height) + 30px);font-family:var(--font-sans,"Manrope",sans-serif)}',
       '.fin-shell,.fin-tabs,.fin-section,.fin-payment-row,.fin-sheet-panel{background:color-mix(in srgb,var(--surface-raised,#f7f2eb) 92%, transparent);border:1px solid var(--border,rgba(73,102,79,.14));box-shadow:var(--shadow-sm)}',
       '.fin-shell{border-radius:30px;padding:24px}',
       '.fin-hero{display:grid;grid-template-columns:1.1fr .9fr;gap:16px;align-items:start}',
       '.fin-kicker{display:inline-block;margin-bottom:10px;font-size:.72rem;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:var(--blue,#49664f)}',
-      '.fin-title{margin:0;font-family:var(--font-display,"Fraunces",serif);font-size:clamp(1.5rem,3vw,2.4rem);line-height:1;letter-spacing:-.04em;color:var(--text,#243126);white-space:nowrap}',
-      '.fin-section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}',
-      '.fin-period-toggle{display:flex;gap:4px;background:rgba(255,255,255,.48);border-radius:999px;padding:4px;border:1px solid var(--border,rgba(73,102,79,.12))}',
-      '.fin-period-btn{border:none;background:transparent;padding:7px 11px;border-radius:999px;font-size:.74rem;font-weight:800;cursor:pointer;color:var(--text-secondary,rgba(36,49,38,.68))}',
-      '.fin-period-btn.active{background:#fff;color:var(--blue,#49664f);box-shadow:0 4px 10px rgba(31,43,35,.08)}',
+      '.fin-title{margin:0;font-family:var(--font-display,"Fraunces",serif);font-size:clamp(2rem,4vw,3.2rem);line-height:.96;letter-spacing:-.06em;color:var(--text,#243126);max-width:10ch}',
       '.fin-text{margin:14px 0 0;max-width:38rem;color:var(--text-secondary,rgba(36,49,38,.68));line-height:1.75}',
       '.fin-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px}',
       '.fin-action{border:none;border-radius:999px;padding:13px 16px;font-size:.84rem;font-weight:800;cursor:pointer;background:rgba(255,255,255,.68);color:var(--blue,#49664f);transition:transform .15s ease,background .15s ease}',
@@ -46,22 +40,14 @@ const FinanceViews = (() => {
       '.fin-section-title{margin:0 0 14px;font-size:1rem;font-weight:800;color:var(--text,#243126)}',
       '.fin-split{display:grid;grid-template-columns:1.1fr .9fr;gap:14px}',
       '.fin-method-list,.fin-debt-list,.fin-actions-list{display:grid;gap:10px}',
-      '.fin-method-row,.fin-debt-row,.fin-action-row{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:10px;padding:14px 16px;border-radius:20px;background:rgba(255,255,255,.62);border:1px solid var(--border,rgba(73,102,79,.1))}',
+      '.fin-method-row,.fin-debt-row,.fin-action-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;border-radius:20px;background:rgba(255,255,255,.62);border:1px solid var(--border,rgba(73,102,79,.1))}',
       '.fin-method-label,.fin-debt-name,.fin-action-row strong{color:var(--text,#243126);font-weight:700}',
-      '.fin-method-amount,.fin-debt-amount{color:var(--text,#243126);font-weight:800;text-align:right;white-space:nowrap}',
-      '.fin-debt-count,.fin-action-row span{color:var(--text-secondary,rgba(36,49,38,.68));font-size:.82rem;text-align:right;white-space:nowrap}',
+      '.fin-method-amount,.fin-debt-amount{color:var(--text,#243126);font-weight:800}',
+      '.fin-debt-count,.fin-action-row span{color:var(--text-secondary,rgba(36,49,38,.68));font-size:.82rem}',
       '.fin-method-badge{display:inline-flex;align-items:center;padding:.35rem .7rem;border-radius:999px;font-size:.74rem;font-weight:800}',
       '.fin-method-badge.badge-alior{background:rgba(191,97,82,.12);color:var(--red,#bf6152)}',
       '.fin-method-badge.badge-ing{background:rgba(204,139,86,.14);color:var(--orange,#cc8b56)}',
       '.fin-method-badge.badge-cash{background:rgba(107,144,115,.14);color:var(--green,#6b9073)}',
-      '.fin-method-badge.badge-split{background:rgba(73,102,79,.1);color:var(--blue,#49664f)}',
-      '.fin-split-label{display:flex;align-items:center;gap:.5rem;font-size:.88rem;font-weight:600;cursor:pointer;color:var(--text,#243126)}',
-      '.fin-split-label input[type=checkbox]{width:17px;height:17px;accent-color:var(--blue,#49664f);cursor:pointer}',
-      '.fin-split-amount-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}',
-      '.fin-split-amount-item{display:flex;flex-direction:column;gap:6px}',
-      '.fin-split-amount-label{font-size:.78rem;font-weight:700;color:var(--text-secondary,rgba(36,49,38,.68));text-transform:uppercase;letter-spacing:.06em}',
-      '.fin-split-amount-readonly{background:var(--surface-raised,#f7f2eb)!important;color:var(--text-secondary,rgba(36,49,38,.68))!important;cursor:default}',
-      '.fin-detail-split{padding-left:24px;border-left:2px solid var(--border,rgba(73,102,79,.14))}',
       '.fin-bar-chart{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;align-items:end;min-height:220px}',
       '.fin-bar{display:flex;flex-direction:column;justify-content:flex-end;gap:8px;min-height:220px}',
       '.fin-bar__value{font-size:.76rem;color:var(--text-secondary,rgba(36,49,38,.68));min-height:18px}',
@@ -72,6 +58,7 @@ const FinanceViews = (() => {
       '.fin-filter-row{display:flex;gap:10px;flex-wrap:wrap}',
       '.fin-chip{border:none;border-radius:999px;padding:10px 12px;background:rgba(255,255,255,.62);color:var(--text-secondary,rgba(36,49,38,.68));font-size:.8rem;font-weight:800;cursor:pointer}',
       '.fin-chip.active{background:var(--blue,#49664f);color:var(--text-inverse,#f6f0e6)}',
+      '.badge-split{background:linear-gradient(135deg,var(--blue,#49664f),#8a6d3b);color:#fff}',
       '.fin-date-group{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:18px;background:rgba(255,255,255,.62);border:1px solid var(--border,rgba(73,102,79,.1));color:var(--text-secondary,rgba(36,49,38,.68));font-size:.82rem;font-weight:700}',
       '.fin-date-group input{border:none;background:transparent;color:var(--text,#243126);font:inherit;outline:none}',
       '.fin-summary{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-radius:20px;background:rgba(255,255,255,.62);border:1px solid var(--border,rgba(73,102,79,.1));font-weight:700;color:var(--text,#243126)}',
@@ -109,9 +96,9 @@ const FinanceViews = (() => {
       '.fin-session-check input{margin-top:4px;accent-color:var(--blue,#49664f)}',
       '.fin-session-check-label{display:flex;flex-direction:column;gap:4px;color:var(--text,#243126);font-weight:700}',
       '.fin-session-check-label small{font-size:.8rem;color:var(--text-secondary,rgba(36,49,38,.68));font-weight:600}',
-      '.fin-balance-info{margin-top:8px;padding:10px 14px;border-radius:14px;font-size:.84rem;line-height:1.55}',
-      '.fin-balance-info--over{background:rgba(107,144,115,.12);color:#3a5c42}',
-      '.fin-balance-info--under{background:rgba(204,139,86,.14);color:#8a5a1a}',
+      '.fin-total-box{padding:16px;border-radius:22px;background:rgba(255,255,255,.68);border:1px solid var(--border,rgba(73,102,79,.1))}',
+      '.fin-total-box strong{display:block;font-size:1.3rem;color:var(--text,#243126)}',
+      '.fin-total-box span{color:var(--text-secondary,rgba(36,49,38,.68));font-size:.84rem}',
       '.fin-sheet-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}',
       '.fin-detail-stack{display:grid;gap:12px}',
       '.fin-detail-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-radius:20px;background:rgba(255,255,255,.62);border:1px solid var(--border,rgba(73,102,79,.1))}',
@@ -126,7 +113,7 @@ const FinanceViews = (() => {
   }
 
   function getPatient(id) {
-    return AppState.patients.find((patient) => patient.id === id) || null;
+    return AppState.patients.find((patient) => patient.id === id);
   }
 
   function getSessions() {
@@ -146,13 +133,8 @@ const FinanceViews = (() => {
     return Number(amount || 0).toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' });
   }
 
-  function escHtml(str) {
-    return String(str || '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
+  // Alias do globalnego escapeHtml z utils.js
+  function escHtml(str) { return escapeHtml(str); }
 
   function monthKey(date) {
     const d = date instanceof Date ? date : new Date(date);
@@ -160,25 +142,32 @@ const FinanceViews = (() => {
   }
 
   function sessionAmount(session) {
+    if (typeof getSessionAmount === 'function') {
+      return getSessionAmount(session);
+    }
     const patient = getPatient(session.patientId);
-    return session.paymentAmount !== null && session.paymentAmount !== undefined
-      ? session.paymentAmount
-      : (patient ? patient.sessionRate : 0);
+    return patient ? patient.sessionRate : 0;
   }
 
-  const METHOD_LABELS = { aliorBank: 'Alior Bank', ingBank: 'ING Bank', cash: 'Gotówka' };
-
   function paymentMethodLabel(method) {
-    if (!method) return '—';
-    if (isCompoundMethod(method)) {
-      return method.split('+').map(m => METHOD_LABELS[m] || m).join(' + ');
+    const labels = {
+      aliorBank: 'Alior Bank',
+      ingBank: 'ING Bank',
+      cash: 'Gotówka',
+    };
+    if (method && method.indexOf('+') !== -1) {
+      return method.split('+').map(function(m) { return labels[m] || m; }).join(' + ');
     }
-    return METHOD_LABELS[method] || method;
+    return labels[method] || method || '—';
   }
 
   function paymentMethodClass(method) {
-    const map = { aliorBank: 'badge-alior', ingBank: 'badge-ing', cash: 'badge-cash' };
-    if (!method || isCompoundMethod(method)) return 'badge-split';
+    if (method && method.indexOf('+') !== -1) return 'badge-split';
+    const map = {
+      aliorBank: 'badge-alior',
+      ingBank: 'badge-ing',
+      cash: 'badge-cash',
+    };
     return map[method] || 'badge-cash';
   }
 
@@ -201,45 +190,33 @@ const FinanceViews = (() => {
         grouped[session.patientId] = { sessions: [], total: 0 };
       }
       grouped[session.patientId].sessions.push(session);
-      const full = sessionAmount(session);
-      const owed = session.isPartiallyPaid && session.partialPaymentAmount
-        ? full - session.partialPaymentAmount
-        : full;
-      grouped[session.patientId].total += owed;
+      grouped[session.patientId].total += sessionAmount(session);
     });
     return grouped;
   }
 
   function revenueByMethod(periodSessions) {
     const totals = { aliorBank: 0, ingBank: 0, cash: 0 };
-    const payMap = new Map(AppState.payments.map(p => [p.id, p]));
-    periodSessions.forEach((session) => {
-      if (!session.isPaid) return;
-      const sessAmt = sessionAmount(session);
-      // Look up the payment record for split logic
-      const payment = session.paymentId ? payMap.get(session.paymentId) : null;
+    const seen = new Set();
+    const paymentMap = new Map(getPayments().map(function(p) { return [p.id, p]; }));
+    periodSessions.forEach(function(session) {
+      if (!session.isPaid || !session.paymentId) return;
+      var payment = paymentMap.get(session.paymentId);
 
-      if (payment && payment.isSplit && payment.splitAmounts && payment.amount > 0) {
-        // Distribute proportionally: session's share of total payment
-        const fraction = sessAmt / payment.amount;
-        const m1 = payment.method || 'cash';
-        const m2 = payment.splitMethod || 'cash';
-        totals[m1] = (totals[m1] || 0) + parseFloat((payment.splitAmounts.primary * fraction).toFixed(2));
-        totals[m2] = (totals[m2] || 0) + parseFloat((payment.splitAmounts.secondary * fraction).toFixed(2));
+      if (payment && payment.isSplit && payment.splitAmounts) {
+        // Split payment: count full split amounts once (not proportionally)
+        if (seen.has(payment.id)) return;
+        seen.add(payment.id);
+        var m1 = payment.method || 'cash';
+        var m2 = payment.splitMethod || 'cash';
+        totals[m1] = (totals[m1] || 0) + payment.splitAmounts.primary;
+        totals[m2] = (totals[m2] || 0) + payment.splitAmounts.secondary;
       } else {
-        let method = session.paymentMethod;
-        // If split payment but splitAmounts missing or amount=0, fall back to primary method
-        if (payment && payment.isSplit && (!payment.splitAmounts || payment.amount === 0)) {
-          method = payment.method || 'cash';
-        } else if (isCompoundMethod(method)) {
-          method = method.split('+')[0]; // fallback: use primary
-        }
-        if (!method && payment) method = payment.method;
-        method = method || 'cash';
-        // Only add to known buckets — skip unknown compound strings
-        if (Object.prototype.hasOwnProperty.call(totals, method)) {
-          totals[method] = (totals[method] || 0) + sessAmt;
-        }
+        // Non-split: attribute session amount to its method
+        var method = session.paymentMethod || 'cash';
+        if (method.indexOf('+') !== -1) method = method.split('+')[0];
+        if (!method && payment) method = payment.method || 'cash';
+        totals[method] = (totals[method] || 0) + sessionAmount(session);
       }
     });
     return totals;
@@ -262,12 +239,11 @@ const FinanceViews = (() => {
     return points;
   }
 
-  function renderRevenueBars(period) {
-    const points = monthlyRevenueSeries(period);
+  function renderRevenueBars() {
+    const points = monthlyRevenueSeries(6);
     const max = Math.max(...points.map((point) => point.value), 1);
-    const cols = period <= 3 ? 3 : period <= 6 ? 6 : 12;
     return (
-      '<div class="fin-bar-chart" style="grid-template-columns:repeat(' + cols + ',minmax(0,1fr))">' +
+      '<div class="fin-bar-chart">' +
       points.map((point) => (
         '<div class="fin-bar">' +
           '<div class="fin-bar__value">' + (point.value ? escHtml(formatCurrency(point.value)) : '&nbsp;') + '</div>' +
@@ -286,13 +262,7 @@ const FinanceViews = (() => {
     const monthRevenue = monthSessions.filter((session) => session.isPaid)
       .reduce((sum, session) => sum + sessionAmount(session), 0);
     const outstanding = outstandingSessions();
-    const outstandingTotal = outstanding.reduce((sum, session) => {
-      const full = sessionAmount(session);
-      const owed = session.isPartiallyPaid && session.partialPaymentAmount
-        ? full - session.partialPaymentAmount
-        : full;
-      return sum + owed;
-    }, 0);
+    const outstandingTotal = outstanding.reduce((sum, session) => sum + sessionAmount(session), 0);
     const methods = revenueByMethod(monthSessions);
     const debtMap = outstandingByPatient();
     const debtRows = Object.keys(debtMap).map((patientId) => {
@@ -317,9 +287,11 @@ const FinanceViews = (() => {
           '<div class="fin-hero">' +
             '<div>' +
               '<span class="fin-kicker">Finanse</span>' +
-              '<h1 class="fin-title">Kondycja finansowa gabinetu</h1>' +
+              '<h1 class="fin-title">Kondycja gabinetu bez arkuszy i zgadywania.</h1>' +
+              '<p class="fin-text">Zobacz bieżący przychód, zaległości i najważniejsze działania finansowe w jednym spokojnym panelu.</p>' +
               '<div class="fin-actions">' +
                 '<button class="fin-action fin-action--primary" id="fin-open-add-payment">Zarejestruj płatność</button>' +
+                '<button class="fin-action" id="fin-open-patients">Przejdź do pacjentów</button>' +
               '</div>' +
             '</div>' +
             '<div class="fin-highlight">' +
@@ -329,10 +301,10 @@ const FinanceViews = (() => {
             '</div>' +
           '</div>' +
           '<div class="fin-metric-grid">' +
-            '<article class="fin-metric"><span>Przychód</span><strong>' + escHtml(formatCurrency(monthRevenue)) + '</strong></article>' +
-            '<article class="fin-metric"><span>Należności</span><strong>' + escHtml(formatCurrency(outstandingTotal)) + '</strong></article>' +
-            '<article class="fin-metric"><span>Pacjenci z zaległościami</span><strong>' + Object.keys(debtMap).length + '</strong></article>' +
-            '<article class="fin-metric"><span>Śr. przychód / miesiąc</span><strong>' + escHtml(formatCurrency(averageMonthlyRevenue)) + '</strong></article>' +
+            '<article class="fin-metric"><span>Przychód</span><strong>' + escHtml(formatCurrency(monthRevenue)) + '</strong><small>bieżący miesiąc</small></article>' +
+            '<article class="fin-metric"><span>Należności</span><strong>' + escHtml(formatCurrency(outstandingTotal)) + '</strong><small>' + outstanding.length + ' sesji czeka na rozliczenie</small></article>' +
+            '<article class="fin-metric"><span>Pacjenci z zaległościami</span><strong>' + Object.keys(debtMap).length + '</strong><small>potrzebują spokojnej reakcji</small></article>' +
+            '<article class="fin-metric"><span>Śr. przychód / miesiąc</span><strong>' + escHtml(formatCurrency(averageMonthlyRevenue)) + '</strong><small>rok bieżący</small></article>' +
           '</div>' +
         '</section>' +
 
@@ -349,23 +321,16 @@ const FinanceViews = (() => {
           '<section class="fin-section">' +
             '<h2 class="fin-section-title">Rzeczy wymagające uwagi</h2>' +
             '<div class="fin-actions-list">' +
-              '<div class="fin-action-row"><strong>' + outstanding.length + ' sesji do rozliczenia</strong></div>' +
-              '<div class="fin-action-row"><strong>' + Object.keys(debtMap).length + ' pacjentów z należnościami</strong></div>' +
-              '<div class="fin-action-row"><strong>' + paid + ' opłaconych w tym miesiącu</strong></div>' +
+              '<div class="fin-action-row"><div><strong>' + outstanding.length + ' sesji do rozliczenia</strong><span>zaległe lub odwołane płatne spotkania</span></div></div>' +
+              '<div class="fin-action-row"><div><strong>' + Object.keys(debtMap).length + ' pacjentów z należnościami</strong><span>warto sprawdzić kontekst terapii i ostatnie ustalenia</span></div></div>' +
+              '<div class="fin-action-row"><div><strong>' + paid + ' opłaconych w tym miesiącu</strong><span>bieżący rytm przychodów gabinetu</span></div></div>' +
             '</div>' +
           '</section>' +
         '</div>' +
 
         '<section class="fin-section">' +
-          '<div class="fin-section-header">' +
-            '<h2 class="fin-section-title" style="margin:0">Trend przychodów</h2>' +
-            '<div class="fin-period-toggle" id="fin-period-toggle">' +
-              '<button class="fin-period-btn' + (chartPeriod === 3  ? ' active' : '') + '" data-period="3">3 mies.</button>' +
-              '<button class="fin-period-btn' + (chartPeriod === 6  ? ' active' : '') + '" data-period="6">6 mies.</button>' +
-              '<button class="fin-period-btn' + (chartPeriod === 12 ? ' active' : '') + '" data-period="12">12 mies.</button>' +
-            '</div>' +
-          '</div>' +
-          '<div id="fin-bars-wrap" style="margin-top:14px">' + renderRevenueBars(chartPeriod) + '</div>' +
+          '<h2 class="fin-section-title">Trend przychodów</h2>' +
+          renderRevenueBars() +
         '</section>' +
 
         '<section class="fin-section">' +
@@ -385,7 +350,7 @@ const FinanceViews = (() => {
 
   function filteredPayments() {
     return getPayments()
-      .filter((payment) => {
+      .filter(function(payment) {
         if (paymentFilters.method !== 'all') {
           var matchesPrimary = payment.method === paymentFilters.method;
           var matchesSplit = payment.isSplit && payment.splitMethod === paymentFilters.method;
@@ -395,12 +360,12 @@ const FinanceViews = (() => {
         if (paymentFilters.to && payment.date > paymentFilters.to) return false;
         return true;
       })
-      .sort((a, b) => b.date.localeCompare(a.date));
+      .sort(function(a, b) { return b.date.localeCompare(a.date); });
   }
 
   function renderPayments() {
     const payments = filteredPayments();
-    const total = payments.reduce((sum, payment) => sum + paymentDisplayAmount(payment, paymentFilters.method), 0);
+    var total = payments.reduce(function(sum, payment) { return sum + paymentDisplayAmount(payment, paymentFilters.method); }, 0);
     return (
       '<div class="fin-payments">' +
         '<section class="fin-shell">' +
@@ -473,54 +438,47 @@ const FinanceViews = (() => {
     bindViewEvents(container);
   }
 
-  function bindViewEvents(container) {
-    container.querySelectorAll('.fin-tab').forEach((button) => {
-      button.addEventListener('click', () => {
-        currentTab = button.dataset.tab;
-        render(container);
-      });
+  /** Odswieza tylko zawartosc taba bez przebudowy calego DOM. */
+  function _refreshTabContent(container) {
+    const content = container.querySelector('#fin-content');
+    if (!content) { render(container); return; }
+    content.innerHTML = currentTab === 'dashboard' ? renderDashboard() : renderPayments();
+    // Aktualizuj klase active na tabach
+    container.querySelectorAll('.fin-tab').forEach(t => {
+      t.classList.toggle('active', t.dataset.tab === currentTab);
     });
+    _bindContentEvents(container);
+  }
 
+  /** Binduje eventy wewnatrz #fin-content (bez tabow). */
+  function _bindContentEvents(container) {
     container.querySelectorAll('#fin-open-add-payment').forEach((button) => {
       button.addEventListener('click', () => openAddPayment());
     });
-
-    const periodToggle = container.querySelector('#fin-period-toggle');
-    if (periodToggle) {
-      periodToggle.addEventListener('click', (e) => {
-        const btn = e.target.closest('[data-period]');
-        if (!btn) return;
-        chartPeriod = Number(btn.dataset.period);
-        const barsWrap = container.querySelector('#fin-bars-wrap');
-        if (barsWrap) barsWrap.innerHTML = renderRevenueBars(chartPeriod);
-        periodToggle.querySelectorAll('.fin-period-btn').forEach((b) => {
-          b.classList.toggle('active', Number(b.dataset.period) === chartPeriod);
-        });
-      });
+    const patientsButton = container.querySelector('#fin-open-patients');
+    if (patientsButton) {
+      patientsButton.addEventListener('click', () => Router.navigate('patients'));
     }
-
     container.querySelectorAll('.fin-chip').forEach((chip) => {
       chip.addEventListener('click', () => {
         paymentFilters.method = chip.dataset.method;
-        render(container);
+        _refreshTabContent(container);
       });
     });
-
     const filterFrom = container.querySelector('#fin-filter-from');
     const filterTo = container.querySelector('#fin-filter-to');
     if (filterFrom) {
       filterFrom.addEventListener('change', () => {
         paymentFilters.from = filterFrom.value;
-        render(container);
+        _refreshTabContent(container);
       });
     }
     if (filterTo) {
       filterTo.addEventListener('change', () => {
         paymentFilters.to = filterTo.value;
-        render(container);
+        _refreshTabContent(container);
       });
     }
-
     container.querySelectorAll('[data-payment-detail]').forEach((element) => {
       element.addEventListener('click', () => openPaymentDetail(element.dataset.paymentDetail));
     });
@@ -530,6 +488,17 @@ const FinanceViews = (() => {
     container.querySelectorAll('[data-payment-delete]').forEach((button) => {
       button.addEventListener('click', () => confirmDeletePayment(button.dataset.paymentDelete));
     });
+  }
+
+  function bindViewEvents(container) {
+    container.querySelectorAll('.fin-tab').forEach((button) => {
+      button.addEventListener('click', () => {
+        currentTab = button.dataset.tab;
+        _refreshTabContent(container);
+      });
+    });
+
+    _bindContentEvents(container);
   }
 
   function unpaidSessionsForPatient(patientId, selectedIds = []) {
@@ -578,25 +547,15 @@ const FinanceViews = (() => {
     }, 0);
   }
 
-  function renderMethodToggle(id, selected) {
-    return (
-      '<div class="fin-method-toggle" id="' + id + '">' +
-        '<button class="fin-method-btn ' + (selected === 'aliorBank' ? 'active' : '') + '" type="button" data-method="aliorBank">Alior Bank</button>' +
-        '<button class="fin-method-btn ' + (selected === 'ingBank' ? 'active' : '') + '" type="button" data-method="ingBank">ING Bank</button>' +
-        '<button class="fin-method-btn ' + (selected === 'cash' ? 'active' : '') + '" type="button" data-method="cash">Gotówka</button>' +
-      '</div>'
-    );
-  }
-
-  function renderPaymentSheet(payment, prefill) {
+  function renderPaymentSheet(payment) {
     const isEdit = Boolean(payment);
     const patients = AppState.activePatients.slice().sort((a, b) => displayPatientName(a).localeCompare(displayPatientName(b), 'pl'));
-    const isSplit = payment ? Boolean(payment.isSplit) : false;
-    const selectedMethod  = payment ? payment.method : 'cash';
-    const selectedMethod2 = (payment && payment.splitMethod) ? payment.splitMethod : 'cash';
-    const splitAmount2    = (payment && payment.splitAmounts) ? payment.splitAmounts.secondary : '';
-    const patientId = payment ? payment.patientId : (prefill ? (prefill.patientId || '') : '');
-    const selectedIds = payment ? (payment.sessionIds || []) : (prefill ? (prefill.sessionIds || []) : []);
+    const selectedMethod = payment ? payment.method : 'cash';
+    const splitMethodVal = payment && payment.isSplit ? (payment.splitMethod || 'cash') : 'cash';
+    const splitPrimary = payment && payment.splitAmounts ? payment.splitAmounts.primary : '';
+    const splitSecondary = payment && payment.splitAmounts ? payment.splitAmounts.secondary : '';
+    const patientId = payment ? payment.patientId : '';
+    const selectedIds = payment ? (payment.sessionIds || []) : [];
     return (
       '<div class="fin-sheet-overlay" id="fin-payment-sheet">' +
         '<div class="fin-sheet-panel">' +
@@ -621,29 +580,32 @@ const FinanceViews = (() => {
             '</div>' +
             '<div class="fin-form-group fin-form-group--full">' +
               '<label>Metoda płatności</label>' +
-              renderMethodToggle('fin-method-toggle', selectedMethod) +
+              '<div class="fin-method-toggle" id="fin-method-toggle">' +
+                '<button class="fin-method-btn ' + (selectedMethod === 'aliorBank' ? 'active' : '') + '" type="button" data-method="aliorBank">Alior Bank</button>' +
+                '<button class="fin-method-btn ' + (selectedMethod === 'ingBank' ? 'active' : '') + '" type="button" data-method="ingBank">ING Bank</button>' +
+                '<button class="fin-method-btn ' + (selectedMethod === 'cash' ? 'active' : '') + '" type="button" data-method="cash">Gotówka</button>' +
+              '</div>' +
               '<input type="hidden" id="fin-sheet-method" value="' + escHtml(selectedMethod) + '">' +
-            '</div>' +
-            // Split toggle
-            '<div class="fin-form-group fin-form-group--full">' +
-              '<label class="fin-split-label">' +
-                '<input type="checkbox" id="fin-split-toggle"' + (isSplit ? ' checked' : '') + '>' +
-                ' Podziel na dwie formy płatności' +
+              '<label class="fin-toggle-row" style="margin-top:10px;display:flex;align-items:center;gap:10px;cursor:pointer">' +
+                '<input type="checkbox" id="fin-sheet-split"' + (payment && payment.isSplit ? ' checked' : '') + ' style="accent-color:var(--blue,#49664f)">' +
+                '<span style="font-size:.82rem;font-weight:700;color:var(--text-secondary,rgba(36,49,38,.68))">Podziel płatność na dwie metody</span>' +
               '</label>' +
-            '</div>' +
-            // Second method row (hidden unless split)
-            '<div class="fin-form-group fin-form-group--full" id="fin-split-row" style="' + (isSplit ? '' : 'display:none') + '">' +
-              '<label>Druga forma płatności</label>' +
-              renderMethodToggle('fin-method2-toggle', selectedMethod2) +
-              '<input type="hidden" id="fin-sheet-method2" value="' + escHtml(selectedMethod2) + '">' +
-              '<div class="fin-split-amount-row">' +
-                '<div class="fin-split-amount-item">' +
-                  '<span class="fin-split-amount-label" id="fin-split-label1">Kwota — pierwsza forma</span>' +
-                  '<input class="fin-input fin-split-amount-readonly" type="text" id="fin-split-amount1" readonly placeholder="auto">' +
+              '<div id="fin-split-section" style="margin-top:10px;flex-direction:column;gap:10px;padding:14px;border-radius:18px;background:rgba(255,255,255,.48);border:1px solid var(--border,rgba(73,102,79,.1));' + (payment && payment.isSplit ? 'display:flex' : 'display:none') + '">' +
+                '<div style="display:flex;gap:8px;flex-wrap:wrap" id="fin-split-method-toggle">' +
+                  '<button class="fin-method-btn' + (splitMethodVal === 'aliorBank' ? ' active' : '') + '" type="button" data-split-method="aliorBank">Alior Bank</button>' +
+                  '<button class="fin-method-btn' + (splitMethodVal === 'ingBank' ? ' active' : '') + '" type="button" data-split-method="ingBank">ING Bank</button>' +
+                  '<button class="fin-method-btn' + (splitMethodVal === 'cash' ? ' active' : '') + '" type="button" data-split-method="cash">Gotówka</button>' +
                 '</div>' +
-                '<div class="fin-split-amount-item">' +
-                  '<span class="fin-split-amount-label">Kwota — druga forma (zł)</span>' +
-                  '<input class="fin-input" type="number" id="fin-split-amount2" min="0.01" step="0.01" value="' + escHtml(String(splitAmount2)) + '" placeholder="0.00">' +
+                '<input type="hidden" id="fin-sheet-split-method" value="' + escHtml(splitMethodVal) + '">' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+                  '<div class="fin-form-group">' +
+                    '<label for="fin-split-primary">Kwota: ' + escHtml(paymentMethodLabel(selectedMethod)) + '</label>' +
+                    '<input class="fin-input" type="number" step="0.01" min="0" id="fin-split-primary" value="' + (splitPrimary || '') + '">' +
+                  '</div>' +
+                  '<div class="fin-form-group">' +
+                    '<label for="fin-split-secondary">Kwota: <span id="fin-split-secondary-label">' + escHtml(paymentMethodLabel(splitMethodVal)) + '</span></label>' +
+                    '<input class="fin-input" type="number" step="0.01" min="0" id="fin-split-secondary" value="' + (splitSecondary || '') + '">' +
+                  '</div>' +
                 '</div>' +
               '</div>' +
             '</div>' +
@@ -654,9 +616,8 @@ const FinanceViews = (() => {
               '</div>' +
             '</div>' +
             '<div class="fin-form-group">' +
-              '<label for="fin-sheet-amount">Łączna kwota (zł)</label>' +
-              '<input class="fin-input" type="number" id="fin-sheet-amount" min="0" step="0.01" value="' + escHtml(String((payment && payment.amount) || '0')) + '" placeholder="0.00">' +
-              '<div id="fin-sheet-balance-info" class="fin-balance-info" style="display:none"></div>' +
+              '<label>Kwota łączna</label>' +
+              '<div class="fin-total-box"><strong id="fin-sheet-total">' + escHtml(formatCurrency((payment && payment.amount) || 0)) + '</strong><span>Wyliczana na podstawie zaznaczonych sesji</span></div>' +
             '</div>' +
             '<div class="fin-form-group">' +
               '<label for="fin-sheet-note">Notatka</label>' +
@@ -672,92 +633,24 @@ const FinanceViews = (() => {
     );
   }
 
-  function openPaymentSheet(payment, prefill) {
+  function openPaymentSheet(payment) {
     const existing = document.getElementById('fin-payment-sheet');
     if (existing) existing.remove();
-    document.body.insertAdjacentHTML('beforeend', renderPaymentSheet(payment, prefill));
-    bindPaymentSheetEvents(payment, prefill);
+    document.body.insertAdjacentHTML('beforeend', renderPaymentSheet(payment));
+    bindPaymentSheetEvents(payment);
   }
 
-  // Opens a new-payment sheet pre-filled for a specific session (called from calendar detail).
-  function openAddPaymentForSession(session) {
-    openPaymentSheet(null, { patientId: session.patientId, sessionIds: [session.id] });
-  }
-
-  function bindPaymentSheetEvents(payment, prefill) {
+  function bindPaymentSheetEvents(payment) {
     const sheet = document.getElementById('fin-payment-sheet');
     if (!sheet) return;
     const patientSelect = sheet.querySelector('#fin-sheet-patient');
     const sessionsWrap = sheet.querySelector('#fin-sheet-sessions');
-    const amountInput = sheet.querySelector('#fin-sheet-amount');
-    const balanceInfo = sheet.querySelector('#fin-sheet-balance-info');
+    const totalEl = sheet.querySelector('#fin-sheet-total');
     const methodInput = sheet.querySelector('#fin-sheet-method');
-    const selectedIds = payment ? (payment.sessionIds || []) : (prefill ? (prefill.sessionIds || []) : []);
-
-    function updateBalanceInfo() {
-      const expected = selectedTotal(sheet);
-      const paid = parseFloat(amountInput.value) || 0;
-      const diff = paid - expected;
-      if (!expected || paid === expected) {
-        balanceInfo.style.display = 'none';
-        return;
-      }
-      balanceInfo.style.display = '';
-      if (diff > 0) {
-        balanceInfo.className = 'fin-balance-info fin-balance-info--over';
-        balanceInfo.textContent = 'Nadpłata: ' + formatCurrency(diff) + '. Różnica pozostaje nieprzypisana.';
-      } else {
-        // underpayment — figure out which sessions are fully/partially covered
-        const sessionIds = selectedSessionIds(sheet);
-        const sessions = sessionIds
-          .map(id => getSessions().find(s => s.id === id))
-          .filter(Boolean)
-          .sort((a, b) => new Date(a.date) - new Date(b.date));
-        let remaining = paid;
-        let fullyCovered = 0;
-        let partialSession = null;
-        let partialPaid = 0;
-        for (const s of sessions) {
-          const rate = sessionAmount(s);
-          if (remaining >= rate) { remaining -= rate; fullyCovered++; }
-          else if (remaining > 0) { partialSession = s; partialPaid = remaining; remaining = 0; }
-          else break;
-        }
-        const unpaidCount = sessions.length - fullyCovered - (partialSession ? 1 : 0);
-        let msg = '';
-        if (fullyCovered > 0) msg += fullyCovered + ' ' + (fullyCovered === 1 ? 'sesja opłacona w całości' : 'sesje opłacone w całości') + '. ';
-        if (partialSession) {
-          const rate = sessionAmount(partialSession);
-          msg += 'Sesja ' + formatDateMedium(partialSession.date) + ' opłacona częściowo (' + formatCurrency(partialPaid) + ' z ' + formatCurrency(rate) + '). ';
-        }
-        if (unpaidCount > 0) msg += unpaidCount + ' ' + (unpaidCount === 1 ? 'sesja pozostaje nieopłacona' : 'sesje pozostają nieopłacone') + '.';
-        balanceInfo.className = 'fin-balance-info fin-balance-info--under';
-        balanceInfo.textContent = msg.trim();
-      }
-    }
-
-    // Split toggle: show/hide second method row
-    const splitToggle = sheet.querySelector('#fin-split-toggle');
-    const splitRow    = sheet.querySelector('#fin-split-row');
-    const splitAmt2   = sheet.querySelector('#fin-split-amount2');
-    const splitAmt1   = sheet.querySelector('#fin-split-amount1');
-
-    function updateSplitAmount1() {
-      if (!splitAmt1 || !splitAmt2) return;
-      const total = parseFloat(amountInput.value) || 0;
-      const amt2  = parseFloat(splitAmt2.value) || 0;
-      const amt1  = Math.max(0, total - amt2);
-      splitAmt1.value = amt1 > 0 ? amt1.toFixed(2) : '';
-    }
+    const selectedIds = payment ? (payment.sessionIds || []) : [];
 
     function refreshTotal() {
-      const expected = selectedTotal(sheet);
-      // Only auto-fill if user hasn't manually changed the amount
-      if (!amountInput.dataset.userEdited) {
-        amountInput.value = expected > 0 ? expected.toFixed(2) : '0.00';
-      }
-      updateBalanceInfo();
-      updateSplitAmount1();
+      if (totalEl) totalEl.textContent = formatCurrency(selectedTotal(sheet));
     }
 
     function bindCheckboxes() {
@@ -776,47 +669,34 @@ const FinanceViews = (() => {
       });
     }
 
-    // Primary method toggle
-    const methodToggle = sheet.querySelector('#fin-method-toggle');
-    if (methodToggle) {
-      methodToggle.querySelectorAll('.fin-method-btn').forEach((button) => {
-        button.addEventListener('click', () => {
-          methodToggle.querySelectorAll('.fin-method-btn').forEach((item) => item.classList.remove('active'));
-          button.classList.add('active');
-          methodInput.value = button.dataset.method;
-        });
+    sheet.querySelectorAll('#fin-method-toggle .fin-method-btn').forEach((button) => {
+      button.addEventListener('click', () => {
+        sheet.querySelectorAll('#fin-method-toggle .fin-method-btn').forEach((item) => item.classList.remove('active'));
+        button.classList.add('active');
+        methodInput.value = button.dataset.method;
+      });
+    });
+
+    // Split toggle
+    var splitCheck = sheet.querySelector('#fin-sheet-split');
+    var splitSection = sheet.querySelector('#fin-split-section');
+    if (splitCheck && splitSection) {
+      splitCheck.addEventListener('change', function() {
+        splitSection.style.display = splitCheck.checked ? 'flex' : 'none';
       });
     }
 
-    // Second method toggle (split)
-    const methodInput2 = sheet.querySelector('#fin-sheet-method2');
-    const method2Toggle = sheet.querySelector('#fin-method2-toggle');
-    if (method2Toggle) {
-      method2Toggle.querySelectorAll('.fin-method-btn').forEach((button) => {
-        button.addEventListener('click', () => {
-          method2Toggle.querySelectorAll('.fin-method-btn').forEach((item) => item.classList.remove('active'));
-          button.classList.add('active');
-          if (methodInput2) methodInput2.value = button.dataset.method;
-        });
+    // Split method buttons
+    var splitMethodInput = sheet.querySelector('#fin-sheet-split-method');
+    sheet.querySelectorAll('[data-split-method]').forEach(function(button) {
+      button.addEventListener('click', function() {
+        sheet.querySelectorAll('[data-split-method]').forEach(function(item) { item.classList.remove('active'); });
+        button.classList.add('active');
+        splitMethodInput.value = button.dataset.splitMethod;
+        var label = sheet.querySelector('#fin-split-secondary-label');
+        if (label) label.textContent = paymentMethodLabel(button.dataset.splitMethod);
       });
-    }
-
-    if (splitToggle && splitRow) {
-      splitToggle.addEventListener('change', () => {
-        splitRow.style.display = splitToggle.checked ? '' : 'none';
-        if (splitToggle.checked) updateSplitAmount1();
-      });
-    }
-    if (splitAmt2) {
-      splitAmt2.addEventListener('input', updateSplitAmount1);
-    }
-
-    if (amountInput) {
-      amountInput.addEventListener('input', () => {
-        amountInput.dataset.userEdited = '1';
-        updateBalanceInfo();
-      });
-    }
+    });
 
     bindCheckboxes();
     if (!payment && selectedIds.length === 0) refreshTotal();
@@ -851,18 +731,11 @@ const FinanceViews = (() => {
     const date = sheet.querySelector('#fin-sheet-date').value;
     const method = sheet.querySelector('#fin-sheet-method').value || 'cash';
     const note = sheet.querySelector('#fin-sheet-note').value.trim();
+    const isSplit = sheet.querySelector('#fin-sheet-split') && sheet.querySelector('#fin-sheet-split').checked;
+    const splitMethod = isSplit ? (sheet.querySelector('#fin-sheet-split-method') || {}).value || 'cash' : null;
+    const splitPrimaryVal = isSplit ? parseFloat((sheet.querySelector('#fin-split-primary') || {}).value) : 0;
+    const splitSecondaryVal = isSplit ? parseFloat((sheet.querySelector('#fin-split-secondary') || {}).value) : 0;
     const sessionIds = selectedSessionIds(sheet);
-
-    // Split fields
-    const splitToggle = sheet.querySelector('#fin-split-toggle');
-    const isSplit = splitToggle ? splitToggle.checked : false;
-    const splitMethod = isSplit ? (sheet.querySelector('#fin-sheet-method2').value || 'cash') : null;
-    const splitAmt2Raw = isSplit ? parseFloat(sheet.querySelector('#fin-split-amount2').value) : 0;
-
-    if (isSplit && splitMethod && !['aliorBank', 'ingBank', 'cash'].includes(splitMethod)) {
-      toast('Nieprawidłowa metoda płatności', 'warning');
-      return;
-    }
 
     if (!patientId) {
       toast('Wybierz pacjenta.', 'warning');
@@ -876,117 +749,46 @@ const FinanceViews = (() => {
       toast('Wybierz co najmniej jedną sesję.', 'warning');
       return;
     }
-
-    const amount = parseFloat(sheet.querySelector('#fin-sheet-amount').value) || selectedTotal(sheet);
-
-    // Validate amount when split
-    if (isSplit && amount <= 0) {
-      toast('Kwota płatności musi być większa od zera.', 'warning');
-      return;
-    }
-
-    // Validate split
     if (isSplit) {
-      if (!splitMethod || splitMethod === method) {
+      if (!splitPrimaryVal || splitPrimaryVal <= 0 || !splitSecondaryVal || splitSecondaryVal <= 0) {
+        toast('Obie kwoty muszą być większe od zera.', 'warning');
+        return;
+      }
+      if (method === splitMethod) {
         toast('Wybierz dwie różne metody płatności.', 'warning');
         return;
       }
-      if (!splitAmt2Raw || splitAmt2Raw <= 0) {
-        toast('Podaj kwotę dla drugiej formy płatności.', 'warning');
-        return;
-      }
-      if (splitAmt2Raw >= amount) {
-        toast('Kwota drugiej formy nie może być równa ani większa od łącznej kwoty.', 'warning');
+      var expectedTotal = selectedTotal(sheet);
+      if (Math.abs((splitPrimaryVal + splitSecondaryVal) - expectedTotal) > 0.01) {
+        toast('Suma kwot (' + formatCurrency(splitPrimaryVal + splitSecondaryVal) + ') musi być równa kwocie łącznej (' + formatCurrency(expectedTotal) + ').', 'warning');
         return;
       }
     }
 
-    const splitAmounts = isSplit
-      ? { primary: parseFloat((amount - splitAmt2Raw).toFixed(2)), secondary: parseFloat(splitAmt2Raw.toFixed(2)) }
-      : null;
+    try {
+      if (typeof recordPaymentForSessions !== 'function') {
+        throw new Error('Brak helpera recordPaymentForSessions.');
+      }
 
-    const previous = existingId ? getPayments().find((payment) => payment.id === existingId) : null;
-
-    if (previous) {
-      (previous.sessionIds || []).forEach((sessionId) => {
-        const session = getSessions().find((item) => item.id === sessionId);
-        if (!session) return;
-        session.isPaid = false;
-        session.paymentId = null;
-        session.paymentMethod = null;
-        session.paymentDate = null;
-      });
-    }
-
-    const effectiveMethod = isSplit ? method + '+' + splitMethod : method;
-
-    let paymentRecord = previous;
-    if (!paymentRecord) {
-      paymentRecord = createPayment({
+      recordPaymentForSessions({
+        id: existingId || null,
         patientId,
         date,
-        amount,
         method,
-        isSplit,
-        splitMethod,
-        splitAmounts,
-        sessionIds,
-        sessionsCount: sessionIds.length,
         note,
+        sessionIds,
+        isSplit: isSplit,
+        splitMethod: splitMethod,
+        splitAmounts: isSplit ? { primary: splitPrimaryVal, secondary: splitSecondaryVal } : null,
       });
-      AppState.payments.push(paymentRecord);
-    } else {
-      paymentRecord.patientId = patientId;
-      paymentRecord.date = date;
-      paymentRecord.amount = amount;
-      paymentRecord.method = method;
-      paymentRecord.isSplit = isSplit;
-      paymentRecord.splitMethod = splitMethod;
-      paymentRecord.splitAmounts = splitAmounts;
-      paymentRecord.sessionIds = sessionIds;
-      paymentRecord.sessionsCount = sessionIds.length;
-      paymentRecord.note = note;
+    } catch (error) {
+      toast('Nie udało się zapisać płatności: ' + error.message, 'error');
+      return;
     }
-
-    // Sort sessions by date so we pay oldest first
-    const sortedSessions = sessionIds
-      .map(id => getSessions().find(item => item.id === id))
-      .filter(Boolean)
-      .sort((a, b) => new Date(a.date) - new Date(b.date));
-
-    let remaining = amount;
-    sortedSessions.forEach((session) => {
-      const rate = sessionAmount(session);
-      session.paymentId = paymentRecord.id;
-      session.paymentMethod = effectiveMethod;
-      session.paymentDate = date;
-      if (remaining >= rate) {
-        session.isPaid = true;
-        session.isPartiallyPaid = false;
-        session.partialPaymentAmount = null;
-        remaining -= rate;
-      } else if (remaining > 0) {
-        session.isPaid = false;
-        session.isPartiallyPaid = true;
-        session.partialPaymentAmount = remaining;
-        remaining = 0;
-      } else {
-        session.isPaid = false;
-        session.isPartiallyPaid = false;
-        session.partialPaymentAmount = null;
-        session.paymentId = null;
-        session.paymentMethod = null;
-        session.paymentDate = null;
-      }
-    });
 
     persistData();
     closePaymentSheet();
     if (containerRef) render(containerRef);
-    // Refresh calendar view if it is currently visible (opened from session detail)
-    if (typeof CalendarViews !== 'undefined' && typeof CalendarViews._refresh === 'function') {
-      CalendarViews._refresh();
-    }
     toast(existingId ? 'Płatność zaktualizowana.' : 'Płatność zapisana.', 'success');
   }
 
@@ -996,20 +798,9 @@ const FinanceViews = (() => {
   }
 
   function deletePayment(paymentId) {
-    const payment = getPayments().find((item) => item.id === paymentId);
+    if (typeof detachPaymentFromSessions !== 'function') return;
+    const payment = detachPaymentFromSessions(paymentId);
     if (!payment) return;
-    (payment.sessionIds || []).forEach((sessionId) => {
-
-      const session = getSessions().find((item) => item.id === sessionId);
-      if (!session) return;
-      session.isPaid = false;
-      session.isPartiallyPaid = false;
-      session.partialPaymentAmount = null;
-      session.paymentId = null;
-      session.paymentMethod = null;
-      session.paymentDate = null;
-    });
-    AppState.payments = AppState.payments.filter((item) => item.id !== paymentId);
     persistData();
     if (containerRef) render(containerRef);
     toast('Płatność usunięta.', 'success');
@@ -1037,12 +828,12 @@ const FinanceViews = (() => {
           '<div class="fin-detail-stack">' +
             '<div class="fin-detail-row"><span>Pacjent</span><strong>' + escHtml(display + (fullName ? ` (${fullName})` : '')) + '</strong></div>' +
             '<div class="fin-detail-row"><span>Data płatności</span><strong>' + escHtml(formatDateLong(payment.date)) + '</strong></div>' +
-            (payment.isSplit
-              ? '<div class="fin-detail-row"><span>Metoda</span><strong class="fin-method-badge badge-split">' + escHtml(paymentMethodLabel(payment.method)) + ' + ' + escHtml(paymentMethodLabel(payment.splitMethod)) + '</strong></div>' +
-                '<div class="fin-detail-row fin-detail-split"><span>' + escHtml(paymentMethodLabel(payment.method)) + '</span><strong>' + escHtml(formatCurrency(payment.splitAmounts ? payment.splitAmounts.primary : 0)) + '</strong></div>' +
-                '<div class="fin-detail-row fin-detail-split"><span>' + escHtml(paymentMethodLabel(payment.splitMethod)) + '</span><strong>' + escHtml(formatCurrency(payment.splitAmounts ? payment.splitAmounts.secondary : 0)) + '</strong></div>'
-              : '<div class="fin-detail-row"><span>Metoda</span><strong class="fin-method-badge ' + paymentMethodClass(payment.method) + '">' + escHtml(paymentMethodLabel(payment.method)) + '</strong></div>') +
-            '<div class="fin-detail-row"><span>Kwota łączna</span><strong>' + escHtml(formatCurrency(payment.amount)) + '</strong></div>' +
+            '<div class="fin-detail-row"><span>Metoda</span><strong class="fin-method-badge ' + paymentMethodClass(payment.isSplit ? payment.method + '+' + payment.splitMethod : payment.method) + '">' + escHtml(paymentMethodLabel(payment.isSplit ? payment.method + '+' + payment.splitMethod : payment.method)) + '</strong></div>' +
+            (payment.isSplit && payment.splitAmounts
+              ? '<div class="fin-detail-row"><span>' + escHtml(paymentMethodLabel(payment.method)) + '</span><strong>' + escHtml(formatCurrency(payment.splitAmounts.primary)) + '</strong></div>'
+              + '<div class="fin-detail-row"><span>' + escHtml(paymentMethodLabel(payment.splitMethod)) + '</span><strong>' + escHtml(formatCurrency(payment.splitAmounts.secondary)) + '</strong></div>'
+              : '') +
+            '<div class="fin-detail-row"><span>Kwota</span><strong>' + escHtml(formatCurrency(payment.amount)) + '</strong></div>' +
             (payment.note ? '<div class="fin-detail-row"><span>Notatka</span><strong>' + escHtml(payment.note) + '</strong></div>' : '') +
             '<div class="fin-detail-sessions">' +
               (payment.sessionIds || []).map((sessionId) => {
@@ -1078,7 +869,6 @@ const FinanceViews = (() => {
   return {
     render,
     openAddPayment,
-    openAddPaymentForSession,
     openEditPayment,
     savePayment,
     closePaymentSheet,

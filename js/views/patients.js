@@ -45,12 +45,16 @@ function sessionDayLabels(patient) {
     .join(', ');
 }
 
-function escHtml(str) {
-  return String(str || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+// Alias do globalnego escapeHtml z utils.js
+function escHtml(str) { return escapeHtml(str); }
+
+function clinicalDataUnlocked() {
+  return typeof SecurityService !== 'undefined' && SecurityService.canReadClinicalData();
+}
+
+function clinicalActionLabel() {
+  if (typeof SecurityService === 'undefined') return 'Ustaw hasło';
+  return SecurityService.needsPasswordSetup() ? 'Ustaw hasło' : 'Odblokuj notatki';
 }
 
 // =============================================================================
@@ -66,8 +70,11 @@ const PatientViews = {
 
   render(params) {
     params = params || {};
-    // view-specific routes must be checked before patientId,
-    // because edit passes both { view:'edit', patientId }
+    if (params.patientId) {
+      this._currentPatientId = params.patientId;
+      this._renderDetailPage(params.patientId);
+      return;
+    }
     if (params.view === 'archive') {
       this._renderArchivePage();
       return;
@@ -75,11 +82,6 @@ const PatientViews = {
     if (params.view === 'add' || params.view === 'edit') {
       this._currentPatientId = params.patientId || null;
       this._renderFormPage(params.patientId || null);
-      return;
-    }
-    if (params.patientId) {
-      this._currentPatientId = params.patientId;
-      this._renderDetailPage(params.patientId);
       return;
     }
     if (params.q !== undefined) {
@@ -102,38 +104,6 @@ const PatientViews = {
     container.innerHTML = this.renderPatientDetail(patientId);
     this._injectStyles();
     this._bindDetailEvents(patientId);
-    this._decryptNotePreviews(patientId);
-  },
-
-  _decryptNotePreviews(patientId) {
-    const patient = getPatient(patientId);
-    if (!patient) return;
-    const container = document.getElementById('view-container');
-    if (!container) return;
-
-    const fillBody = (row, encryptedContent) => {
-      if (!row) return;
-      const el = row.querySelector('.pv-note-body');
-      if (!el) return;
-      Encryption.decrypt(encryptedContent).then(decrypted => {
-        el.textContent = decrypted && decrypted.trim() ? decrypted : '(pusta notatka)';
-      }).catch(() => {
-        el.textContent = '(nie mo\u017cna odczyta\u0107)';
-      });
-    };
-
-    // Manual notes
-    (patient.sessionNotes || []).forEach(n => {
-      if (!n.content) return;
-      fillBody(container.querySelector('.pv-note-row[data-noteid="' + n.id + '"]'), n.content);
-    });
-
-    // Calendar session notes
-    getPatientSessions(patientId)
-      .filter(s => s.sessionNotes && s.sessionNotes.trim())
-      .forEach(s => {
-        fillBody(container.querySelector('.pv-note-row[data-sessionnoteid="' + s.id + '"]'), s.sessionNotes);
-      });
   },
 
   _renderFormPage(patientId) {
@@ -206,6 +176,7 @@ const PatientViews = {
         '<button class="pv-btn pv-btn-add" id="pv-btn-add" title="Dodaj pacjenta">' +
           '<span class="pv-btn-icon">+</span> Nowy' +
         '</button>' +
+        '<button class="pv-btn pv-btn-icon-only" id="pv-btn-archive" title="Archiwum">&#128451;</button>' +
         '<div class="pv-sort-wrap">' +
           '<button class="pv-btn pv-btn-sort" id="pv-btn-sort">' +
             escHtml(sortLabel) + ' &#9660;' +
@@ -215,7 +186,6 @@ const PatientViews = {
           '</div>' +
         '</div>' +
         '<button class="pv-btn pv-btn-debt' + debtActive + '" id="pv-btn-debt" title="Tylko zad\u0142u\u017ceni">D\u0142ug</button>' +
-        '<button class="pv-btn pv-btn-archive-link" id="pv-btn-archive">Archiwum</button>' +
       '</div>'
     );
   },
@@ -224,6 +194,14 @@ const PatientViews = {
 
   renderPatientList() {
     let patients = AppState.activePatients.slice();
+
+    // Pre-compute debt cache to avoid O(n*sessions) per patient per sort comparison.
+    const debtCache = new Map();
+    const getCachedDebt = (id) => {
+      if (!debtCache.has(id)) debtCache.set(id, getPatientDebt(id));
+      return debtCache.get(id);
+    };
+    this._debtCache = getCachedDebt; // share with renderPatientRow
 
     // Filter by search
     const q = this.searchQuery.trim().toLowerCase();
@@ -236,7 +214,7 @@ const PatientViews = {
 
     // Filter by debt
     if (this.showDebtOnly) {
-      patients = patients.filter(p => getPatientDebt(p.id).total > 0);
+      patients = patients.filter(p => getCachedDebt(p.id).total > 0);
     }
 
     // Sort
@@ -255,8 +233,8 @@ const PatientViews = {
           return db - da;
         }
         case 'debt': {
-          const da = getPatientDebt(a.id).total;
-          const db = getPatientDebt(b.id).total;
+          const da = getCachedDebt(a.id).total;
+          const db = getCachedDebt(b.id).total;
           return db - da;
         }
         default:
@@ -282,7 +260,7 @@ const PatientViews = {
     const legalName        = ((patient.firstName || '') + ' ' + (patient.lastName || '')).trim();
     const days             = sessionDayLabels(patient);
     const duration         = getPatientTherapyDuration(patient);
-    const debt             = getPatientDebt(patient.id);
+    const debt             = this._debtCache ? this._debtCache(patient.id) : getPatientDebt(patient.id);
     const completedCount   = getCompletedSessionsCount(patient.id);
     const debtBadge        = debt.total > 0
       ? '<span class="pv-row-debt">' + escHtml(formatPLN(debt.total)) + '</span>'
@@ -336,26 +314,21 @@ const PatientViews = {
     const debt           = getPatientDebt(patientId);
     const sessions       = getPatientSessions(patientId);
     const completedCount = sessions.filter(s => s.status === 'completed').length;
-    const prevTotal      = (patient.previousTherapies || []).reduce((s, t) => s + (parseInt(t.sessionsCount, 10) || 0), 0);
-    const sessionDisplay = prevTotal > 0 ? completedCount + ' (' + (completedCount + prevTotal) + ')' : String(completedCount);
     const lastTen        = sessions.slice().reverse().slice(0, 12);
     const display        = patientDisplayName(patient);
     const initials       = patientInitials(patient);
     const color          = avatarColor(patient.firstName || patient.pseudonym);
     const duration       = getPatientTherapyDuration(patient);
     const fullName       = ((patient.firstName || '') + ' ' + (patient.lastName || '')).trim();
-    const sessionNotesWithContent = sessions.filter(s => s.sessionNotes && s.sessionNotes.trim());
-    const notesCount     = (patient.sessionNotes || []).length + sessionNotesWithContent.length;
+    const notesCount     = (patient.sessionNotes || []).length;
     const goalsCount     = (patient.therapeuticGoals || []).length;
     const progressCount  = (patient.progressEntries || []).length;
     const debtAmount     = debt.total > 0 ? formatPLN(debt.total) : 'Brak zaległości';
-    const cancelledSessions = sessions.filter(s => s.status === 'cancelled');
-    const cancelVacation    = cancelledSessions.filter(s => s.cancellationReason === 'patient_vacation').length;
-    const cancelPatient     = cancelledSessions.filter(s => s.cancellationReason === 'patient_late').length;
-    const cancelTherapist   = cancelledSessions.filter(s => s.cancellationReason === 'therapist').length;
-    const cancelOther       = cancelledSessions.filter(s => !s.cancellationReason).length;
-    const cancelTotal       = cancelledSessions.length;
+    const clinicalUnlocked = clinicalDataUnlocked();
 
+    const privacyBadge = patient.pseudonym
+      ? '<span class="pv-debt-badge pv-debt-badge--soft">Pseudonim na pierwszym planie</span>'
+      : '';
     const pseudonymDl = patient.pseudonym
       ? '<dt>Pseudonim</dt><dd>' + escHtml(patient.pseudonym) + '</dd>'
       : '';
@@ -372,11 +345,12 @@ const PatientViews = {
           '<h1 class="pv-detail-name">' + escHtml(display) + '</h1>' +
           '<p class="pv-detail-pseudonym">' + escHtml(fullName) + '</p>' +
           '<div class="pv-detail-badges">' +
+            privacyBadge +
             '<span class="pv-debt-badge">' + escHtml(debtAmount) + '</span>' +
           '</div>' +
           '<div class="pv-overview-stats">' +
             '<article class="pv-overview-stat"><span>Czas terapii</span><strong>' + escHtml(duration) + '</strong></article>' +
-            '<article class="pv-overview-stat"><span>Sesje</span><strong>' + sessionDisplay + '</strong></article>' +
+            '<article class="pv-overview-stat"><span>Sesje</span><strong>' + completedCount + '</strong></article>' +
             '<article class="pv-overview-stat"><span>Notatki</span><strong>' + notesCount + '</strong></article>' +
             '<article class="pv-overview-stat"><span>Cele</span><strong>' + goalsCount + '</strong></article>' +
           '</div>' +
@@ -409,7 +383,7 @@ const PatientViews = {
                 '<dl class="pv-dl">' +
                   '<dt>Pocz\u0105tek terapii</dt><dd>' + escHtml(formatDateLong(patient.therapyStartDate)) + '</dd>' +
                   '<dt>Czas trwania</dt><dd>' + escHtml(duration) + '</dd>' +
-                  '<dt>Uko\u0144czone sesje</dt><dd>' + sessionDisplay + '</dd>' +
+                  '<dt>Uko\u0144czone sesje</dt><dd>' + completedCount + '</dd>' +
                   '<dt>Zaległości</dt><dd>' + escHtml(debtAmount) + '</dd>' +
                 '</dl>' +
               '</article>' +
@@ -439,18 +413,29 @@ const PatientViews = {
           '<section class="pv-section pv-section--workspace" id="pv-clinical">' +
             '<h2 class="pv-section-title">Kliniczne</h2>' +
             '<div class="pv-workspace-grid">' +
-              '<article class="pv-panel-card">' +
-                '<h3>Cele terapeutyczne ' +
-                  '<button class="pv-section-add-btn" id="pv-add-goal" data-id="' + escHtml(patientId) + '">+ Dodaj</button>' +
-                '</h3>' +
-                this._renderGoalsSection(patient) +
-              '</article>' +
-              '<article class="pv-panel-card pv-panel-card--wide">' +
-                '<h3>Notatki i obserwacje ' +
-                  '<button class="pv-section-add-btn" id="pv-add-note" data-id="' + escHtml(patientId) + '">+ Dodaj</button>' +
-                '</h3>' +
-                this._renderNotesSection(patient) +
-              '</article>' +
+              (clinicalUnlocked
+                ? (
+                  '<article class="pv-panel-card">' +
+                    '<h3>Cele terapeutyczne ' +
+                      '<button class="pv-section-add-btn" id="pv-add-goal" data-id="' + escHtml(patientId) + '">+ Dodaj</button>' +
+                    '</h3>' +
+                    this._renderGoalsSection(patient) +
+                  '</article>' +
+                  '<article class="pv-panel-card pv-panel-card--wide">' +
+                    '<h3>Notatki i obserwacje ' +
+                      '<button class="pv-section-add-btn" id="pv-add-note" data-id="' + escHtml(patientId) + '">+ Dodaj</button>' +
+                    '</h3>' +
+                    this._renderNotesSection(patient) +
+                  '</article>'
+                )
+                : (
+                  '<article class="pv-panel-card pv-panel-card--wide">' +
+                    this._renderClinicalLockCard(
+                      'Dane kliniczne są zablokowane',
+                      'Aby zobaczyć notatki, cele i obserwacje, podaj hasło do danych klinicznych.'
+                    ) +
+                  '</article>'
+                )) +
             '</div>' +
           '</section>' +
 
@@ -458,16 +443,13 @@ const PatientViews = {
             '<h2 class="pv-section-title">Historia</h2>' +
             '<div class="pv-workspace-grid">' +
               '<article class="pv-panel-card">' +
-                '<h3>Odwołane sesje</h3>' +
-                (cancelTotal > 0
-                  ? '<dl class="pv-dl">' +
-                      '<dt>Łącznie</dt><dd>' + cancelTotal + '</dd>' +
-                      (cancelVacation > 0 ? '<dt>Urlop pacjenta</dt><dd>' + cancelVacation + '</dd>' : '') +
-                      (cancelPatient > 0 ? '<dt>Odwołane przez pacjenta</dt><dd>' + cancelPatient + '</dd>' : '') +
-                      (cancelTherapist > 0 ? '<dt>Odwołane przez terapeutę</dt><dd>' + cancelTherapist + '</dd>' : '') +
-                      (cancelOther > 0 ? '<dt>Bez kategorii</dt><dd>' + cancelOther + '</dd>' : '') +
-                    '</dl>'
-                  : '<p class="pv-empty-msg" style="padding:8px 0">Brak odwołanych sesji.</p>') +
+                '<h3>Oś postępów</h3>' +
+                (clinicalUnlocked
+                  ? this._renderProgressSection(patient)
+                  : this._renderClinicalLockCard(
+                      'Historia postępów jest zablokowana',
+                      'Wpisy kliniczne wrócą po odblokowaniu danych klinicznych.'
+                    )) +
               '</article>' +
               '<article class="pv-panel-card">' +
                 '<h3>Cykle terapii</h3>' +
@@ -482,6 +464,7 @@ const PatientViews = {
                 'Usu\u0144 pacjenta' +
               '</button>' +
             '</div>' +
+            '<div class="pv-history-footnote">Wpisy postępów: ' + progressCount + '. Historia pozostaje częścią spokojnego kontekstu pacjenta, a nie osobną wyspą nawigacji.</div>' +
           '</section>' +
 
         '</div>' +
@@ -546,55 +529,23 @@ const PatientViews = {
   },
 
   _renderNotesSection(patient) {
-    // Combine manual notes and calendar session notes into one chronological list
-    const manualNotes = (patient.sessionNotes || []).map(n => ({
-      date:    n.date,
-      type:    'manual',
-      id:      n.id,
-      content: n.content,
-    }));
-
-    const sessionNotes = getPatientSessions(patient.id)
-      .filter(s => s.sessionNotes && s.sessionNotes.trim())
-      .map(s => ({
-        date:    s.date,
-        type:    'session',
-        id:      s.id,
-        content: s.sessionNotes,
-      }));
-
-    // Oldest first — newest at the bottom, like a notebook
-    const all = manualNotes.concat(sessionNotes)
-      .sort((a, b) => new Date(a.date) - new Date(b.date));
-
-    if (all.length === 0) {
+    if (!patient.sessionNotes || patient.sessionNotes.length === 0) {
       return '<p class="pv-empty-sub">Brak notatek.</p>';
     }
-
-    const rows = all.map(item => {
-      const isSession  = item.type === 'session';
-      const dataAttr   = isSession
-        ? 'data-sessionnoteid="' + escHtml(item.id) + '"'
-        : 'data-noteid="' + escHtml(item.id) + '"';
-      const typeTag    = isSession
-        ? '<span class="pv-note-type-tag">Sesja</span>'
-        : '';
-      const deleteBtn  = isSession
-        ? ''
-        : '<button class="pv-row-delete-btn" data-noteid="' + escHtml(item.id) + '"' +
-            ' data-patientid="' + escHtml(patient.id) + '" title="Usu\u0144 notatk\u0119">&#10005;</button>';
+    const rows = patient.sessionNotes.slice().reverse().map(n => {
+      const preview = (n.content || '').slice(0, 100);
+      const ellipsis = (n.content || '').length > 100 ? '\u2026' : '';
       return (
-        '<div class="pv-note-row" ' + dataAttr + '>' +
+        '<div class="pv-note-row" data-noteid="' + escHtml(n.id) + '">' +
           '<div class="pv-note-header">' +
-            '<span class="pv-note-date">' + escHtml(formatDateMedium(item.date)) + '</span>' +
-            typeTag +
-            deleteBtn +
+            '<span class="pv-note-date">' + escHtml(formatDateMedium(n.date)) + '</span>' +
+            '<button class="pv-row-delete-btn" data-noteid="' + escHtml(n.id) + '"' +
+              ' data-patientid="' + escHtml(patient.id) + '" title="Usu\u0144 notatk\u0119">&#10005;</button>' +
           '</div>' +
-          '<p class="pv-note-body">\u2026</p>' +
+          '<p class="pv-note-preview">' + escHtml(preview) + ellipsis + '</p>' +
         '</div>'
       );
     }).join('');
-
     return '<div class="pv-notes-list">' + rows + '</div>';
   },
 
@@ -606,11 +557,7 @@ const PatientViews = {
     const rows = sessions.map(s => {
       const label  = statusLabels[s.status] || s.status;
       const cls    = 'pv-sess-status--' + (s.status || 'scheduled');
-      const paid   = s.isPaid
-        ? '<span class="pv-sess-paid">&#10003;</span>'
-        : s.isPartiallyPaid
-          ? '<span class="pv-sess-partial">Częściowo opłacona (' + escHtml(formatPLN(s.partialPaymentAmount)) + ')</span>'
-          : '';
+      const paid   = s.isPaid ? '<span class="pv-sess-paid">&#10003;</span>' : '';
       return (
         '<div class="pv-sess-row">' +
           '<span class="pv-sess-date">' + escHtml(formatDateMedium(s.date)) + ' ' + escHtml(formatTime(s.date)) + '</span>' +
@@ -639,42 +586,27 @@ const PatientViews = {
   },
 
   _renderTherapyCyclesSection(patient) {
-    const cycles   = Array.isArray(patient.therapyCycles)    ? patient.therapyCycles    : [];
-    const prevs    = Array.isArray(patient.previousTherapies) ? patient.previousTherapies : [];
-
-    if (cycles.length === 0 && prevs.length === 0) {
+    if (!patient.therapyCycles || patient.therapyCycles.length === 0) {
       return '<p class="pv-empty-sub">Brak zapisanych cykli terapii.</p>';
     }
-
-    // Current / app-managed cycles (newest first)
-    const cycleRows = cycles.slice().reverse().map(cycle => (
+    const rows = patient.therapyCycles.slice().reverse().map(cycle => (
       '<div class="pv-sess-row">' +
         '<span class="pv-sess-date">Cykl ' + escHtml(String(cycle.cycleNumber || '—')) + '</span>' +
         '<span class="pv-row-duration">' + escHtml(formatDateShort(cycle.startDate)) + ' – ' + escHtml(cycle.endDate ? formatDateShort(cycle.endDate) : 'trwa') + '</span>' +
       '</div>'
     )).join('');
+    return '<div class="pv-sessions-list">' + rows + '</div>';
+  },
 
-    // Previous therapies entered manually (oldest first, to mirror form order)
-    const prevRows = prevs.map((t, i) => {
-      const dateRange = (t.startDate ? escHtml(formatDateShort(t.startDate)) : '?')
-        + ' – '
-        + (t.endDate ? escHtml(formatDateShort(t.endDate)) : '?');
-      const sessionsBadge = t.sessionsCount
-        ? '<span class="pv-cycle-sessions-badge">' + escHtml(String(t.sessionsCount)) + ' sesji</span>'
-        : '';
-      return (
-        '<div class="pv-sess-row">' +
-          '<span class="pv-sess-date">Poprzednia terapia' + (prevs.length > 1 ? ' ' + (i + 1) : '') + '</span>' +
-          '<span class="pv-row-duration">' + dateRange + sessionsBadge + '</span>' +
-        '</div>'
-      );
-    }).join('');
-
-    const separator = (cycleRows && prevRows)
-      ? '<div class="pv-cycle-separator"></div>'
-      : '';
-
-    return '<div class="pv-sessions-list">' + cycleRows + separator + prevRows + '</div>';
+  _renderClinicalLockCard(title, description) {
+    return (
+      '<div class="pv-clinical-guard">' +
+        '<div class="pv-clinical-guard__icon">🔒</div>' +
+        '<h4 class="pv-clinical-guard__title">' + escHtml(title) + '</h4>' +
+        '<p class="pv-clinical-guard__text">' + escHtml(description) + '</p>' +
+        '<button class="pv-btn pv-btn-add" id="pv-clinical-unlock-btn">' + escHtml(clinicalActionLabel()) + '</button>' +
+      '</div>'
+    );
   },
 
   // ── PATIENT FORM ─────────────────────────────────────────────────────────
@@ -716,27 +648,6 @@ const PatientViews = {
     const deleteBtn = isEdit
       ? '<button type="button" class="pv-btn pv-btn-danger" id="pv-form-delete" data-id="' + escHtml(p.id || '') + '">Usu\u0144</button>'
       : '';
-
-    const prevTherapies = Array.isArray(p.previousTherapies) ? p.previousTherapies : [];
-    const prevTherapyCount = prevTherapies.length;
-    const prevTherapyRows = prevTherapies.map((t, i) => {
-      const startVal = t.startDate ? new Date(t.startDate).toISOString().split('T')[0] : '';
-      const endVal   = t.endDate   ? new Date(t.endDate).toISOString().split('T')[0]   : '';
-      const sessVal  = t.sessionsCount !== undefined ? String(t.sessionsCount) : '';
-      return (
-        '<div class="pv-prev-therapy-row" data-index="' + i + '">' +
-          '<input type="hidden" class="pt-id" value="' + escHtml(t.id || '') + '">' +
-          '<div class="pv-prev-therapy-fields">' +
-            '<label class="pv-form-label pv-form-label--inline"><span>Od</span>' +
-              '<input type="date" class="pv-form-input pt-start" value="' + escHtml(startVal) + '"></label>' +
-            '<label class="pv-form-label pv-form-label--inline"><span>Do</span>' +
-              '<input type="date" class="pv-form-input pt-end" value="' + escHtml(endVal) + '"></label>' +
-            '<label class="pv-form-label pv-form-label--inline"><span>Sesji</span>' +
-              '<input type="number" class="pv-form-input pt-sessions" value="' + escHtml(sessVal) + '" min="0" placeholder="0"></label>' +
-          '</div>' +
-        '</div>'
-      );
-    }).join('');
 
     return (
       '<div class="pv-page pv-page--form">' +
@@ -801,16 +712,6 @@ const PatientViews = {
               '</div>' +
               '<span class="pv-form-error" id="err-days"></span>' +
             '</div>' +
-          '</section>' +
-
-          '<section class="pv-form-section">' +
-            '<h3 class="pv-form-section-title">Poprzednie terapie</h3>' +
-            '<label class="pv-form-label">' +
-              '<span>Liczba poprzednich terapii</span>' +
-              '<input type="number" id="pv-prev-therapy-count" class="pv-form-input"' +
-                ' min="0" max="20" value="' + prevTherapyCount + '" placeholder="0">' +
-            '</label>' +
-            '<div id="pv-prev-therapies-rows">' + prevTherapyRows + '</div>' +
           '</section>' +
 
           '<div class="pv-form-actions">' +
@@ -1151,10 +1052,23 @@ const PatientViews = {
       deleteBtn.addEventListener('click', () => this.deletePatient(patientId));
     }
 
+    const clinicalUnlockBtn = document.getElementById('pv-clinical-unlock-btn');
+    if (clinicalUnlockBtn) {
+      clinicalUnlockBtn.addEventListener('click', async () => {
+        if (typeof SecurityService === 'undefined') return;
+        const ok = await SecurityService.requestClinicalAccess();
+        if (ok) this._renderDetailPage(patientId);
+      });
+    }
+
     // Add goal
     const addGoal = document.getElementById('pv-add-goal');
     if (addGoal) {
-      addGoal.addEventListener('click', () => {
+      addGoal.addEventListener('click', async () => {
+        if (typeof SecurityService !== 'undefined') {
+          const ok = await SecurityService.requestClinicalAccess();
+          if (!ok) return;
+        }
         const modal = document.getElementById('pv-modal-goal');
         if (!modal) return;
         modal.dataset.patientid = patientId;
@@ -1169,7 +1083,11 @@ const PatientViews = {
     // Add note
     const addNote = document.getElementById('pv-add-note');
     if (addNote) {
-      addNote.addEventListener('click', () => {
+      addNote.addEventListener('click', async () => {
+        if (typeof SecurityService !== 'undefined') {
+          const ok = await SecurityService.requestClinicalAccess();
+          if (!ok) return;
+        }
         const modal = document.getElementById('pv-modal-note');
         if (!modal) return;
         modal.dataset.patientid = patientId;
@@ -1205,7 +1123,11 @@ const PatientViews = {
     const goalSave   = document.getElementById('pv-goal-save');
     const goalCancel = document.getElementById('pv-goal-cancel');
     if (goalSave) {
-      goalSave.addEventListener('click', () => {
+      goalSave.addEventListener('click', async () => {
+        if (typeof SecurityService !== 'undefined') {
+          const ok = await SecurityService.requestClinicalAccess();
+          if (!ok) return;
+        }
         const modal    = document.getElementById('pv-modal-goal');
         const pid      = (modal && modal.dataset.patientid) || patientId;
         const titleEl  = document.getElementById('goal-title');
@@ -1237,6 +1159,10 @@ const PatientViews = {
     const noteCancel = document.getElementById('pv-note-cancel');
     if (noteSave) {
       noteSave.addEventListener('click', async () => {
+        if (typeof SecurityService !== 'undefined') {
+          const ok = await SecurityService.requestClinicalAccess();
+          if (!ok) return;
+        }
         const modal     = document.getElementById('pv-modal-note');
         const pid       = (modal && modal.dataset.patientid) || patientId;
         const contentEl = document.getElementById('note-content');
@@ -1246,11 +1172,10 @@ const PatientViews = {
         if (!content) { toast('Wpisz tre\u015b\u0107 notatki.', 'warning'); return; }
         const patient = getPatient(pid);
         if (!patient) return;
-        const encryptedContent = await Encryption.encrypt(content);
         patient.sessionNotes.push({
           id: uuid(),
           date: date ? new Date(date).toISOString() : new Date().toISOString(),
-          content: encryptedContent,
+          content,
           sessionId: null
         });
         persistData();
@@ -1283,34 +1208,14 @@ const PatientViews = {
         }
         const patient = getPatient(pid);
         if (!patient) return;
-        const vpStart = new Date(start);
-        const vpEnd   = new Date(end);
-        vpStart.setHours(0, 0, 0, 0);
-        vpEnd.setHours(23, 59, 59, 999);
-
         patient.vacationPeriods.push({
           id: uuid(),
-          startDate: vpStart.toISOString(),
-          endDate:   vpEnd.toISOString()
+          startDate: new Date(start).toISOString(),
+          endDate:   new Date(end).toISOString()
         });
-
-        // Cancel existing scheduled sessions within vacation range
-        let cancelled = 0;
-        getSessions().forEach(s => {
-          if (s.patientId !== patient.id) return;
-          if (s.status !== 'scheduled') return;
-          const sd = new Date(s.date);
-          if (sd >= vpStart && sd <= vpEnd) {
-            s.status = 'cancelled';
-            s.cancellationReason = 'patient_vacation';
-            s.isPaymentRequired = false;
-            cancelled++;
-          }
-        });
-
         persistData();
         if (modal) modal.classList.add('hidden');
-        toast('Urlop dodany.' + (cancelled > 0 ? ' Odwo\u0142ano ' + cancelled + ' sesji.' : ''), 'success');
+        toast('Urlop dodany.', 'success');
         this._renderDetailPage(pid);
       });
     }
@@ -1333,27 +1238,7 @@ const PatientViews = {
         const vpid = btn.dataset.vpid;
         const p    = getPatient(pid);
         if (!p) return;
-        const removed = p.vacationPeriods.find(v => v.id === vpid);
         p.vacationPeriods = p.vacationPeriods.filter(v => v.id !== vpid);
-
-        // Restore cancelled-by-vacation sessions within the removed period
-        if (removed) {
-          const vpStart = new Date(removed.startDate);
-          const vpEnd   = new Date(removed.endDate);
-          vpStart.setHours(0, 0, 0, 0);
-          vpEnd.setHours(23, 59, 59, 999);
-          getSessions().forEach(s => {
-            if (s.patientId !== pid) return;
-            if (s.status !== 'cancelled' || s.cancellationReason !== 'patient_vacation') return;
-            const sd = new Date(s.date);
-            if (sd >= vpStart && sd <= vpEnd) {
-              s.status = 'scheduled';
-              s.cancellationReason = null;
-              s.isPaymentRequired = true;
-            }
-          });
-        }
-
         persistData();
         toast('Urlop usuni\u0119ty.', 'success');
         this._renderDetailPage(pid);
@@ -1409,37 +1294,6 @@ const PatientViews = {
           const timeEl = container.querySelector('.pv-time-input[data-dayid="' + dayId + '"]');
           if (timeEl) timeEl.disabled = !chk.checked;
         });
-      });
-    }
-
-    // Previous therapies count → generate / remove rows
-    const prevCountEl = document.getElementById('pv-prev-therapy-count');
-    const prevRowsEl  = document.getElementById('pv-prev-therapies-rows');
-    if (prevCountEl && prevRowsEl) {
-      prevCountEl.addEventListener('input', () => {
-        const target  = Math.max(0, Math.min(20, parseInt(prevCountEl.value, 10) || 0));
-        const current = prevRowsEl.querySelectorAll('.pv-prev-therapy-row').length;
-        if (target > current) {
-          for (let i = current; i < target; i++) {
-            const row = document.createElement('div');
-            row.className   = 'pv-prev-therapy-row';
-            row.dataset.index = i;
-            row.innerHTML   =
-              '<input type="hidden" class="pt-id" value="">' +
-              '<div class="pv-prev-therapy-fields">' +
-                '<label class="pv-form-label pv-form-label--inline"><span>Od</span>' +
-                  '<input type="date" class="pv-form-input pt-start"></label>' +
-                '<label class="pv-form-label pv-form-label--inline"><span>Do</span>' +
-                  '<input type="date" class="pv-form-input pt-end"></label>' +
-                '<label class="pv-form-label pv-form-label--inline"><span>Sesji</span>' +
-                  '<input type="number" class="pv-form-input pt-sessions" min="0" placeholder="0"></label>' +
-              '</div>';
-            prevRowsEl.appendChild(row);
-          }
-        } else {
-          const rows = prevRowsEl.querySelectorAll('.pv-prev-therapy-row');
-          for (let i = target; i < rows.length; i++) rows[i].remove();
-        }
       });
     }
 
@@ -1541,35 +1395,17 @@ const PatientViews = {
 
     const therapyStartDate = new Date(startDateRaw).toISOString();
 
-    // Collect previousTherapies from dynamic rows
-    const previousTherapies = [];
-    const prevRowsContainer = document.getElementById('pv-prev-therapies-rows');
-    if (prevRowsContainer) {
-      prevRowsContainer.querySelectorAll('.pv-prev-therapy-row').forEach(row => {
-        const idEl       = row.querySelector('.pt-id');
-        const startEl    = row.querySelector('.pt-start');
-        const endEl      = row.querySelector('.pt-end');
-        const sessionsEl = row.querySelector('.pt-sessions');
-        const therapyId  = (idEl && idEl.value) ? idEl.value : uuid();
-        const startDate  = (startEl  && startEl.value)  ? new Date(startEl.value).toISOString()  : null;
-        const endDate    = (endEl    && endEl.value)    ? new Date(endEl.value).toISOString()    : null;
-        const sessionsCount = parseInt((sessionsEl && sessionsEl.value) || '0', 10) || 0;
-        previousTherapies.push({ id: therapyId, startDate, endDate, sessionsCount });
-      });
-    }
-
     if (id) {
       // --- Update existing patient ---
       const patient = getPatient(id);
       if (!patient) { toast('Nie znaleziono pacjenta.', 'error'); return; }
-      patient.firstName          = firstName;
-      patient.lastName           = lastName;
-      patient.pseudonym          = pseudonym;
-      patient.therapyStartDate   = therapyStartDate;
-      patient.sessionRate        = sessionRate;
-      patient.sessionsPerWeek    = sessionsPerWeek;
-      patient.sessionDayConfigs  = sessionDayConfigs;
-      patient.previousTherapies  = previousTherapies;
+      patient.firstName         = firstName;
+      patient.lastName          = lastName;
+      patient.pseudonym         = pseudonym;
+      patient.therapyStartDate  = therapyStartDate;
+      patient.sessionRate       = sessionRate;
+      patient.sessionsPerWeek   = sessionsPerWeek;
+      patient.sessionDayConfigs = sessionDayConfigs;
       persistData();
       toast('Pacjent zaktualizowany.', 'success');
       Router.navigate('patients', { patientId: id });
@@ -1583,7 +1419,6 @@ const PatientViews = {
         sessionRate,
         sessionsPerWeek,
         sessionDayConfigs,
-        previousTherapies,
       });
 
       // Create the initial therapy cycle
@@ -1697,19 +1532,18 @@ const PatientViews = {
     const style = document.createElement('style');
     style.id = 'pv-styles';
     style.textContent = [
-      '.pv-page{display:flex;flex-direction:column;background:transparent;padding:18px 18px calc(var(--tab-bar-height) + 30px);font-family:var(--font-sans,"Manrope",sans-serif)}',
-      '.pv-list-wrap{}',
-      '.pv-search-bar,.pv-section,.pv-form-section,.pv-modal-box,.pv-ctx-menu{background:color-mix(in srgb,var(--surface-raised,#f7f2eb) 92%, transparent);border:1px solid var(--border,rgba(73,102,79,.14));box-shadow:var(--shadow-sm)}',
+      '.pv-page{display:flex;flex-direction:column;height:100%;overflow:hidden;background:transparent;padding:18px 18px calc(var(--tab-bar-height) + 30px);font-family:var(--font-sans,"Manrope",sans-serif)}',
+      '.pv-list-wrap{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}',
+      '.pv-search-bar,.pv-toolbar,.pv-section,.pv-form-section,.pv-modal-box,.pv-ctx-menu{background:color-mix(in srgb,var(--surface-raised,#f7f2eb) 92%, transparent);border:1px solid var(--border,rgba(73,102,79,.14));box-shadow:var(--shadow-sm)}',
       '.pv-search-bar{display:flex;align-items:center;gap:.75rem;padding:16px 18px;border-radius:24px}',
       '.pv-search-icon{font-size:1.1rem;color:var(--text-secondary,rgba(36,49,38,.68))}',
       '.pv-search-input{flex:1;border:none;outline:none;font-size:1rem;background:transparent;color:var(--text,#243126)}',
       '.pv-search-input::placeholder{color:var(--text-tertiary,rgba(36,49,38,.44))}',
-      '.pv-toolbar{display:flex;align-items:center;gap:.5rem;padding:10px 0;flex-wrap:wrap}',
+      '.pv-toolbar{display:flex;align-items:center;gap:.6rem;padding:12px 14px;border-radius:22px;margin-top:12px;flex-wrap:wrap}',
       '.pv-btn{display:inline-flex;align-items:center;justify-content:center;gap:.35rem;padding:.78rem 1rem;border:none;border-radius:999px;font-size:.84rem;cursor:pointer;background:rgba(255,255,255,.68);color:var(--text,#243126);font-weight:800;transition:transform .15s ease,background .15s ease,opacity .15s ease}',
       '.pv-btn:hover{transform:translateY(-1px);background:rgba(255,255,255,.9)}',
       '.pv-btn-add,.pv-btn-primary{background:linear-gradient(135deg,var(--blue,#49664f),#617f68);color:var(--text-inverse,#f6f0e6)}',
       '.pv-btn-icon-only{padding:.75rem .9rem;font-size:1.05rem}',
-      '.pv-btn-archive-link{margin-left:auto;color:var(--text-secondary,rgba(36,49,38,.6));font-weight:600;font-size:.8rem}',
       '.pv-btn--active{background:var(--blue,#49664f)!important;color:var(--text-inverse,#f6f0e6)!important}',
       '.pv-btn-danger{background:linear-gradient(135deg,var(--red,#bf6152),#a95246);color:#fff}',
       '.pv-btn-restore{background:linear-gradient(135deg,var(--green,#6b9073),#7ca484);color:#fff}',
@@ -1747,8 +1581,7 @@ const PatientViews = {
       '.pv-ctx-item{display:block;width:100%;padding:.85rem 1rem;text-align:left;border:none;background:transparent;cursor:pointer;font-size:.9rem;color:var(--text,#243126)}',
       '.pv-ctx-item:hover{background:rgba(255,255,255,.7)}',
       '.pv-ctx-item--danger{color:var(--red,#bf6152)}',
-      '.pv-page--detail,.pv-page--form{overflow-y:auto;scrollbar-width:none}',
-      '.pv-page--detail::-webkit-scrollbar,.pv-page--form::-webkit-scrollbar{display:none}',
+      '.pv-page--detail,.pv-page--form{overflow-y:auto}',
       '.pv-detail-header{display:flex;align-items:center;justify-content:space-between;padding:16px 2px 10px;position:sticky;top:0;z-index:20;background:linear-gradient(180deg,var(--bg,transparent) 72%, transparent)}',
       '.pv-back-btn,.pv-edit-btn{background:rgba(255,255,255,.68);border:none;color:var(--blue,#49664f);font-size:.92rem;font-weight:800;cursor:pointer;padding:.72rem .95rem;border-radius:999px}',
       '.pv-back-btn:hover,.pv-edit-btn:hover{background:rgba(255,255,255,.92)}',
@@ -1781,8 +1614,6 @@ const PatientViews = {
       '.pv-schedule-row{justify-content:space-between}',
       '.pv-schedule-day,.pv-goal-title{color:var(--text,#243126);font-weight:600}',
       '.pv-schedule-time,.pv-vacation-dates,.pv-sess-date,.pv-row-duration{color:var(--text-secondary,rgba(36,49,38,.68))}',
-      '.pv-cycle-sessions-badge{margin-left:.4rem;font-size:.75rem;font-weight:700;background:rgba(73,102,79,.1);color:var(--green,#49664f);border-radius:999px;padding:.1rem .5rem;white-space:nowrap}',
-      '.pv-cycle-separator{height:1px;background:var(--separator,rgba(73,102,79,.18));margin:.4rem 0}',
       '.pv-goal-icon{font-size:1rem;flex-shrink:0}',
       '.pv-goal-status{font-size:.74rem;padding:.2rem .48rem;border-radius:999px;font-weight:800}',
       '.pv-goal-status--inProgress{background:var(--blue-light,#dbe7d7);color:var(--blue,#49664f)}',
@@ -1793,6 +1624,10 @@ const PatientViews = {
       '.pv-note-date{font-size:.78rem;color:var(--text-secondary,rgba(36,49,38,.68));flex:1}',
       '.pv-note-preview{margin:0;color:var(--text-secondary,rgba(36,49,38,.68));font-size:.86rem;line-height:1.6;flex:1;word-break:break-word}',
       '.pv-note-preview strong{color:var(--text,#243126)}',
+      '.pv-clinical-guard{padding:1.25rem;border:1px dashed rgba(73,102,79,.24);border-radius:20px;background:rgba(73,102,79,.04);display:flex;flex-direction:column;align-items:flex-start;gap:.75rem}',
+      '.pv-clinical-guard__icon{font-size:1.35rem}',
+      '.pv-clinical-guard__title{margin:0;font-size:1rem;color:var(--text,#243126)}',
+      '.pv-clinical-guard__text{margin:0;color:var(--text-secondary,rgba(36,49,38,.68));font-size:.9rem;line-height:1.6}',
       '.pv-row-delete-btn{background:none;border:none;cursor:pointer;color:var(--text-tertiary,rgba(36,49,38,.44));font-size:.85rem;padding:.2rem .35rem;border-radius:999px;flex-shrink:0}',
       '.pv-row-delete-btn:hover{background:var(--red-light,#f4ddd8);color:var(--red,#bf6152)}',
       '.pv-sess-status{font-size:.74rem;font-weight:800;padding:.2rem .48rem;border-radius:999px}',
@@ -1800,7 +1635,6 @@ const PatientViews = {
       '.pv-sess-status--completed{background:var(--green-light,#e5f0e4);color:var(--green,#6b9073)}',
       '.pv-sess-status--cancelled{background:var(--orange-light,#f6e4d5);color:var(--orange,#cc8b56)}',
       '.pv-sess-paid{color:var(--green,#6b9073);font-size:.9rem;margin-left:.25rem}',
-      '.pv-sess-partial{color:var(--orange,#cc8b56);font-size:.9rem;margin-left:.25rem;cursor:help}',
       '.pv-detail-actions{display:flex;flex-wrap:wrap;gap:.7rem;margin-top:12px}',
       '.pv-history-footnote{margin-top:12px;font-size:.84rem;color:var(--text-secondary,rgba(36,49,38,.68));line-height:1.6}',
       '.pv-form{padding:.85rem 0 2rem;display:grid;gap:14px}',
@@ -1822,12 +1656,6 @@ const PatientViews = {
       '.pv-day-toggle input[type=checkbox]{width:1.1rem;height:1.1rem;accent-color:var(--blue,#49664f);cursor:pointer}',
       '.pv-day-label{font-weight:600}',
       '.pv-time-input:disabled{opacity:.35;pointer-events:none}',
-      '.pv-note-body{font-size:.9rem;color:var(--text,#243126);line-height:1.65;margin:6px 0 0;white-space:pre-wrap;word-break:break-word}',
-      '.pv-note-type-tag{font-size:.7rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--blue,#49664f);background:rgba(73,102,79,.1);border-radius:6px;padding:2px 7px;margin-left:6px}',
-      '.pv-prev-therapy-row{border:1.5px solid var(--border,rgba(73,102,79,.14));border-radius:16px;padding:12px 14px;margin-bottom:10px;background:rgba(255,255,255,.5)}',
-      '.pv-prev-therapy-fields{display:grid;grid-template-columns:1fr 1fr 80px;gap:.6rem;align-items:end}',
-      '.pv-form-label--inline{margin-bottom:0}',
-      '@media (max-width:520px){.pv-prev-therapy-fields{grid-template-columns:1fr 1fr;}.pv-prev-therapy-fields .pv-form-label--inline:last-child{grid-column:1 / -1}}',
       '.pv-modal{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;background:rgba(14,18,15,.4);padding:1rem}',
       '.pv-modal.hidden{display:none}',
       '.pv-modal-box{border-radius:28px;padding:1.5rem;width:100%;max-width:420px}',
