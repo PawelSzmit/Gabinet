@@ -1013,8 +1013,11 @@ const CalendarViews = {
   },
 
   _paymentMethodName(method) {
-    const map = { aliorBank: 'Alior Bank', ingBank: 'ING Bank', cash: 'Gotówka' };
-    return map[method] || method;
+    const names = { cash: 'Gotówka', aliorBank: 'Alior Bank', ingBank: 'ING Bank' };
+    if (method && method.indexOf('+') !== -1) {
+      return method.split('+').map(function(m) { return names[m] || m; }).join(' + ');
+    }
+    return names[method] || method || '—';
   },
 
   _isDateBlocked(date) {
