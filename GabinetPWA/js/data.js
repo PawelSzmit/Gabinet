@@ -217,6 +217,7 @@ function createSession(data = {}) {
  * @returns {Payment}
  */
 function createPayment(data = {}) {
+  const isSplit = data.isSplit === true;
   return {
     ...data,
     id:            data.id            || uuid(),
@@ -225,6 +226,12 @@ function createPayment(data = {}) {
     amount:        normalizeNullableNumber(data.amount) ?? 0,
     // aliorBank | ingBank | cash
     method:        data.method        || 'cash',
+    isSplit:       isSplit,
+    splitMethod:   isSplit ? (data.splitMethod || 'cash') : null,
+    splitAmounts:  isSplit && data.splitAmounts
+      ? { primary: normalizeNullableNumber(data.splitAmounts.primary) ?? 0,
+          secondary: normalizeNullableNumber(data.splitAmounts.secondary) ?? 0 }
+      : null,
     sessionsCount: normalizePositiveInteger(data.sessionsCount, 0),
     sessionIds:    Array.isArray(data.sessionIds) ? data.sessionIds : [],
     note:          data.note          || '',
@@ -328,7 +335,9 @@ function attachPaymentToSession(session, paymentRecord) {
   session.paymentAmount = getSessionAmount(session);
   session.isPaid = true;
   session.paymentId = paymentRecord.id;
-  session.paymentMethod = paymentRecord.method || null;
+  session.paymentMethod = (paymentRecord.isSplit && paymentRecord.splitMethod)
+    ? (paymentRecord.method + '+' + paymentRecord.splitMethod)
+    : (paymentRecord.method || null);
   session.paymentDate = paymentRecord.date || null;
 }
 
@@ -388,6 +397,11 @@ function recordPaymentForSessions(data = {}) {
   const paymentDate = data.date ? normalizeSessionDate(data.date) : new Date().toISOString();
   const paymentMethod = data.method || 'cash';
   const paymentTotal = calculatePaymentTotal(uniqueSessionIds);
+  const isSplit = data.isSplit === true;
+  const splitMethod = isSplit ? (data.splitMethod || 'cash') : null;
+  const splitAmounts = isSplit && data.splitAmounts
+    ? { primary: data.splitAmounts.primary, secondary: data.splitAmounts.secondary }
+    : null;
 
   let paymentRecord = previousRecord;
   if (!paymentRecord) {
@@ -396,6 +410,9 @@ function recordPaymentForSessions(data = {}) {
       date: paymentDate,
       amount: paymentTotal,
       method: paymentMethod,
+      isSplit,
+      splitMethod,
+      splitAmounts,
       sessionIds: uniqueSessionIds,
       sessionsCount: uniqueSessionIds.length,
       note: data.note || '',
@@ -406,6 +423,9 @@ function recordPaymentForSessions(data = {}) {
     paymentRecord.date = paymentDate;
     paymentRecord.amount = paymentTotal;
     paymentRecord.method = paymentMethod;
+    paymentRecord.isSplit = isSplit;
+    paymentRecord.splitMethod = splitMethod;
+    paymentRecord.splitAmounts = splitAmounts;
     paymentRecord.sessionIds = uniqueSessionIds;
     paymentRecord.sessionsCount = uniqueSessionIds.length;
     paymentRecord.note = data.note || '';
