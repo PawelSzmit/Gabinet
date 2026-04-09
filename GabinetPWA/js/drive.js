@@ -5,10 +5,6 @@ const GOOGLE_CLIENT_ID = '554823778989-760krqf91lrhq288s5l61oaa0fe2pekp.apps.goo
 const DRIVE_FILE_NAME  = 'gabinet-data.json';
 const SCOPES           = 'https://www.googleapis.com/auth/drive.appdata';
 
-const LS_TOKEN_KEY   = 'gabinet_access_token';
-const LS_EXPIRY_KEY  = 'gabinet_token_expiry';
-const LS_FILEID_KEY  = 'gabinet_drive_file_id';
-
 // ─── Utility: simple debounce ─────────────────────────────────────────────────
 function debounce(fn, delay) {
   let timer = null;
@@ -34,6 +30,8 @@ const DriveService = {
       return;
     }
 
+    this._clearLegacySessionCache();
+
     this._tokenClient = google.accounts.oauth2.initTokenClient({
       client_id: GOOGLE_CLIENT_ID,
       scope: SCOPES,
@@ -45,28 +43,19 @@ const DriveService = {
           return;
         }
 
-        const expiresAt = Date.now() + (response.expires_in - 60) * 1000;
         this.accessToken = response.access_token;
-
-        localStorage.setItem(LS_TOKEN_KEY,  response.access_token);
-        localStorage.setItem(LS_EXPIRY_KEY, String(expiresAt));
 
         if (this._tokenResolve) {
           this._tokenResolve(response.access_token);
         }
       },
     });
-
-    // Restore cached file-id so we skip the search step on reload.
-    const cachedFileId = localStorage.getItem(LS_FILEID_KEY);
-    if (cachedFileId) {
-      this.fileId = cachedFileId;
-    }
   },
 
   // ── requestToken ──────────────────────────────────────────────────────────
-  // Shows the Google consent popup (or reuses a cached token silently).
-  requestToken() {
+  // Shows the Google consent popup after a user click or tries a quiet refresh.
+  requestToken(options = {}) {
+    const interactive = options.interactive !== false;
     return new Promise((resolve, reject) => {
       if (!this._tokenClient) {
         reject(new Error('DriveService.init() has not been called.'));
@@ -81,32 +70,13 @@ const DriveService = {
 
       this._tokenResolve = resolve;
       this._tokenReject  = reject;
-      this._tokenClient.requestAccessToken({ prompt: '' });
+      this._tokenClient.requestAccessToken({ prompt: interactive ? '' : 'none' });
     });
   },
 
   // ── isSignedIn ────────────────────────────────────────────────────────────
   isSignedIn() {
-    if (this.accessToken) return true;
-    const token  = localStorage.getItem(LS_TOKEN_KEY);
-    const expiry = parseInt(localStorage.getItem(LS_EXPIRY_KEY) || '0', 10);
-    return !!(token && Date.now() < expiry);
-  },
-
-  // ── loadStoredToken ───────────────────────────────────────────────────────
-  // Restores a previously saved token into memory on page reload.
-  loadStoredToken() {
-    const token  = localStorage.getItem(LS_TOKEN_KEY);
-    const expiry = parseInt(localStorage.getItem(LS_EXPIRY_KEY) || '0', 10);
-    if (token && Date.now() < expiry) {
-      this.accessToken = token;
-      return true;
-    }
-    // Token expired – clear stale entries.
-    localStorage.removeItem(LS_TOKEN_KEY);
-    localStorage.removeItem(LS_EXPIRY_KEY);
-    this.accessToken = null;
-    return false;
+    return !!this.accessToken;
   },
 
   // ── signOut ───────────────────────────────────────────────────────────────
@@ -116,9 +86,7 @@ const DriveService = {
     }
     this.accessToken = null;
     this.fileId      = null;
-    localStorage.removeItem(LS_TOKEN_KEY);
-    localStorage.removeItem(LS_EXPIRY_KEY);
-    localStorage.removeItem(LS_FILEID_KEY);
+    this._clearLegacySessionCache();
   },
 
   // ── findOrCreateFile ──────────────────────────────────────────────────────
@@ -138,15 +106,13 @@ const DriveService = {
 
     if (json.files && json.files.length > 0) {
       this.fileId = json.files[0].id;
-      localStorage.setItem(LS_FILEID_KEY, this.fileId);
       return this.fileId;
     }
 
     // File not found – create it with a fresh empty state.
-    const emptyContent = serializeAppData ? serializeAppData() : JSON.stringify({});
+    const emptyContent = serializeAppData ? await serializeAppData() : JSON.stringify({});
     const id = await this.createFile(emptyContent);
     this.fileId = id;
-    localStorage.setItem(LS_FILEID_KEY, id);
     return id;
   },
 
@@ -167,6 +133,13 @@ const DriveService = {
         if (typeof deserializeAppData === 'function') {
           deserializeAppData(text);
         }
+        if (typeof LocalStore !== 'undefined' && typeof LocalStore.storeSerializedSnapshot === 'function') {
+          await LocalStore.storeSerializedSnapshot(text, {
+            hasPendingSync: false,
+            lastDriveSyncAt: new Date().toISOString(),
+            source: 'drive-load',
+          });
+        }
       }
     } catch (err) {
       console.error('[Drive] loadData error:', err);
@@ -181,19 +154,33 @@ const DriveService = {
     if (!this.isSignedIn()) return;
 
     try {
-      const content = typeof serializeAppData === 'function'
-        ? serializeAppData()
-        : JSON.stringify({});
+      // Uzyj ostatnio zserializowanych danych z LocalStore (max 3s stare)
+      // zamiast serializowac i szyfrowac ponownie.
+      const cachedContent = (typeof LocalStore !== 'undefined' && typeof LocalStore.getRecentSerialized === 'function')
+        ? LocalStore.getRecentSerialized(3000)
+        : null;
+      const content = cachedContent || (typeof serializeAppData === 'function'
+        ? await serializeAppData()
+        : JSON.stringify({}));
 
       const fileId = await this.findOrCreateFile();
       await this.updateFile(fileId, content);
+      if (typeof LocalStore !== 'undefined' && typeof LocalStore.storeSerializedSnapshot === 'function') {
+        const currentState = typeof LocalStore.getState === 'function' ? LocalStore.getState() : {};
+        await LocalStore.storeSerializedSnapshot(content, {
+          hasPendingSync: false,
+          lastLocalWriteAt: currentState.lastLocalWriteAt || new Date().toISOString(),
+          lastDriveSyncAt: new Date().toISOString(),
+          source: 'drive-sync',
+        });
+      }
     } catch (err) {
       if (err.message === 'OFFLINE') {
         console.warn('[Drive] Offline – save deferred.');
         return;
       }
       console.error('[Drive] saveData error:', err);
-      DriveService._showError('Nie udało się zapisać danych na Drive.');
+      DriveService._showError(err && err.message ? err.message : 'Nie udało się zapisać danych na Drive.');
     }
   },
 
@@ -252,6 +239,10 @@ const DriveService = {
       throw new Error('OFFLINE');
     }
 
+    if (!this.accessToken) {
+      throw new Error('Sesja Google wygasła. Kliknij "Połącz z Google" ponownie.');
+    }
+
     const buildHeaders = (extraHeaders = {}) => ({
       Authorization: `Bearer ${this.accessToken}`,
       ...extraHeaders,
@@ -268,11 +259,13 @@ const DriveService = {
     // Token expired mid-session – refresh once and retry.
     if (resp.status === 401) {
       try {
-        await this.requestToken();
+        this.accessToken = null;
+        await this.requestToken({ interactive: false });
         mergedOptions.headers = buildHeaders(options.headers || {});
         resp = await fetch(url, mergedOptions);
       } catch (refreshErr) {
-        throw new Error('Token refresh failed – please sign in again.');
+        this.accessToken = null;
+        throw new Error('Sesja Google wygasła. Kliknij "Połącz z Google" ponownie.');
       }
     }
 
@@ -305,6 +298,16 @@ const DriveService = {
     clearTimeout(this._errorTimer);
     this._errorTimer = setTimeout(() => { el.hidden = true; }, 4000);
   },
+
+  _clearLegacySessionCache() {
+    ['gabinet_access_token', 'gabinet_token_expiry', 'gabinet_drive_file_id', 'gabinet_user_info'].forEach((key) => {
+      try {
+        localStorage.removeItem(key);
+      } catch (err) {
+        console.warn('[Drive] Could not clear legacy session cache:', err);
+      }
+    });
+  },
 };
 
 // Assign after object literal so the debounce closure can reference DriveService.
@@ -314,7 +317,14 @@ DriveService.debouncedSave = debounce(function () {
 
 // ─── Public helper called after any data mutation ─────────────────────────────
 function persistData() {
+  if (typeof LocalStore !== 'undefined' && typeof LocalStore.scheduleSnapshot === 'function') {
+    LocalStore.scheduleSnapshot({
+      hasPendingSync: true,
+      source: 'local-change',
+    });
+  }
   DriveService.debouncedSave();
+  if (typeof TabGuard !== 'undefined') TabGuard.notifyDataSaved();
 }
 
 // ─── Offline / online banners ─────────────────────────────────────────────────
@@ -325,9 +335,15 @@ window.addEventListener('online',  () => {
   if (DriveService.isSignedIn()) {
     DriveService.saveData();
   }
+  if (typeof App !== 'undefined' && typeof App.refreshSyncStatusUi === 'function') {
+    App.refreshSyncStatusUi();
+  }
 });
 
 window.addEventListener('offline', () => {
   document.getElementById('offline-banner') &&
     (document.getElementById('offline-banner').hidden = false);
+  if (typeof App !== 'undefined' && typeof App.refreshSyncStatusUi === 'function') {
+    App.refreshSyncStatusUi();
+  }
 });

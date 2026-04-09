@@ -45,12 +45,16 @@ function sessionDayLabels(patient) {
     .join(', ');
 }
 
-function escHtml(str) {
-  return String(str || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+// Alias do globalnego escapeHtml z utils.js
+function escHtml(str) { return escapeHtml(str); }
+
+function clinicalDataUnlocked() {
+  return typeof SecurityService !== 'undefined' && SecurityService.canReadClinicalData();
+}
+
+function clinicalActionLabel() {
+  if (typeof SecurityService === 'undefined') return 'Ustaw hasło';
+  return SecurityService.needsPasswordSetup() ? 'Ustaw hasło' : 'Odblokuj notatki';
 }
 
 // =============================================================================
@@ -191,6 +195,14 @@ const PatientViews = {
   renderPatientList() {
     let patients = AppState.activePatients.slice();
 
+    // Pre-compute debt cache to avoid O(n*sessions) per patient per sort comparison.
+    const debtCache = new Map();
+    const getCachedDebt = (id) => {
+      if (!debtCache.has(id)) debtCache.set(id, getPatientDebt(id));
+      return debtCache.get(id);
+    };
+    this._debtCache = getCachedDebt; // share with renderPatientRow
+
     // Filter by search
     const q = this.searchQuery.trim().toLowerCase();
     if (q) {
@@ -202,7 +214,7 @@ const PatientViews = {
 
     // Filter by debt
     if (this.showDebtOnly) {
-      patients = patients.filter(p => getPatientDebt(p.id).total > 0);
+      patients = patients.filter(p => getCachedDebt(p.id).total > 0);
     }
 
     // Sort
@@ -221,8 +233,8 @@ const PatientViews = {
           return db - da;
         }
         case 'debt': {
-          const da = getPatientDebt(a.id).total;
-          const db = getPatientDebt(b.id).total;
+          const da = getCachedDebt(a.id).total;
+          const db = getCachedDebt(b.id).total;
           return db - da;
         }
         default:
@@ -248,7 +260,7 @@ const PatientViews = {
     const legalName        = ((patient.firstName || '') + ' ' + (patient.lastName || '')).trim();
     const days             = sessionDayLabels(patient);
     const duration         = getPatientTherapyDuration(patient);
-    const debt             = getPatientDebt(patient.id);
+    const debt             = this._debtCache ? this._debtCache(patient.id) : getPatientDebt(patient.id);
     const completedCount   = getCompletedSessionsCount(patient.id);
     const debtBadge        = debt.total > 0
       ? '<span class="pv-row-debt">' + escHtml(formatPLN(debt.total)) + '</span>'
@@ -312,6 +324,7 @@ const PatientViews = {
     const goalsCount     = (patient.therapeuticGoals || []).length;
     const progressCount  = (patient.progressEntries || []).length;
     const debtAmount     = debt.total > 0 ? formatPLN(debt.total) : 'Brak zaległości';
+    const clinicalUnlocked = clinicalDataUnlocked();
 
     const privacyBadge = patient.pseudonym
       ? '<span class="pv-debt-badge pv-debt-badge--soft">Pseudonim na pierwszym planie</span>'
@@ -400,18 +413,29 @@ const PatientViews = {
           '<section class="pv-section pv-section--workspace" id="pv-clinical">' +
             '<h2 class="pv-section-title">Kliniczne</h2>' +
             '<div class="pv-workspace-grid">' +
-              '<article class="pv-panel-card">' +
-                '<h3>Cele terapeutyczne ' +
-                  '<button class="pv-section-add-btn" id="pv-add-goal" data-id="' + escHtml(patientId) + '">+ Dodaj</button>' +
-                '</h3>' +
-                this._renderGoalsSection(patient) +
-              '</article>' +
-              '<article class="pv-panel-card pv-panel-card--wide">' +
-                '<h3>Notatki i obserwacje ' +
-                  '<button class="pv-section-add-btn" id="pv-add-note" data-id="' + escHtml(patientId) + '">+ Dodaj</button>' +
-                '</h3>' +
-                this._renderNotesSection(patient) +
-              '</article>' +
+              (clinicalUnlocked
+                ? (
+                  '<article class="pv-panel-card">' +
+                    '<h3>Cele terapeutyczne ' +
+                      '<button class="pv-section-add-btn" id="pv-add-goal" data-id="' + escHtml(patientId) + '">+ Dodaj</button>' +
+                    '</h3>' +
+                    this._renderGoalsSection(patient) +
+                  '</article>' +
+                  '<article class="pv-panel-card pv-panel-card--wide">' +
+                    '<h3>Notatki i obserwacje ' +
+                      '<button class="pv-section-add-btn" id="pv-add-note" data-id="' + escHtml(patientId) + '">+ Dodaj</button>' +
+                    '</h3>' +
+                    this._renderNotesSection(patient) +
+                  '</article>'
+                )
+                : (
+                  '<article class="pv-panel-card pv-panel-card--wide">' +
+                    this._renderClinicalLockCard(
+                      'Dane kliniczne są zablokowane',
+                      'Aby zobaczyć notatki, cele i obserwacje, podaj hasło do danych klinicznych.'
+                    ) +
+                  '</article>'
+                )) +
             '</div>' +
           '</section>' +
 
@@ -420,7 +444,12 @@ const PatientViews = {
             '<div class="pv-workspace-grid">' +
               '<article class="pv-panel-card">' +
                 '<h3>Oś postępów</h3>' +
-                this._renderProgressSection(patient) +
+                (clinicalUnlocked
+                  ? this._renderProgressSection(patient)
+                  : this._renderClinicalLockCard(
+                      'Historia postępów jest zablokowana',
+                      'Wpisy kliniczne wrócą po odblokowaniu danych klinicznych.'
+                    )) +
               '</article>' +
               '<article class="pv-panel-card">' +
                 '<h3>Cykle terapii</h3>' +
@@ -567,6 +596,17 @@ const PatientViews = {
       '</div>'
     )).join('');
     return '<div class="pv-sessions-list">' + rows + '</div>';
+  },
+
+  _renderClinicalLockCard(title, description) {
+    return (
+      '<div class="pv-clinical-guard">' +
+        '<div class="pv-clinical-guard__icon">🔒</div>' +
+        '<h4 class="pv-clinical-guard__title">' + escHtml(title) + '</h4>' +
+        '<p class="pv-clinical-guard__text">' + escHtml(description) + '</p>' +
+        '<button class="pv-btn pv-btn-add" id="pv-clinical-unlock-btn">' + escHtml(clinicalActionLabel()) + '</button>' +
+      '</div>'
+    );
   },
 
   // ── PATIENT FORM ─────────────────────────────────────────────────────────
@@ -1012,10 +1052,23 @@ const PatientViews = {
       deleteBtn.addEventListener('click', () => this.deletePatient(patientId));
     }
 
+    const clinicalUnlockBtn = document.getElementById('pv-clinical-unlock-btn');
+    if (clinicalUnlockBtn) {
+      clinicalUnlockBtn.addEventListener('click', async () => {
+        if (typeof SecurityService === 'undefined') return;
+        const ok = await SecurityService.requestClinicalAccess();
+        if (ok) this._renderDetailPage(patientId);
+      });
+    }
+
     // Add goal
     const addGoal = document.getElementById('pv-add-goal');
     if (addGoal) {
-      addGoal.addEventListener('click', () => {
+      addGoal.addEventListener('click', async () => {
+        if (typeof SecurityService !== 'undefined') {
+          const ok = await SecurityService.requestClinicalAccess();
+          if (!ok) return;
+        }
         const modal = document.getElementById('pv-modal-goal');
         if (!modal) return;
         modal.dataset.patientid = patientId;
@@ -1030,7 +1083,11 @@ const PatientViews = {
     // Add note
     const addNote = document.getElementById('pv-add-note');
     if (addNote) {
-      addNote.addEventListener('click', () => {
+      addNote.addEventListener('click', async () => {
+        if (typeof SecurityService !== 'undefined') {
+          const ok = await SecurityService.requestClinicalAccess();
+          if (!ok) return;
+        }
         const modal = document.getElementById('pv-modal-note');
         if (!modal) return;
         modal.dataset.patientid = patientId;
@@ -1066,7 +1123,11 @@ const PatientViews = {
     const goalSave   = document.getElementById('pv-goal-save');
     const goalCancel = document.getElementById('pv-goal-cancel');
     if (goalSave) {
-      goalSave.addEventListener('click', () => {
+      goalSave.addEventListener('click', async () => {
+        if (typeof SecurityService !== 'undefined') {
+          const ok = await SecurityService.requestClinicalAccess();
+          if (!ok) return;
+        }
         const modal    = document.getElementById('pv-modal-goal');
         const pid      = (modal && modal.dataset.patientid) || patientId;
         const titleEl  = document.getElementById('goal-title');
@@ -1097,7 +1158,11 @@ const PatientViews = {
     const noteSave   = document.getElementById('pv-note-save');
     const noteCancel = document.getElementById('pv-note-cancel');
     if (noteSave) {
-      noteSave.addEventListener('click', () => {
+      noteSave.addEventListener('click', async () => {
+        if (typeof SecurityService !== 'undefined') {
+          const ok = await SecurityService.requestClinicalAccess();
+          if (!ok) return;
+        }
         const modal     = document.getElementById('pv-modal-note');
         const pid       = (modal && modal.dataset.patientid) || patientId;
         const contentEl = document.getElementById('note-content');
@@ -1559,6 +1624,10 @@ const PatientViews = {
       '.pv-note-date{font-size:.78rem;color:var(--text-secondary,rgba(36,49,38,.68));flex:1}',
       '.pv-note-preview{margin:0;color:var(--text-secondary,rgba(36,49,38,.68));font-size:.86rem;line-height:1.6;flex:1;word-break:break-word}',
       '.pv-note-preview strong{color:var(--text,#243126)}',
+      '.pv-clinical-guard{padding:1.25rem;border:1px dashed rgba(73,102,79,.24);border-radius:20px;background:rgba(73,102,79,.04);display:flex;flex-direction:column;align-items:flex-start;gap:.75rem}',
+      '.pv-clinical-guard__icon{font-size:1.35rem}',
+      '.pv-clinical-guard__title{margin:0;font-size:1rem;color:var(--text,#243126)}',
+      '.pv-clinical-guard__text{margin:0;color:var(--text-secondary,rgba(36,49,38,.68));font-size:.9rem;line-height:1.6}',
       '.pv-row-delete-btn{background:none;border:none;cursor:pointer;color:var(--text-tertiary,rgba(36,49,38,.44));font-size:.85rem;padding:.2rem .35rem;border-radius:999px;flex-shrink:0}',
       '.pv-row-delete-btn:hover{background:var(--red-light,#f4ddd8);color:var(--red,#bf6152)}',
       '.pv-sess-status{font-size:.74rem;font-weight:800;padding:.2rem .48rem;border-radius:999px}',
