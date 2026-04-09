@@ -259,12 +259,6 @@ erDiagram
 - Bump `CACHE_NAME` w `sw.js` wymagany przy każdym commicie zmieniającym JS
 - Istniejące dane nie wymagają migracji — `isSplit` defaultuje do `false`, brak destructive change
 
-## Do poprawy po review 2026-04-09
-
-- [ ] Pokazać split payment czytelnie już na liście płatności, a nie tylko w szczegółach
-- [ ] Rozszerzyć filtr metody płatności tak, żeby uwzględniał także `splitMethod`
-- [ ] Poprawić agregację `revenueByMethod()`, żeby suma słupków zawsze zgadzała się z sumą split payment także po zaokrągleniach
-
 ## Źródła i referencje
 
 - Powiązany kod: `js/data.js` (createPayment, reconcilePaymentStatus), `js/views/finance.js` (renderPaymentSheet, savePayment, revenueByMethod), `js/views/calendar.js` (_paymentMethodName)

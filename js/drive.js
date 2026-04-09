@@ -3,7 +3,11 @@
 // ─── Constants ────────────────────────────────────────────────────────────────
 const GOOGLE_CLIENT_ID = '554823778989-760krqf91lrhq288s5l61oaa0fe2pekp.apps.googleusercontent.com';
 const DRIVE_FILE_NAME  = 'gabinet-data.json';
-const SCOPES           = 'https://www.googleapis.com/auth/drive.appdata';
+const SCOPES           = 'https://www.googleapis.com/auth/drive.file';
+
+const LS_TOKEN_KEY   = 'gabinet_access_token';
+const LS_EXPIRY_KEY  = 'gabinet_token_expiry';
+const LS_FILEID_KEY  = 'gabinet_drive_file_id_v2';
 
 // ─── Utility: simple debounce ─────────────────────────────────────────────────
 function debounce(fn, delay) {
@@ -30,8 +34,6 @@ const DriveService = {
       return;
     }
 
-    this._clearLegacySessionCache();
-
     this._tokenClient = google.accounts.oauth2.initTokenClient({
       client_id: GOOGLE_CLIENT_ID,
       scope: SCOPES,
@@ -43,19 +45,43 @@ const DriveService = {
           return;
         }
 
+        const expiresAt = Date.now() + (response.expires_in - 60) * 1000;
         this.accessToken = response.access_token;
+
+        localStorage.setItem(LS_TOKEN_KEY,  response.access_token);
+        localStorage.setItem(LS_EXPIRY_KEY, String(expiresAt));
+
+        // Fetch user profile (name + email) and cache it
+        fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: 'Bearer ' + response.access_token }
+        })
+          .then(r => r.json())
+          .then(info => {
+            if (info && (info.name || info.email)) {
+              localStorage.setItem('gabinet_user_info', JSON.stringify({
+                name:  info.name  || '',
+                email: info.email || '',
+              }));
+            }
+          })
+          .catch(() => {});
 
         if (this._tokenResolve) {
           this._tokenResolve(response.access_token);
         }
       },
     });
+
+    // Restore cached file-id so we skip the search step on reload.
+    const cachedFileId = localStorage.getItem(LS_FILEID_KEY);
+    if (cachedFileId) {
+      this.fileId = cachedFileId;
+    }
   },
 
   // ── requestToken ──────────────────────────────────────────────────────────
-  // Shows the Google consent popup after a user click or tries a quiet refresh.
-  requestToken(options = {}) {
-    const interactive = options.interactive !== false;
+  // Shows the Google consent popup (or reuses a cached token silently).
+  requestToken() {
     return new Promise((resolve, reject) => {
       if (!this._tokenClient) {
         reject(new Error('DriveService.init() has not been called.'));
@@ -70,13 +96,32 @@ const DriveService = {
 
       this._tokenResolve = resolve;
       this._tokenReject  = reject;
-      this._tokenClient.requestAccessToken({ prompt: interactive ? '' : 'none' });
+      this._tokenClient.requestAccessToken({ prompt: '' });
     });
   },
 
   // ── isSignedIn ────────────────────────────────────────────────────────────
   isSignedIn() {
-    return !!this.accessToken;
+    if (this.accessToken) return true;
+    const token  = localStorage.getItem(LS_TOKEN_KEY);
+    const expiry = parseInt(localStorage.getItem(LS_EXPIRY_KEY) || '0', 10);
+    return !!(token && Date.now() < expiry);
+  },
+
+  // ── loadStoredToken ───────────────────────────────────────────────────────
+  // Restores a previously saved token into memory on page reload.
+  loadStoredToken() {
+    const token  = localStorage.getItem(LS_TOKEN_KEY);
+    const expiry = parseInt(localStorage.getItem(LS_EXPIRY_KEY) || '0', 10);
+    if (token && Date.now() < expiry) {
+      this.accessToken = token;
+      return true;
+    }
+    // Token expired – clear stale entries.
+    localStorage.removeItem(LS_TOKEN_KEY);
+    localStorage.removeItem(LS_EXPIRY_KEY);
+    this.accessToken = null;
+    return false;
   },
 
   // ── signOut ───────────────────────────────────────────────────────────────
@@ -86,11 +131,13 @@ const DriveService = {
     }
     this.accessToken = null;
     this.fileId      = null;
-    this._clearLegacySessionCache();
+    localStorage.removeItem(LS_TOKEN_KEY);
+    localStorage.removeItem(LS_EXPIRY_KEY);
+    localStorage.removeItem(LS_FILEID_KEY);
   },
 
   // ── findOrCreateFile ──────────────────────────────────────────────────────
-  // Returns the Drive file-id of gabinet-data.json in appDataFolder.
+  // Returns the Drive file-id of gabinet-data.json on the user's Drive.
   // Creates the file with an empty data structure if it does not exist yet.
   async findOrCreateFile() {
     if (this.fileId) return this.fileId;
@@ -99,20 +146,22 @@ const DriveService = {
       `name = '${DRIVE_FILE_NAME}' and trashed = false`
     );
     const url   = `https://www.googleapis.com/drive/v3/files` +
-                  `?spaces=appDataFolder&q=${query}&fields=files(id,name)`;
+                  `?q=${query}&fields=files(id,name)`;
 
     const resp = await this.apiFetch(url);
     const json = await resp.json();
 
     if (json.files && json.files.length > 0) {
       this.fileId = json.files[0].id;
+      localStorage.setItem(LS_FILEID_KEY, this.fileId);
       return this.fileId;
     }
 
     // File not found – create it with a fresh empty state.
-    const emptyContent = serializeAppData ? await serializeAppData() : JSON.stringify({});
+    const emptyContent = serializeAppData ? serializeAppData() : JSON.stringify({});
     const id = await this.createFile(emptyContent);
     this.fileId = id;
+    localStorage.setItem(LS_FILEID_KEY, id);
     return id;
   },
 
@@ -133,13 +182,6 @@ const DriveService = {
         if (typeof deserializeAppData === 'function') {
           deserializeAppData(text);
         }
-        if (typeof LocalStore !== 'undefined' && typeof LocalStore.storeSerializedSnapshot === 'function') {
-          await LocalStore.storeSerializedSnapshot(text, {
-            hasPendingSync: false,
-            lastDriveSyncAt: new Date().toISOString(),
-            source: 'drive-load',
-          });
-        }
       }
     } catch (err) {
       console.error('[Drive] loadData error:', err);
@@ -154,33 +196,19 @@ const DriveService = {
     if (!this.isSignedIn()) return;
 
     try {
-      // Uzyj ostatnio zserializowanych danych z LocalStore (max 3s stare)
-      // zamiast serializowac i szyfrowac ponownie.
-      const cachedContent = (typeof LocalStore !== 'undefined' && typeof LocalStore.getRecentSerialized === 'function')
-        ? LocalStore.getRecentSerialized(3000)
-        : null;
-      const content = cachedContent || (typeof serializeAppData === 'function'
-        ? await serializeAppData()
-        : JSON.stringify({}));
+      const content = typeof serializeAppData === 'function'
+        ? serializeAppData()
+        : JSON.stringify({});
 
       const fileId = await this.findOrCreateFile();
       await this.updateFile(fileId, content);
-      if (typeof LocalStore !== 'undefined' && typeof LocalStore.storeSerializedSnapshot === 'function') {
-        const currentState = typeof LocalStore.getState === 'function' ? LocalStore.getState() : {};
-        await LocalStore.storeSerializedSnapshot(content, {
-          hasPendingSync: false,
-          lastLocalWriteAt: currentState.lastLocalWriteAt || new Date().toISOString(),
-          lastDriveSyncAt: new Date().toISOString(),
-          source: 'drive-sync',
-        });
-      }
     } catch (err) {
       if (err.message === 'OFFLINE') {
         console.warn('[Drive] Offline – save deferred.');
         return;
       }
       console.error('[Drive] saveData error:', err);
-      DriveService._showError(err && err.message ? err.message : 'Nie udało się zapisać danych na Drive.');
+      DriveService._showError('Nie udało się zapisać danych na Drive.');
     }
   },
 
@@ -188,7 +216,6 @@ const DriveService = {
   async createFile(content) {
     const metadata = {
       name:    DRIVE_FILE_NAME,
-      parents: ['appDataFolder'],
     };
 
     const form = new FormData();
@@ -239,10 +266,6 @@ const DriveService = {
       throw new Error('OFFLINE');
     }
 
-    if (!this.accessToken) {
-      throw new Error('Sesja Google wygasła. Kliknij "Połącz z Google" ponownie.');
-    }
-
     const buildHeaders = (extraHeaders = {}) => ({
       Authorization: `Bearer ${this.accessToken}`,
       ...extraHeaders,
@@ -259,13 +282,11 @@ const DriveService = {
     // Token expired mid-session – refresh once and retry.
     if (resp.status === 401) {
       try {
-        this.accessToken = null;
-        await this.requestToken({ interactive: false });
+        await this.requestToken();
         mergedOptions.headers = buildHeaders(options.headers || {});
         resp = await fetch(url, mergedOptions);
       } catch (refreshErr) {
-        this.accessToken = null;
-        throw new Error('Sesja Google wygasła. Kliknij "Połącz z Google" ponownie.');
+        throw new Error('Token refresh failed – please sign in again.');
       }
     }
 
@@ -298,16 +319,6 @@ const DriveService = {
     clearTimeout(this._errorTimer);
     this._errorTimer = setTimeout(() => { el.hidden = true; }, 4000);
   },
-
-  _clearLegacySessionCache() {
-    ['gabinet_access_token', 'gabinet_token_expiry', 'gabinet_drive_file_id', 'gabinet_user_info'].forEach((key) => {
-      try {
-        localStorage.removeItem(key);
-      } catch (err) {
-        console.warn('[Drive] Could not clear legacy session cache:', err);
-      }
-    });
-  },
 };
 
 // Assign after object literal so the debounce closure can reference DriveService.
@@ -317,15 +328,179 @@ DriveService.debouncedSave = debounce(function () {
 
 // ─── Public helper called after any data mutation ─────────────────────────────
 function persistData() {
-  if (typeof LocalStore !== 'undefined' && typeof LocalStore.scheduleSnapshot === 'function') {
-    LocalStore.scheduleSnapshot({
-      hasPendingSync: true,
-      source: 'local-change',
-    });
-  }
   DriveService.debouncedSave();
-  if (typeof TabGuard !== 'undefined') TabGuard.notifyDataSaved();
 }
+
+// ─── Data Recovery from Drive Version History ────────────────────────────────
+const DataRecovery = {
+
+  /**
+   * Lists all available revisions of gabinet-data.json on Google Drive.
+   * @returns {Promise<Array<{id: string, modifiedTime: string}>>}
+   */
+  async listRevisions() {
+    const fileId = DriveService.fileId || localStorage.getItem(LS_FILEID_KEY);
+    if (!fileId) throw new Error('Brak pliku na Drive — zaloguj się najpierw.');
+
+    const url = `https://www.googleapis.com/drive/v3/files/${fileId}/revisions?fields=revisions(id,modifiedTime,size)`;
+    const resp = await DriveService.apiFetch(url);
+    if (!resp.ok) {
+      const body = await resp.text();
+      throw new Error('Nie udało się pobrać historii wersji: ' + resp.status + ' ' + body);
+    }
+    const json = await resp.json();
+    return (json.revisions || []).sort((a, b) => new Date(a.modifiedTime) - new Date(b.modifiedTime));
+  },
+
+  /**
+   * Downloads a specific revision's content.
+   * @param {string} revisionId
+   * @returns {Promise<string>} — raw JSON text
+   */
+  async downloadRevision(revisionId) {
+    const fileId = DriveService.fileId || localStorage.getItem(LS_FILEID_KEY);
+    const url = `https://www.googleapis.com/drive/v3/files/${fileId}/revisions/${revisionId}?alt=media`;
+    const resp = await DriveService.apiFetch(url);
+    if (!resp.ok) throw new Error('Nie udało się pobrać rewizji: ' + resp.status);
+    return await resp.text();
+  },
+
+  /**
+   * Attempts to recover session times and patient schedule data by scanning
+   * ALL available revisions on Google Drive. Collects the best data from
+   * every revision (the one with the most recoverable fields wins per-item).
+   *
+   * @param {function} onProgress — callback(message) for UI updates
+   * @returns {Promise<{sessionsFixed: number, patientsFixed: number}>}
+   */
+  async recoverFromHistory(onProgress) {
+    const log = onProgress || console.log;
+
+    log('Pobieranie listy wersji z Google Drive...');
+    const revisions = await this.listRevisions();
+
+    if (revisions.length < 2) {
+      throw new Error('Brak starszych wersji pliku na Drive. Odzyskanie danych nie jest możliwe.');
+    }
+
+    log(`Znaleziono ${revisions.length} wersji. Przeglądam WSZYSTKIE od najnowszej...`);
+
+    // Collect session times and patient schedules from ALL revisions.
+    // Key: session/patient id → value from the revision with the most data.
+    // We use maps so that later (more complete) revisions overwrite earlier ones.
+    const collectedSessionTimes = {};   // sessionId → { time: "HH:MM" }
+    const collectedPatientDays  = {};   // patientId → { sessionDays: [...], sessionTimes: {...} }
+    let revisionsWithData = 0;
+
+    // Scan from newest to oldest — newest pre-corruption revision has most data
+    const reversedRevisions = revisions.slice().reverse();
+
+    for (const rev of reversedRevisions) {
+      try {
+        const dateStr = new Date(rev.modifiedTime).toLocaleString('pl-PL');
+        log(`Sprawdzam wersję z ${dateStr}...`);
+        const text = await this.downloadRevision(rev.id);
+        let parsed;
+        try { parsed = JSON.parse(text); } catch (e) { continue; }
+
+        let foundInThisRev = 0;
+
+        // Collect session times
+        for (const s of (parsed.sessions || [])) {
+          if (s.id && s.time && typeof s.time === 'string') {
+            if (!collectedSessionTimes[s.id]) {
+              collectedSessionTimes[s.id] = s.time;
+              foundInThisRev++;
+            }
+          }
+        }
+
+        // Collect patient schedule data
+        for (const p of (parsed.patients || [])) {
+          if (p.id && Array.isArray(p.sessionDays) && p.sessionDays.length > 0) {
+            if (!collectedPatientDays[p.id]) {
+              collectedPatientDays[p.id] = {
+                sessionDays: p.sessionDays,
+                sessionTimes: p.sessionTimes || {},
+              };
+              foundInThisRev++;
+            }
+          }
+        }
+
+        if (foundInThisRev > 0) {
+          revisionsWithData++;
+          log(`  → Znaleziono ${foundInThisRev} nowych pól w tej wersji`);
+        }
+      } catch (e) {
+        log(`⚠️ Nie udało się odczytać wersji: ${e.message}`);
+      }
+    }
+
+    const totalSessionTimes = Object.keys(collectedSessionTimes).length;
+    const totalPatientDays = Object.keys(collectedPatientDays).length;
+
+    log(`\nPodsumowanie: znaleziono ${totalSessionTimes} czasów sesji i ${totalPatientDays} harmonogramów pacjentów w ${revisionsWithData} wersjach.`);
+
+    if (totalSessionTimes === 0 && totalPatientDays === 0) {
+      throw new Error('Nie znaleziono żadnych oryginalnych danych (time/sessionDays) w historii wersji.');
+    }
+
+    // ── Merge session times ──
+    let sessionsFixed = 0;
+    for (const currentSession of AppState.sessions) {
+      const oldTime = collectedSessionTimes[currentSession.id];
+      if (!oldTime) continue;
+
+      const datePart = currentSession.date.substring(0, 10);
+      const newDate = new Date(datePart + 'T' + oldTime + ':00').toISOString();
+      if (newDate !== currentSession.date) {
+        currentSession.date = newDate;
+        sessionsFixed++;
+      }
+    }
+
+    log(`Naprawiono czasy ${sessionsFixed} sesji.`);
+
+    // ── Merge patient schedule data ──
+    let patientsFixed = 0;
+    const dayToISO = {
+      monday: 1, tuesday: 2, wednesday: 3, thursday: 4,
+      friday: 5, saturday: 6, sunday: 7,
+    };
+
+    for (const currentPatient of AppState.patients) {
+      const old = collectedPatientDays[currentPatient.id];
+      if (!old) continue;
+
+      // Only fix if current patient has empty sessionDayConfigs
+      if (Array.isArray(currentPatient.sessionDayConfigs) && currentPatient.sessionDayConfigs.length > 0) {
+        continue;
+      }
+
+      currentPatient.sessionDayConfigs = old.sessionDays
+        .filter(d => dayToISO[d] !== undefined)
+        .map(d => ({
+          weekday: dayToISO[d],
+          sessionTime: old.sessionTimes[d] || '10:00',
+        }));
+      patientsFixed++;
+    }
+
+    log(`Naprawiono harmonogramy ${patientsFixed} pacjentów.`);
+
+    // ── Save corrected data ──
+    if (sessionsFixed > 0 || patientsFixed > 0) {
+      log('Zapisywanie poprawionych danych na Drive...');
+      await DriveService.saveData();
+      log(`\n✅ Gotowe! Naprawiono ${sessionsFixed} sesji i ${patientsFixed} pacjentów.`);
+    } else {
+      log('⚠️ Nie znaleziono danych do naprawienia (ID sesji/pacjentów mogły się zmienić).');
+    }
+
+    return { sessionsFixed, patientsFixed };
+  },
+};
 
 // ─── Offline / online banners ─────────────────────────────────────────────────
 window.addEventListener('online',  () => {
@@ -335,15 +510,9 @@ window.addEventListener('online',  () => {
   if (DriveService.isSignedIn()) {
     DriveService.saveData();
   }
-  if (typeof App !== 'undefined' && typeof App.refreshSyncStatusUi === 'function') {
-    App.refreshSyncStatusUi();
-  }
 });
 
 window.addEventListener('offline', () => {
   document.getElementById('offline-banner') &&
     (document.getElementById('offline-banner').hidden = false);
-  if (typeof App !== 'undefined' && typeof App.refreshSyncStatusUi === 'function') {
-    App.refreshSyncStatusUi();
-  }
 });
