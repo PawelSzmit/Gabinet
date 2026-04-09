@@ -77,7 +77,7 @@
       </nav>
 
       <button id="btn-google-signin" class="auth-nav__cta" type="button">
-        Zaloguj się
+        Połącz z Google
       </button>
     </header>
 
@@ -87,14 +87,14 @@
           <p class="auth-kicker">Spokój pracy. Porządek dnia. Pełna dyskrecja.</p>
           <h1 class="auth-screen__title">Cyfrowy porządek dla gabinetu psychoterapeutycznego.</h1>
           <p class="auth-screen__subtitle">
-            Prowadź pacjentów, sesje, płatności i szyfrowane notatki w jednym spokojnym narzędziu.
+            Prowadź pacjentów, sesje, płatności i notatki kliniczne chronione osobnym hasłem w jednym spokojnym narzędziu.
             Bez własnego serwera, bez chaosu, z danymi po Twojej stronie.
           </p>
 
           <p id="auth-error" class="auth-screen__error hidden" hidden></p>
 
           <div class="auth-usp-strip">
-            <div class="auth-usp-pill">Szyfrowane notatki kliniczne</div>
+            <div class="auth-usp-pill">Haslo do danych klinicznych</div>
             <div class="auth-usp-pill">Dane na Twoim Google Drive</div>
             <div class="auth-usp-pill">Automatyczny kalendarz sesji</div>
           </div>
@@ -109,7 +109,7 @@
         <div class="auth-card-grid auth-card-grid--3">
           <article class="auth-feature-card">
             <h3>Prywatność w praktyce</h3>
-            <p>Szyfruje notatki kliniczne, eksponuje pseudonimy i przechowuje dane na Twoim Drive, a nie na obcej bazie.</p>
+            <p>Chroni notatki kliniczne osobnym haslem, eksponuje pseudonimy i przechowuje dane na Twoim Drive, a nie na obcej bazie.</p>
           </article>
           <article class="auth-feature-card">
             <h3>Automatyzacja terapii</h3>
@@ -157,8 +157,8 @@
             <p>Dlatego prywatność nie jest dodatkiem marketingowym, tylko osią całego doświadczenia.</p>
           </article>
           <article class="auth-privacy-card auth-privacy-card--lower-copy">
-            <h3>Szyfrowanie treści klinicznych</h3>
-            <p>Notatki z sesji, wpisy kliniczne i cele terapeutyczne są szyfrowane przed zapisem.</p>
+            <h3>Haslo i szyfrowanie tresci klinicznych</h3>
+            <p>Notatki z sesji, wpisy kliniczne i cele terapeutyczne sa chronione osobnym haslem i szyfrowane przed zapisem.</p>
           </article>
           <article class="auth-privacy-card auth-privacy-card--lower-copy">
             <h3>Pseudonimy zamiast nazwisk</h3>
@@ -218,8 +218,8 @@
             <p>Nie. Aplikacja działa po stronie klienta i synchronizuje dane przez Google Drive użytkownika.</p>
           </details>
           <details class="auth-faq-item">
-            <summary>Czy notatki kliniczne są chronione?</summary>
-            <p>Tak. Wrażliwe treści są szyfrowane przed zapisem, a interfejs dodatkowo opiera się na pseudonimizacji.</p>
+            <summary>Czy notatki kliniczne sa chronione?</summary>
+            <p>Tak. Wrazliwe tresci sa szyfrowane przed zapisem, a dostep do nich wymaga osobnego hasla.</p>
           </details>
           <details class="auth-faq-item">
             <summary>Czy mogę korzystać z aplikacji na telefonie?</summary>
@@ -232,7 +232,7 @@
         <div class="auth-closing-card">
           <p class="auth-section__eyebrow">Gotowe do wejścia</p>
           <h2>Produkt dla psychoterapeuty, który chce mniej chaosu i więcej spokoju w pracy.</h2>
-          <p>Zaloguj się kontem Google, aby wejść do aplikacji i zacząć pracę ze swoim gabinetem.</p>
+          <p>Kliknij „Połącz z Google”, aby zsynchronizować dane. Po odświeżeniu możesz wrócić do lokalnej kopii i połączyć konto wtedy, gdy chcesz zsynchronizować zmiany.</p>
         </div>
       </section>
 
@@ -385,11 +385,21 @@
     Brak połączenia z internetem – tryb offline
   </div>
 
+  <!-- Local sync banner -->
+  <div id="sync-status-banner" class="sync-status-banner hidden" hidden role="status">
+    <span id="sync-status-text"></span>
+    <button id="sync-status-action" type="button" class="sync-status-banner__action" hidden>
+      Połącz z Google
+    </button>
+  </div>
+
   <!-- ═══════════════════════════════════════════════
        APP SCRIPTS (loaded in dependency order)
   ════════════════════════════════════════════════ -->
   <script src="js/utils.js"></script>
   <script src="js/data.js"></script>
+  <script src="js/security.js"></script>
+  <script src="js/local-store.js"></script>
   <script src="js/drive.js"></script>
   <script src="js/views/calendar.js"></script>
   <script src="js/views/patients.js"></script>

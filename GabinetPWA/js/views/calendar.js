@@ -39,11 +39,7 @@ const CalendarViews = {
       return session.status === 'completed' || session.status === 'cancelled';
     });
     const unpaidTotal = unpaidSessions.reduce((sum, session) => {
-      const patient = getPatient(session.patientId);
-      const amount = session.paymentAmount !== null
-        ? session.paymentAmount
-        : (patient ? patient.sessionRate : 0);
-      return sum + amount;
+      return sum + getSessionAmount(session);
     }, 0);
     const upcoming = AppState.sessions
       .filter((session) => session.status === 'scheduled' && new Date(session.date) >= new Date())
@@ -243,7 +239,7 @@ const CalendarViews = {
           return '<div class="cal-week-event" style="background:' + color
             + '20;border-left:3px solid ' + color + '" data-session-id="' + s.id + '" role="button">'
             + '<span class="cal-week-event-time">' + formatTime(new Date(s.date)) + '</span>'
-            + '<span class="cal-week-event-name">' + name + '</span>'
+            + '<span class="cal-week-event-name">' + this._escapeHtml(name) + '</span>'
             + '</div>';
         }).join('');
         slots += '<div class="cal-week-slot" data-hour="' + hour
@@ -287,7 +283,7 @@ const CalendarViews = {
             + '<span class="cal-daily-event-time">' + formatTime(new Date(s.date)) + '</span>'
             + badge
           + '</div>'
-          + '<div class="cal-daily-event-name">' + name + '</div>'
+          + '<div class="cal-daily-event-name">' + this._escapeHtml(name) + '</div>'
           + (s.wasRescheduled ? '<div class="cal-daily-event-flag">Przełożona</div>' : '')
           + '</div>';
       }).join('');
@@ -323,10 +319,7 @@ const CalendarViews = {
     const totalUnpaid = sessions
       .filter(s => s.isPaymentRequired && !s.isPaid && s.status !== 'cancelled')
       .reduce((sum, s) => {
-        const patient = getPatient(s.patientId);
-        const amount  = s.paymentAmount !== null
-          ? s.paymentAmount : (patient ? patient.sessionRate : 0);
-        return sum + amount;
+        return sum + getSessionAmount(s);
       }, 0);
     const debtHtml = totalUnpaid > 0
       ? '<span class="cal-sessions-debt">Do zapłaty: ' + formatPLN(totalUnpaid) + '</span>' : '';
@@ -347,8 +340,7 @@ const CalendarViews = {
     const time    = formatTime(new Date(session.date));
     const color   = this._sessionColor(session);
     const badge   = this._statusBadge(session.status);
-    const rate    = patient ? patient.sessionRate : 0;
-    const amount  = session.paymentAmount !== null ? session.paymentAmount : rate;
+    const amount  = getSessionAmount(session, patient);
     const paidHtml = session.isPaid
       ? '<span class="cal-row-paid">Opłacona</span>'
       : (session.isPaymentRequired && session.status !== 'cancelled'
@@ -356,7 +348,8 @@ const CalendarViews = {
           : '');
     const reschedFlag = session.wasRescheduled
       ? '<span class="cal-row-flag" title="Przełożona">↩</span>' : '';
-    const noteFlag = session.sessionNotes && session.sessionNotes.trim()
+    const noteFlag = (typeof SecurityService !== 'undefined' && SecurityService.canReadClinicalData()) &&
+      session.sessionNotes && session.sessionNotes.trim()
       ? '<span class="cal-row-flag" title="Ma notatki">📝</span>' : '';
     const numLabel = session.sessionNumber
       ? '<span class="cal-row-num">#' + session.sessionNumber + '</span>' : '';
@@ -364,7 +357,7 @@ const CalendarViews = {
       + '" role="button" tabindex="0" style="border-left:3px solid ' + color + '">'
       + '<div class="cal-row-time">' + time + '</div>'
       + '<div class="cal-row-body">'
-        + '<div class="cal-row-name">' + name + ' ' + numLabel + ' ' + reschedFlag + ' ' + noteFlag + '</div>'
+        + '<div class="cal-row-name">' + this._escapeHtml(name) + ' ' + numLabel + ' ' + reschedFlag + ' ' + noteFlag + '</div>'
         + '<div class="cal-row-meta">' + badge + ' ' + paidHtml + '</div>'
       + '</div>'
       + '<div class="cal-row-chevron">›</div>'
@@ -408,7 +401,7 @@ const CalendarViews = {
     const patients       = AppState.activePatients;
     const patientOptions = patients.map(p =>
       '<option value="' + p.id + '">'
-        + (p.pseudonym || (p.firstName + ' ' + p.lastName))
+        + this._escapeHtml(p.pseudonym || (p.firstName + ' ' + p.lastName))
         + '</option>'
     ).join('');
     const defaultDate = this._dateKey(this.selectedDate);
@@ -568,11 +561,11 @@ const CalendarViews = {
     const patient = getPatient(session.patientId);
     if (!patient) return;
     this._removeExistingModal('modal-session-detail');
-    const name    = patient.firstName + ' ' + patient.lastName;
-    const pseudo  = patient.pseudonym || '—';
+    const name    = this._escapeHtml(patient.firstName + ' ' + patient.lastName);
+    const pseudo  = this._escapeHtml(patient.pseudonym || '—');
     const dateStr = formatDateTimeWithWeekday(new Date(session.date));
     const badge   = this._statusBadge(session.status);
-    const amount  = session.paymentAmount !== null ? session.paymentAmount : patient.sessionRate;
+    const amount  = getSessionAmount(session, patient);
     const color   = this._sessionColor(session);
     const numLabel = session.sessionNumber ? 'Sesja #' + session.sessionNumber : '';
     const paymentSection = session.isPaymentRequired
@@ -614,9 +607,20 @@ const CalendarViews = {
           + '<span class="cal-detail-label">Pierwotna data</span>'
           + '<span class="cal-detail-value">' + formatDateMedium(new Date(session.originalDate)) + '</span>'
           + '</div>') : '';
-    const notesHtml = session.sessionNotes && session.sessionNotes.trim()
-      ? '<p class="cal-detail-notes-text">' + this._escapeHtml(session.sessionNotes) + '</p>'
-      : '<p class="cal-detail-muted">Brak notatek.</p>';
+    const clinicalUnlocked = typeof SecurityService !== 'undefined' && SecurityService.canReadClinicalData();
+    const clinicalAction = (typeof SecurityService !== 'undefined' && SecurityService.needsPasswordSetup())
+      ? 'Ustaw hasło'
+      : 'Odblokuj notatki';
+    const notesHtml = clinicalUnlocked
+      ? (session.sessionNotes && session.sessionNotes.trim()
+          ? '<p class="cal-detail-notes-text">' + this._formatMultiline(session.sessionNotes) + '</p>'
+          : '<p class="cal-detail-muted">Brak notatek.</p>')
+      : (
+          '<div class="cal-detail-locked">'
+          + '<p class="cal-detail-muted">Dane kliniczne są zablokowane.</p>'
+          + '<button class="cal-action-btn cal-action-complete" id="detail-btn-unlock-clinical">' + clinicalAction + '</button>'
+          + '</div>'
+        );
     const modal = document.createElement('div');
     modal.id        = 'modal-session-detail';
     modal.className = 'cal-modal-overlay';
@@ -652,12 +656,14 @@ const CalendarViews = {
         + '<div class="cal-detail-section">'
           + '<div class="cal-detail-section-header">'
             + '<h4 class="cal-detail-section-title" style="margin-bottom:0">Notatki</h4>'
-            + '<button class="cal-edit-notes-btn" id="detail-btn-edit-notes">Edytuj</button>'
+            + (clinicalUnlocked
+                ? '<button class="cal-edit-notes-btn" id="detail-btn-edit-notes">Edytuj</button>'
+                : '')
           + '</div>'
           + '<div id="detail-notes-view">' + notesHtml + '</div>'
           + '<div id="detail-notes-edit" class="hidden">'
             + '<textarea class="cal-form-control cal-notes-textarea" id="detail-notes-input" rows="6" placeholder="Notatki z sesji…">'
-              + this._escapeHtml(session.sessionNotes || '')
+              + this._escapeHtml(clinicalUnlocked ? (session.sessionNotes || '') : '')
             + '</textarea>'
             + '<div class="cal-notes-edit-actions">'
               + '<button class="cal-action-btn" id="detail-notes-cancel">Anuluj</button>'
@@ -674,20 +680,41 @@ const CalendarViews = {
     const notesView  = modal.querySelector('#detail-notes-view');
     const notesEdit  = modal.querySelector('#detail-notes-edit');
     const notesInput = modal.querySelector('#detail-notes-input');
-    modal.querySelector('#detail-btn-edit-notes').addEventListener('click', () => {
-      notesView.classList.add('hidden');
-      notesEdit.classList.remove('hidden');
-      notesInput.focus();
-    });
+    const unlockBtn = modal.querySelector('#detail-btn-unlock-clinical');
+    if (unlockBtn) {
+      unlockBtn.addEventListener('click', async () => {
+        if (typeof SecurityService === 'undefined') return;
+        const ok = await SecurityService.requestClinicalAccess();
+        if (!ok) return;
+        modal.remove();
+        this.openSessionDetail(session.id);
+      });
+    }
+    const editNotesBtn = modal.querySelector('#detail-btn-edit-notes');
+    if (editNotesBtn) {
+      editNotesBtn.addEventListener('click', async () => {
+        if (typeof SecurityService !== 'undefined') {
+          const ok = await SecurityService.requestClinicalAccess();
+          if (!ok) return;
+        }
+        notesView.classList.add('hidden');
+        notesEdit.classList.remove('hidden');
+        notesInput.focus();
+      });
+    }
     modal.querySelector('#detail-notes-cancel').addEventListener('click', () => {
       notesEdit.classList.add('hidden');
       notesView.classList.remove('hidden');
     });
-    modal.querySelector('#detail-notes-save').addEventListener('click', () => {
+    modal.querySelector('#detail-notes-save').addEventListener('click', async () => {
+      if (typeof SecurityService !== 'undefined') {
+        const ok = await SecurityService.requestClinicalAccess();
+        if (!ok) return;
+      }
       session.sessionNotes = notesInput.value;
       if (typeof persistData === 'function') persistData();
       notesView.innerHTML = session.sessionNotes.trim()
-        ? '<p class="cal-detail-notes-text">' + this._escapeHtml(session.sessionNotes) + '</p>'
+        ? '<p class="cal-detail-notes-text">' + this._formatMultiline(session.sessionNotes) + '</p>'
         : '<p class="cal-detail-muted">Brak notatek.</p>';
       notesEdit.classList.add('hidden');
       notesView.classList.remove('hidden');
@@ -751,11 +778,27 @@ const CalendarViews = {
       const method = dialog.querySelector('#absent-payment-method').value;
       session.status            = 'cancelled';
       session.isPaymentRequired = payReq;
-      if (method) {
-        session.isPaid        = true;
-        session.paymentMethod = method;
-        session.paymentDate   = new Date().toISOString();
+
+      if (payReq && method) {
+        try {
+          recordPaymentForSessions({
+            id: session.paymentId || null,
+            patientId: session.patientId,
+            date: new Date().toISOString(),
+            method,
+            note: '',
+            sessionIds: [session.id],
+          });
+        } catch (error) {
+          toast('Nie udało się zapisać płatności: ' + error.message, 'error');
+          return;
+        }
+      } else if (session.paymentId && typeof detachPaymentFromSessions === 'function') {
+        detachPaymentFromSessions(session.paymentId);
+      } else if (typeof clearSessionPaymentState === 'function') {
+        clearSessionPaymentState(session);
       }
+
       if (patient) recalculateSessionNumbers(patient);
       if (typeof persistData === 'function') persistData();
       dialog.remove();
@@ -995,14 +1038,14 @@ const CalendarViews = {
     el.classList.remove('hidden');
   },
 
+  // Deleguje do globalnego escapeHtml z utils.js
   _escapeHtml(str) {
-    return (str || '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;')
-      .replace(/\n/g, '<br>');
+    return escapeHtml(str);
+  },
+
+  /** Escapuje HTML i zamienia newline na <br> — do wyswietlania notatek. */
+  _formatMultiline(str) {
+    return this._escapeHtml(str).replace(/\n/g, '<br>');
   },
 
   _injectStyles() {
@@ -1150,6 +1193,7 @@ const CalendarViews = {
       '.cal-detail-patient-pseudo{font-size:.85rem;color:#8e8e93;margin-top:4px}',
       '.cal-detail-muted{font-size:.85rem;color:#8e8e93;margin:4px 0 0}',
       '.cal-detail-notes-text{font-size:.88rem;color:#1c1c1e;line-height:1.55;margin:4px 0 0}',
+      '.cal-detail-locked{display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding-top:4px}',
       '.cal-paid{color:#34C759!important}.cal-unpaid{color:#FF3B30!important}',
       '.cal-detail-actions{display:flex;flex-direction:column;gap:8px}',
       '.cal-action-btn{border:none;border-radius:10px;padding:12px;font-size:.9rem;font-weight:600;cursor:pointer;text-align:center;background:#e5e5ea;color:#1c1c1e;transition:opacity .15s}',

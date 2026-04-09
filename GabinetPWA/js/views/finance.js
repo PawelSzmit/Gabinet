@@ -112,7 +112,7 @@ const FinanceViews = (() => {
   }
 
   function getPatient(id) {
-    return AppState.patients.find((patient) => patient.id === id) || null;
+    return AppState.patients.find((patient) => patient.id === id);
   }
 
   function getSessions() {
@@ -132,13 +132,8 @@ const FinanceViews = (() => {
     return Number(amount || 0).toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' });
   }
 
-  function escHtml(str) {
-    return String(str || '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
+  // Alias do globalnego escapeHtml z utils.js
+  function escHtml(str) { return escapeHtml(str); }
 
   function monthKey(date) {
     const d = date instanceof Date ? date : new Date(date);
@@ -146,10 +141,11 @@ const FinanceViews = (() => {
   }
 
   function sessionAmount(session) {
+    if (typeof getSessionAmount === 'function') {
+      return getSessionAmount(session);
+    }
     const patient = getPatient(session.patientId);
-    return session.paymentAmount !== null && session.paymentAmount !== undefined
-      ? session.paymentAmount
-      : (patient ? patient.sessionRate : 0);
+    return patient ? patient.sessionRate : 0;
   }
 
   function paymentMethodLabel(method) {
@@ -403,45 +399,47 @@ const FinanceViews = (() => {
     bindViewEvents(container);
   }
 
-  function bindViewEvents(container) {
-    container.querySelectorAll('.fin-tab').forEach((button) => {
-      button.addEventListener('click', () => {
-        currentTab = button.dataset.tab;
-        render(container);
-      });
+  /** Odswieza tylko zawartosc taba bez przebudowy calego DOM. */
+  function _refreshTabContent(container) {
+    const content = container.querySelector('#fin-content');
+    if (!content) { render(container); return; }
+    content.innerHTML = currentTab === 'dashboard' ? renderDashboard() : renderPayments();
+    // Aktualizuj klase active na tabach
+    container.querySelectorAll('.fin-tab').forEach(t => {
+      t.classList.toggle('active', t.dataset.tab === currentTab);
     });
+    _bindContentEvents(container);
+  }
 
+  /** Binduje eventy wewnatrz #fin-content (bez tabow). */
+  function _bindContentEvents(container) {
     container.querySelectorAll('#fin-open-add-payment').forEach((button) => {
       button.addEventListener('click', () => openAddPayment());
     });
-
     const patientsButton = container.querySelector('#fin-open-patients');
     if (patientsButton) {
       patientsButton.addEventListener('click', () => Router.navigate('patients'));
     }
-
     container.querySelectorAll('.fin-chip').forEach((chip) => {
       chip.addEventListener('click', () => {
         paymentFilters.method = chip.dataset.method;
-        render(container);
+        _refreshTabContent(container);
       });
     });
-
     const filterFrom = container.querySelector('#fin-filter-from');
     const filterTo = container.querySelector('#fin-filter-to');
     if (filterFrom) {
       filterFrom.addEventListener('change', () => {
         paymentFilters.from = filterFrom.value;
-        render(container);
+        _refreshTabContent(container);
       });
     }
     if (filterTo) {
       filterTo.addEventListener('change', () => {
         paymentFilters.to = filterTo.value;
-        render(container);
+        _refreshTabContent(container);
       });
     }
-
     container.querySelectorAll('[data-payment-detail]').forEach((element) => {
       element.addEventListener('click', () => openPaymentDetail(element.dataset.paymentDetail));
     });
@@ -451,6 +449,17 @@ const FinanceViews = (() => {
     container.querySelectorAll('[data-payment-delete]').forEach((button) => {
       button.addEventListener('click', () => confirmDeletePayment(button.dataset.paymentDelete));
     });
+  }
+
+  function bindViewEvents(container) {
+    container.querySelectorAll('.fin-tab').forEach((button) => {
+      button.addEventListener('click', () => {
+        currentTab = button.dataset.tab;
+        _refreshTabContent(container);
+      });
+    });
+
+    _bindContentEvents(container);
   }
 
   function unpaidSessionsForPatient(patientId, selectedIds = []) {
@@ -652,50 +661,23 @@ const FinanceViews = (() => {
       return;
     }
 
-    const amount = selectedTotal(sheet);
-    const previous = existingId ? getPayments().find((payment) => payment.id === existingId) : null;
+    try {
+      if (typeof recordPaymentForSessions !== 'function') {
+        throw new Error('Brak helpera recordPaymentForSessions.');
+      }
 
-    if (previous) {
-      (previous.sessionIds || []).forEach((sessionId) => {
-        const session = getSessions().find((item) => item.id === sessionId);
-        if (!session) return;
-        session.isPaid = false;
-        session.paymentId = null;
-        session.paymentMethod = null;
-        session.paymentDate = null;
-      });
-    }
-
-    let paymentRecord = previous;
-    if (!paymentRecord) {
-      paymentRecord = createPayment({
+      recordPaymentForSessions({
+        id: existingId || null,
         patientId,
         date,
-        amount,
         method,
-        sessionIds,
-        sessionsCount: sessionIds.length,
         note,
+        sessionIds,
       });
-      AppState.payments.push(paymentRecord);
-    } else {
-      paymentRecord.patientId = patientId;
-      paymentRecord.date = date;
-      paymentRecord.amount = amount;
-      paymentRecord.method = method;
-      paymentRecord.sessionIds = sessionIds;
-      paymentRecord.sessionsCount = sessionIds.length;
-      paymentRecord.note = note;
+    } catch (error) {
+      toast('Nie udało się zapisać płatności: ' + error.message, 'error');
+      return;
     }
-
-    sessionIds.forEach((sessionId) => {
-      const session = getSessions().find((item) => item.id === sessionId);
-      if (!session) return;
-      session.isPaid = true;
-      session.paymentId = paymentRecord.id;
-      session.paymentMethod = method;
-      session.paymentDate = date;
-    });
 
     persistData();
     closePaymentSheet();
@@ -709,17 +691,9 @@ const FinanceViews = (() => {
   }
 
   function deletePayment(paymentId) {
-    const payment = getPayments().find((item) => item.id === paymentId);
+    if (typeof detachPaymentFromSessions !== 'function') return;
+    const payment = detachPaymentFromSessions(paymentId);
     if (!payment) return;
-    (payment.sessionIds || []).forEach((sessionId) => {
-      const session = getSessions().find((item) => item.id === sessionId);
-      if (!session) return;
-      session.isPaid = false;
-      session.paymentId = null;
-      session.paymentMethod = null;
-      session.paymentDate = null;
-    });
-    AppState.payments = AppState.payments.filter((item) => item.id !== paymentId);
     persistData();
     if (containerRef) render(containerRef);
     toast('Płatność usunięta.', 'success');
