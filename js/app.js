@@ -162,7 +162,17 @@ const App = {
         this._afterSignIn();
       } catch (err) {
         console.warn('[App] Could not load Drive data on startup:', err);
-        if (bootedFromLocalSnapshot) {
+        if (err && err.message === 'DRIVE_FILE_NOT_FOUND') {
+          // File doesn't exist yet on Drive — safe to proceed as new/empty state.
+          // If we have a local snapshot with data, restore it first and let saveData create the file.
+          if (bootedFromLocalSnapshot && this._hasMeaningfulData(localSnapshotStats)) {
+            console.warn('[App] Drive file not found but local snapshot has data — restoring local and will create Drive file on next save.');
+            if (typeof toast === 'function') {
+              toast('Plik na Drive nie istnieje. Dane lokalne zostana przywrocone i zapisane na Drive.', 'warning', 5000);
+            }
+          }
+          this._afterSignIn({ preserveView: bootedFromLocalSnapshot });
+        } else if (bootedFromLocalSnapshot) {
           this._afterSignIn({ preserveView: true });
         } else {
           this.hideSplash();
