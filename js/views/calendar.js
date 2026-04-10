@@ -357,7 +357,9 @@ const CalendarViews = {
           : '');
     const reschedFlag = session.wasRescheduled
       ? '<span class="cal-row-flag" title="Przełożona">↩</span>' : '';
-    const noteFlag = session.sessionNotes && session.sessionNotes.trim()
+    const noteFlag = typeof SecurityService !== 'undefined'
+      && SecurityService.canReadClinicalData()
+      && SecurityService.hasClinicalContent(session.sessionNotes)
       ? '<span class="cal-row-flag" title="Ma notatki">📝</span>' : '';
     const numLabel = session.sessionNumber
       ? '<span class="cal-row-num">#' + session.sessionNumber + '</span>' : '';
@@ -632,9 +634,38 @@ const CalendarViews = {
           + '<span class="cal-detail-label">Pierwotna data</span>'
           + '<span class="cal-detail-value">' + formatDateMedium(new Date(session.originalDate)) + '</span>'
           + '</div>') : '';
-    const notesHtml = session.sessionNotes && session.sessionNotes.trim()
-      ? '<p class="cal-detail-notes-text">' + this._escapeHtml(session.sessionNotes) + '</p>'
-      : '<p class="cal-detail-muted">Brak notatek.</p>';
+    const clinicalUnlocked = typeof SecurityService !== 'undefined'
+      && typeof SecurityService.canReadClinicalData === 'function'
+      && SecurityService.canReadClinicalData();
+    const clinicalAction = typeof SecurityService !== 'undefined'
+      && typeof SecurityService.getClinicalActionLabel === 'function'
+      ? SecurityService.getClinicalActionLabel()
+      : 'Odblokuj notatki';
+    const noteState = typeof SecurityService !== 'undefined'
+      ? SecurityService.getClinicalDisplayState(session.sessionNotes, {
+          emptyLabel: 'Brak notatek.',
+          protectedLabel: 'Notatki kliniczne sa zablokowane.',
+        })
+      : {
+          hasData: typeof session.sessionNotes === 'string' && session.sessionNotes.trim().length > 0,
+          isProtected: false,
+          text: typeof session.sessionNotes === 'string' && session.sessionNotes.trim().length > 0
+            ? session.sessionNotes
+            : 'Brak notatek.',
+          rawText: typeof session.sessionNotes === 'string' ? session.sessionNotes : '',
+        };
+    const notesHtml = clinicalUnlocked
+      ? (noteState.hasData
+        ? '<p class="' + (noteState.isProtected ? 'cal-detail-muted' : 'cal-detail-notes-text') + '">'
+          + this._escapeHtml(noteState.text)
+          + '</p>'
+        : '<p class="cal-detail-muted">Brak notatek.</p>')
+      : (
+        '<div class="cal-detail-locked">'
+          + '<p class="cal-detail-muted">Dane kliniczne sa zablokowane.</p>'
+          + '<button class="cal-action-btn cal-action-complete" id="detail-btn-unlock-clinical">' + this._escapeHtml(clinicalAction) + '</button>'
+        + '</div>'
+      );
     const modal = document.createElement('div');
     modal.id        = 'modal-session-detail';
     modal.className = 'cal-modal-overlay';
@@ -668,15 +699,17 @@ const CalendarViews = {
         + '</div>'
         + paymentSection
         + actionsSection
-        + '<div class="cal-detail-section">'
-          + '<div class="cal-detail-section-header">'
-            + '<h4 class="cal-detail-section-title" style="margin-bottom:0">Notatki</h4>'
-            + '<button class="cal-edit-notes-btn" id="detail-btn-edit-notes">Edytuj</button>'
-          + '</div>'
-          + '<div id="detail-notes-view">' + notesHtml + '</div>'
-          + '<div id="detail-notes-edit" class="hidden">'
-            + '<textarea class="cal-form-control cal-notes-textarea" id="detail-notes-input" rows="6" placeholder="Notatki z sesji…">'
-              + this._escapeHtml(session.sessionNotes || '')
+          + '<div class="cal-detail-section">'
+            + '<div class="cal-detail-section-header">'
+              + '<h4 class="cal-detail-section-title" style="margin-bottom:0">Notatki</h4>'
+              + (clinicalUnlocked && !noteState.isProtected
+                ? '<button class="cal-edit-notes-btn" id="detail-btn-edit-notes">Edytuj</button>'
+                : '')
+            + '</div>'
+            + '<div id="detail-notes-view">' + notesHtml + '</div>'
+            + '<div id="detail-notes-edit" class="hidden">'
+              + '<textarea class="cal-form-control cal-notes-textarea" id="detail-notes-input" rows="6" placeholder="Notatki z sesji…">'
+              + this._escapeHtml(clinicalUnlocked ? (noteState.rawText || '') : '')
             + '</textarea>'
             + '<div class="cal-notes-edit-actions">'
               + '<button class="cal-action-btn" id="detail-notes-cancel">Anuluj</button>'
@@ -694,28 +727,40 @@ const CalendarViews = {
     const notesEdit  = modal.querySelector('#detail-notes-edit');
     const notesInput = modal.querySelector('#detail-notes-input');
 
-    // Decrypt notes asynchronously and populate view + textarea
-    if (session.sessionNotes) {
-      Encryption.decrypt(session.sessionNotes).then(decrypted => {
-        notesInput.value = decrypted;
-        notesView.innerHTML = decrypted.trim()
-          ? '<p class="cal-detail-notes-text">' + this._escapeHtml(decrypted) + '</p>'
-          : '<p class="cal-detail-muted">Brak notatek.</p>';
+    const unlockBtn = modal.querySelector('#detail-btn-unlock-clinical');
+    if (unlockBtn) {
+      unlockBtn.addEventListener('click', async () => {
+        if (typeof SecurityService === 'undefined') return;
+        const ok = await SecurityService.requestClinicalAccess();
+        if (!ok) return;
+        modal.remove();
+        this.openSessionDetail(session.id);
       });
     }
 
-    modal.querySelector('#detail-btn-edit-notes').addEventListener('click', () => {
-      notesView.classList.add('hidden');
-      notesEdit.classList.remove('hidden');
-      notesInput.focus();
-    });
+    const editNotesBtn = modal.querySelector('#detail-btn-edit-notes');
+    if (editNotesBtn) {
+      editNotesBtn.addEventListener('click', async () => {
+        if (typeof SecurityService !== 'undefined') {
+          const ok = await SecurityService.requestClinicalAccess();
+          if (!ok) return;
+        }
+        notesView.classList.add('hidden');
+        notesEdit.classList.remove('hidden');
+        notesInput.focus();
+      });
+    }
     modal.querySelector('#detail-notes-cancel').addEventListener('click', () => {
       notesEdit.classList.add('hidden');
       notesView.classList.remove('hidden');
     });
     modal.querySelector('#detail-notes-save').addEventListener('click', async () => {
+      if (typeof SecurityService !== 'undefined') {
+        const ok = await SecurityService.requestClinicalAccess();
+        if (!ok) return;
+      }
       const plainText = notesInput.value;
-      session.sessionNotes = await Encryption.encrypt(plainText);
+      session.sessionNotes = plainText;
       if (typeof persistData === 'function') persistData();
       notesView.innerHTML = plainText.trim()
         ? '<p class="cal-detail-notes-text">' + this._escapeHtml(plainText) + '</p>'

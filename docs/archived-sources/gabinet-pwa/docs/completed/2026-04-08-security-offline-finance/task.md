@@ -92,7 +92,7 @@ Status: ukończona
 
 ## Zrodla
 
-- Review: [docs/review-kodu-2026-04-08.md](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/docs/review-kodu-2026-04-08.md)
-- Główny plan programu naprawczego: [docs/plans/2026-04-08-security-offline-finance-plan.md](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/docs/plans/2026-04-08-security-offline-finance-plan.md)
-- Wymagania dla hasła klinicznego: [docs/brainstorms/2026-04-08-clinical-password-ux-requirements.md](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/docs/brainstorms/2026-04-08-clinical-password-ux-requirements.md)
-- Plan techniczny dla hasła klinicznego: [docs/plans/2026-04-08-clinical-password-security-plan.md](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/docs/plans/2026-04-08-clinical-password-security-plan.md)
+- Review: [docs/review-kodu-2026-04-08.md](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/docs/review-kodu-2026-04-08.md)
+- Główny plan programu naprawczego: [docs/plans/2026-04-08-security-offline-finance-plan.md](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/docs/plans/2026-04-08-security-offline-finance-plan.md)
+- Wymagania dla hasła klinicznego: [docs/brainstorms/2026-04-08-clinical-password-ux-requirements.md](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/docs/brainstorms/2026-04-08-clinical-password-ux-requirements.md)
+- Plan techniczny dla hasła klinicznego: [docs/plans/2026-04-08-clinical-password-security-plan.md](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/docs/plans/2026-04-08-clinical-password-security-plan.md)

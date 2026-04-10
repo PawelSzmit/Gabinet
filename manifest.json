@@ -2,10 +2,12 @@
   "name": "Gabinet - Gabinet Psychoterapeutyczny",
   "short_name": "Gabinet",
   "description": "Aplikacja do zarządzania gabinetem psychoterapeutycznym",
-  "start_url": "/",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#007AFF",
+  "theme_color": "#1a73e8",
   "orientation": "portrait-primary",
   "icons": [
     {

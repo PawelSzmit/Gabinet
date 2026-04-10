@@ -14,10 +14,74 @@ const AppState = {
   payments:       [],   // Payment[]
   blockedPeriods: [],   // BlockedPeriod[]
   settings:       {},   // AppSettings
+  migrationIssues: [],  // MigrationIssue[]
 
   get activePatients()   { return this.patients.filter(p => !p.isArchived && p.isActive); },
   get archivedPatients() { return this.patients.filter(p => p.isArchived); },
 };
+
+function normalizeNullableNumber(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizePositiveInteger(value, fallback) {
+  const parsed = typeof value === 'number' ? value : parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function normalizeSessionDate(dateValue, legacyTime) {
+  if (dateValue instanceof Date && !isNaN(dateValue.getTime())) {
+    return dateValue.toISOString();
+  }
+
+  if (typeof dateValue === 'string' && dateValue.trim()) {
+    const trimmed = dateValue.trim();
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      const [year, month, day] = trimmed.split('-').map(Number);
+      const [hours, minutes] = String(legacyTime || '00:00').split(':').map(Number);
+      return new Date(year, month - 1, day, hours || 0, minutes || 0, 0, 0).toISOString();
+    }
+
+    const parsed = new Date(trimmed);
+    if (!isNaN(parsed.getTime())) {
+      return parsed.toISOString();
+    }
+  }
+
+  return new Date().toISOString();
+}
+
+function isEncryptedClinicalEnvelope(value) {
+  return !!(
+    value &&
+    typeof value === 'object' &&
+    value.__clinicalEncrypted === true &&
+    (!value.alg || typeof value.alg === 'string') &&
+    typeof value.iv === 'string' &&
+    typeof value.ciphertext === 'string'
+  );
+}
+
+function normalizeClinicalField(value, fallback = '') {
+  if (isEncryptedClinicalEnvelope(value)) return value;
+  if (value === undefined || value === null) return fallback;
+  return String(value);
+}
+
+function createClinicalSecuritySettings(data = {}) {
+  return {
+    enabled: data.enabled === true,
+    version: normalizePositiveInteger(data.version, 1),
+    salt: typeof data.salt === 'string' ? data.salt : '',
+    verification: isEncryptedClinicalEnvelope(data.verification) ? data.verification : null,
+    kdfIterations: normalizePositiveInteger(data.kdfIterations, 210000),
+    kdfHash: typeof data.kdfHash === 'string' && data.kdfHash ? data.kdfHash : 'SHA-256',
+    updatedAt: data.updatedAt || null,
+  };
+}
 
 // -----------------------------------------------------------------------------
 // MODEL FACTORY FUNCTIONS
@@ -30,6 +94,7 @@ const AppState = {
  */
 function createPatient(data = {}) {
   return {
+    ...data,
     id:                 data.id               || uuid(),
     firstName:          data.firstName        || '',
     lastName:           data.lastName         || '',
@@ -37,22 +102,70 @@ function createPatient(data = {}) {
     isActive:           data.isActive         !== false,
     isArchived:         data.isArchived       || false,
     archivedDate:       data.archivedDate     || null,
-    sessionsPerWeek:    data.sessionsPerWeek  || 1,
-    sessionRate:        data.sessionRate      || 200,
-    therapyStartDate:   data.therapyStartDate || new Date().toISOString(),
+    sessionsPerWeek:    normalizePositiveInteger(data.sessionsPerWeek, 1),
+    sessionRate:        normalizeNullableNumber(data.sessionRate) ?? 200,
+    therapyStartDate:   normalizeSessionDate(data.therapyStartDate),
     dateAdded:          data.dateAdded        || new Date().toISOString(),
     // [{weekday:1, sessionTime:'10:00'}]
-    sessionDayConfigs:  Array.isArray(data.sessionDayConfigs)  ? data.sessionDayConfigs  : [],
+    sessionDayConfigs:  Array.isArray(data.sessionDayConfigs)
+      ? data.sessionDayConfigs.map((config) => ({
+          ...config,
+          weekday: normalizePositiveInteger(config && config.weekday, 1),
+          sessionTime: (config && config.sessionTime) || '10:00',
+        }))
+      : [],
     // [{id, startDate, endDate, cycleNumber}]
-    therapyCycles:      Array.isArray(data.therapyCycles)      ? data.therapyCycles      : [],
+    therapyCycles:      Array.isArray(data.therapyCycles)
+      ? data.therapyCycles.map((cycle) => ({
+          ...cycle,
+          id: (cycle && cycle.id) || uuid(),
+          startDate: normalizeSessionDate(cycle && cycle.startDate),
+          endDate: cycle && cycle.endDate ? normalizeSessionDate(cycle.endDate) : null,
+          cycleNumber: normalizePositiveInteger(cycle && cycle.cycleNumber, 1),
+        }))
+      : [],
     // [{id, startDate, endDate}]
-    vacationPeriods:    Array.isArray(data.vacationPeriods)    ? data.vacationPeriods    : [],
+    vacationPeriods:    Array.isArray(data.vacationPeriods)
+      ? data.vacationPeriods.map((period) => ({
+          ...period,
+          id: (period && period.id) || uuid(),
+          startDate: normalizeSessionDate(period && period.startDate),
+          endDate: normalizeSessionDate(period && period.endDate),
+        }))
+      : [],
     // [{id, title, status, dateSet, dateAchieved, notes}]
-    therapeuticGoals:   Array.isArray(data.therapeuticGoals)   ? data.therapeuticGoals   : [],
+    therapeuticGoals:   Array.isArray(data.therapeuticGoals)
+      ? data.therapeuticGoals.map((goal) => ({
+          ...goal,
+          id: (goal && goal.id) || uuid(),
+          title: normalizeClinicalField(goal && goal.title),
+          status: (goal && goal.status) || 'inProgress',
+          dateSet: goal && goal.dateSet ? normalizeSessionDate(goal.dateSet) : new Date().toISOString(),
+          dateAchieved: goal && goal.dateAchieved ? normalizeSessionDate(goal.dateAchieved) : null,
+          notes: normalizeClinicalField(goal && goal.notes),
+        }))
+      : [],
     // [{id, date, category, title, content}]
-    progressEntries:    Array.isArray(data.progressEntries)    ? data.progressEntries    : [],
+    progressEntries:    Array.isArray(data.progressEntries)
+      ? data.progressEntries.map((entry) => ({
+          ...entry,
+          id: (entry && entry.id) || uuid(),
+          date: entry && entry.date ? normalizeSessionDate(entry.date) : new Date().toISOString(),
+          category: (entry && entry.category) || '',
+          title: normalizeClinicalField(entry && entry.title),
+          content: normalizeClinicalField(entry && entry.content),
+        }))
+      : [],
     // [{id, date, content, sessionId}]
-    sessionNotes:       Array.isArray(data.sessionNotes)       ? data.sessionNotes       : [],
+    sessionNotes:       Array.isArray(data.sessionNotes)
+      ? data.sessionNotes.map((note) => ({
+          ...note,
+          id: (note && note.id) || uuid(),
+          date: note && note.date ? normalizeSessionDate(note.date) : new Date().toISOString(),
+          content: normalizeClinicalField(note && (note.content !== undefined ? note.content : note.note)),
+          sessionId: (note && note.sessionId) || null,
+        }))
+      : [],
     invoices:           Array.isArray(data.invoices)           ? data.invoices           : [],
     // [{id, startDate, endDate, sessionsCount}]
     previousTherapies:  Array.isArray(data.previousTherapies)  ? data.previousTherapies  : [],
@@ -65,9 +178,19 @@ function createPatient(data = {}) {
  * @returns {Session}
  */
 function createSession(data = {}) {
+  const patient = data.patientId ? getPatient(data.patientId) : null;
+  const paymentAmount = normalizeNullableNumber(
+    data.paymentAmount !== undefined && data.paymentAmount !== null && data.paymentAmount !== '' ? data.paymentAmount : (
+      data.fee !== undefined ? data.fee : (
+        patient ? patient.sessionRate : null
+      )
+    )
+  );
+
   return {
+    ...data,
     id:                   data.id                   || uuid(),
-    date:                 data.date                 || new Date().toISOString(),
+    date:                 normalizeSessionDate(data.date, data.time),
     patientId:            data.patientId            || null,
     // scheduled | completed | cancelled
     status:               data.status               || 'scheduled',
@@ -75,7 +198,7 @@ function createSession(data = {}) {
     isPaid:               data.isPaid               || false,
     paymentMethod:        data.paymentMethod        || null,
     paymentDate:          data.paymentDate          || null,
-    paymentAmount:        data.paymentAmount        || null,
+    paymentAmount:        paymentAmount,
     paymentId:            data.paymentId            || null,
     isManuallyCreated:    data.isManuallyCreated    || false,
     sessionNumber:        data.sessionNumber        || null,
@@ -84,12 +207,14 @@ function createSession(data = {}) {
     wasRescheduled:       data.wasRescheduled       || false,
     originalDate:         data.originalDate         || null,
     // encrypted text
-    sessionNotes:         data.sessionNotes         || '',
+    sessionNotes:         normalizeClinicalField(
+      data.sessionNotes !== undefined ? data.sessionNotes : (data.note || '')
+    ),
     // null | 'patient_vacation' | 'patient_late' | 'therapist'
     cancellationReason:   data.cancellationReason   || null,
     // partial payment support
     isPartiallyPaid:      data.isPartiallyPaid      || false,
-    partialPaymentAmount: data.partialPaymentAmount  || null,
+    partialPaymentAmount: normalizeNullableNumber(data.partialPaymentAmount),
   };
 }
 
@@ -99,18 +224,25 @@ function createSession(data = {}) {
  * @returns {Payment}
  */
 function createPayment(data = {}) {
+  const isSplit = data.isSplit === true;
   return {
+    ...data,
     id:            data.id            || uuid(),
     patientId:     data.patientId     || null,
-    date:          data.date          || new Date().toISOString(),
-    amount:        data.amount        || 0,
+    date:          data.date ? normalizeSessionDate(data.date) : new Date().toISOString(),
+    amount:        normalizeNullableNumber(data.amount) ?? 0,
     // aliorBank | ingBank | cash
     method:        data.method        || 'cash',
     // Split payment fields
-    isSplit:       data.isSplit       || false,
-    splitMethod:   data.splitMethod   || null,  // second method when isSplit=true
-    splitAmounts:  data.splitAmounts  || null,  // {primary: number, secondary: number}
-    sessionsCount: data.sessionsCount || 0,
+    isSplit:       isSplit,
+    splitMethod:   isSplit ? (data.splitMethod || 'cash') : null,  // second method when isSplit=true
+    splitAmounts:  isSplit && data.splitAmounts
+      ? {
+          primary: normalizeNullableNumber(data.splitAmounts.primary) ?? 0,
+          secondary: normalizeNullableNumber(data.splitAmounts.secondary) ?? 0,
+        }
+      : null,  // {primary: number, secondary: number}
+    sessionsCount: normalizePositiveInteger(data.sessionsCount, 0),
     sessionIds:    Array.isArray(data.sessionIds) ? data.sessionIds : [],
     note:          data.note          || '',
     createdAt:     data.createdAt     || new Date().toISOString(),
@@ -132,9 +264,10 @@ function isCompoundMethod(str) {
  */
 function createBlockedPeriod(data = {}) {
   return {
+    ...data,
     id:        data.id        || uuid(),
-    startDate: data.startDate || new Date().toISOString(),
-    endDate:   data.endDate   || new Date().toISOString(),
+    startDate: normalizeSessionDate(data.startDate),
+    endDate:   normalizeSessionDate(data.endDate),
     reason:    data.reason    || '',
   };
 }
@@ -146,15 +279,21 @@ function createBlockedPeriod(data = {}) {
  */
 function createAppSettings(data = {}) {
   return {
-    therapistName:        data.therapistName        || '',
-    therapistAddress:     data.therapistAddress     || '',
-    therapistNIP:         data.therapistNIP         || '',
-    workingHoursStart:    data.workingHoursStart    || '08:00',
-    workingHoursEnd:      data.workingHoursEnd      || '20:00',
+    ...data,
+    therapistName:      typeof data.therapistName === 'string' ? data.therapistName : '',
+    therapistAddress:   typeof data.therapistAddress === 'string' ? data.therapistAddress : '',
+    therapistNIP:       typeof data.therapistNIP === 'string' ? data.therapistNIP : '',
+    workingHoursStart:  typeof data.workingHoursStart === 'string' && data.workingHoursStart
+      ? data.workingHoursStart
+      : '08:00',
+    workingHoursEnd:    typeof data.workingHoursEnd === 'string' && data.workingHoursEnd
+      ? data.workingHoursEnd
+      : '20:00',
     // seconds of inactivity before app locks
-    autoLockTimeout:      data.autoLockTimeout      !== undefined ? data.autoLockTimeout : 120,
+    autoLockTimeout:    data.autoLockTimeout !== undefined ? data.autoLockTimeout : 120,
     // ISO string of the last month that was auto-generated e.g. "2026-03"
-    lastGeneratedMonth:   data.lastGeneratedMonth   || null,
+    lastGeneratedMonth: data.lastGeneratedMonth || null,
+    clinicalSecurity:   createClinicalSecuritySettings(data.clinicalSecurity || {}),
   };
 }
 
@@ -193,6 +332,108 @@ function getPatient(id) {
   return AppState.patients.find(p => p.id === id);
 }
 
+function getSessionById(id) {
+  return AppState.sessions.find((session) => session.id === id);
+}
+
+function getSessionAmount(session, patient = null) {
+  if (!session) return 0;
+  const resolvedPatient = patient || getPatient(session.patientId);
+  const amount = normalizeNullableNumber(session.paymentAmount);
+  if (amount !== null) return amount;
+  return resolvedPatient ? resolvedPatient.sessionRate : 0;
+}
+
+function getPaymentById(id) {
+  return AppState.payments.find((payment) => payment.id === id);
+}
+
+function clearSessionPaymentState(session) {
+  if (!session) return;
+  session.isPaid = false;
+  session.isPartiallyPaid = false;
+  session.partialPaymentAmount = null;
+  session.paymentId = null;
+  session.paymentMethod = null;
+  session.paymentDate = null;
+}
+
+function getPaymentTotalForSessions(sessionIds = []) {
+  return sessionIds.reduce((sum, sessionId) => {
+    const session = getSessionById(sessionId);
+    return sum + getSessionAmount(session);
+  }, 0);
+}
+
+function savePaymentRecord(data = {}) {
+  const uniqueSessionIds = Array.from(new Set(Array.isArray(data.sessionIds) ? data.sessionIds : []));
+  if (uniqueSessionIds.length === 0) {
+    throw new Error('Platnosc musi obejmowac przynajmniej jedna sesje.');
+  }
+
+  const sessions = uniqueSessionIds.map(getSessionById).filter(Boolean);
+  if (sessions.length !== uniqueSessionIds.length) {
+    throw new Error('Co najmniej jedna wybrana sesja juz nie istnieje.');
+  }
+
+  const patientId = data.patientId || sessions[0].patientId || null;
+  if (sessions.some((session) => session.patientId !== patientId)) {
+    throw new Error('Jedna platnosc nie moze obejmowac sesji roznych pacjentow.');
+  }
+
+  const previousRecord = data.id ? getPaymentById(data.id) : null;
+  const amount = normalizeNullableNumber(data.amount);
+  const normalizedAmount = amount !== null ? amount : getPaymentTotalForSessions(uniqueSessionIds);
+  const isSplit = data.isSplit === true;
+  const splitMethod = isSplit ? (data.splitMethod || 'cash') : null;
+  const splitAmounts = isSplit && data.splitAmounts
+    ? {
+        primary: normalizeNullableNumber(data.splitAmounts.primary) ?? 0,
+        secondary: normalizeNullableNumber(data.splitAmounts.secondary) ?? 0,
+      }
+    : null;
+
+  let paymentRecord = previousRecord;
+  if (!paymentRecord) {
+    paymentRecord = createPayment({
+      id: data.id || undefined,
+      patientId,
+      date: data.date || new Date().toISOString().slice(0, 10),
+      amount: normalizedAmount,
+      method: data.method || 'cash',
+      isSplit,
+      splitMethod,
+      splitAmounts,
+      sessionIds: uniqueSessionIds,
+      sessionsCount: uniqueSessionIds.length,
+      note: data.note || '',
+    });
+    AppState.payments.push(paymentRecord);
+  } else {
+    paymentRecord.patientId = patientId;
+    paymentRecord.date = data.date ? normalizeSessionDate(data.date) : paymentRecord.date;
+    paymentRecord.amount = normalizedAmount;
+    paymentRecord.method = data.method || 'cash';
+    paymentRecord.isSplit = isSplit;
+    paymentRecord.splitMethod = splitMethod;
+    paymentRecord.splitAmounts = splitAmounts;
+    paymentRecord.sessionIds = uniqueSessionIds;
+    paymentRecord.sessionsCount = uniqueSessionIds.length;
+    paymentRecord.note = data.note || '';
+  }
+
+  reconcilePaymentStatus();
+  return paymentRecord;
+}
+
+function deletePaymentRecord(paymentId) {
+  const paymentRecord = getPaymentById(paymentId);
+  if (!paymentRecord) return null;
+  AppState.payments = AppState.payments.filter((payment) => payment.id !== paymentId);
+  reconcilePaymentStatus();
+  return paymentRecord;
+}
+
 /**
  * Returns all sessions belonging to a patient, sorted ascending by date.
  * @param {string} patientId
@@ -224,7 +465,6 @@ function getPatientPayments(patientId) {
  */
 function getPatientDebt(patientId) {
   const patient = getPatient(patientId);
-  const rate    = patient ? patient.sessionRate : 0;
 
   const unpaid = AppState.sessions.filter(s => {
     if (s.patientId !== patientId) return false;
@@ -235,10 +475,11 @@ function getPatientDebt(patientId) {
   });
 
   const total = unpaid.reduce((sum, s) => {
-    const fullRate = s.paymentAmount !== null ? s.paymentAmount : rate;
+    const fullRate = getSessionAmount(s, patient);
+    const paidPart = normalizeNullableNumber(s.partialPaymentAmount) || 0;
     // For partially paid sessions, only count the remaining amount
-    const owed = s.isPartiallyPaid && s.partialPaymentAmount
-      ? fullRate - s.partialPaymentAmount
+    const owed = s.isPartiallyPaid && paidPart
+      ? Math.max(fullRate - paidPart, 0)
       : fullRate;
     return sum + owed;
   }, 0);
@@ -527,11 +768,11 @@ function recalculateSessionNumbers(patient) {
 
 /**
  * Serialises the entire AppState to a JSON string suitable for storage.
- * @returns {string}
+ * @returns {Promise<string>}
  */
-function serializeAppData() {
+async function serializeAppData() {
   const data = {
-    version:         2,
+    version:         3,
     exportedAt:      new Date().toISOString(),
     patients:        AppState.patients,
     sessions:        AppState.sessions,
@@ -540,7 +781,13 @@ function serializeAppData() {
     settings:        AppState.settings,
     generatedMonths: AppState.generatedMonths || [],
   };
-  return JSON.stringify(data);
+
+  if (typeof SecurityService === 'undefined') {
+    return JSON.stringify(data);
+  }
+
+  const protectedData = await SecurityService.prepareDataForStorage(data);
+  return JSON.stringify(protectedData);
 }
 
 /**
@@ -617,6 +864,7 @@ function deserializeAppData(json) {
     throw new Error('Dane są puste lub nieprawidłowe.');
   }
 
+  AppState.migrationIssues = [];
   AppState.patients        = (data.patients       || []).map(_migratePatient).map(createPatient);
   AppState.sessions        = (data.sessions       || []).map(_migrateSession).map(createSession);
   AppState.payments        = (data.payments       || []).map(createPayment);
@@ -625,7 +873,57 @@ function deserializeAppData(json) {
   AppState.generatedMonths = Array.isArray(data.generatedMonths) ? data.generatedMonths : [];
 
   // Always reconcile payment flags so sessions stay in sync with payment records
+  migrateLegacyPaidSessionsToPayments();
   reconcilePaymentStatus();
+
+  AppState.sessions.forEach((session) => {
+    if (session.paymentAmount === null && session.patientId) {
+      AppState.migrationIssues.push({
+        type: 'missing-session-amount',
+        sessionId: session.id,
+        patientId: session.patientId,
+      });
+    }
+  });
+
+  if (AppState.migrationIssues.length > 0) {
+    console.warn('[Data] Migration completed with unresolved issues:', AppState.migrationIssues);
+    if (typeof toast === 'function') {
+      toast('Migracja danych: ' + AppState.migrationIssues.length + ' element(ow) wymaga uwagi.', 'warning', 6000);
+    }
+  }
+
+  if (typeof SecurityService !== 'undefined') {
+    SecurityService.bootstrapFromLoadedState({ forceRefreshProtectedState: true });
+  }
+}
+
+function migrateLegacyPaidSessionsToPayments() {
+  AppState.sessions.forEach((session) => {
+    if (!session.isPaid || !session.isPaymentRequired) return;
+    if (session.paymentId && getPaymentById(session.paymentId)) return;
+
+    const rawMethod = session.paymentMethod || 'cash';
+    const methodParts = isCompoundMethod(rawMethod) ? rawMethod.split('+') : [rawMethod];
+    const method = methodParts[0] || 'cash';
+    const splitMethod = methodParts[1] || null;
+
+    const paymentRecord = createPayment({
+      id: session.paymentId || uuid(),
+      patientId: session.patientId,
+      date: session.paymentDate || session.date,
+      amount: getSessionAmount(session),
+      method,
+      isSplit: !!splitMethod,
+      splitMethod,
+      sessionIds: [session.id],
+      sessionsCount: 1,
+      note: '',
+    });
+
+    AppState.payments.push(paymentRecord);
+    session.paymentId = paymentRecord.id;
+  });
 }
 
 /**
@@ -636,32 +934,26 @@ function deserializeAppData(json) {
  * inconsistencies caused by rescheduling, duplicate-session bugs, etc.
  */
 function reconcilePaymentStatus() {
-  // Step 1 — clear payment flags on all sessions that appear in any payment.
+  // Step 1 — clear payment flags on sessions touched by any payment
+  // or still carrying stale payment state from an older link.
   const referenced = new Set();
   AppState.payments.forEach(p => (p.sessionIds || []).forEach(id => referenced.add(id)));
   AppState.sessions.forEach(s => {
-    if (!referenced.has(s.id)) return;
-    s.isPaid = false;
-    s.isPartiallyPaid = false;
-    s.partialPaymentAmount = null;
-    s.paymentId = null;
-    s.paymentMethod = null;
-    s.paymentDate = null;
+    const hasPaymentState = !!(s.paymentId || s.paymentMethod || s.paymentDate || s.isPaid || s.isPartiallyPaid);
+    if (!referenced.has(s.id) && !hasPaymentState) return;
+    clearSessionPaymentState(s);
   });
 
   // Step 2 — re-apply each payment using oldest-session-first distribution.
   AppState.payments.forEach(payment => {
     const sessions = (payment.sessionIds || [])
-      .map(id => AppState.sessions.find(s => s.id === id))
+      .map(id => getSessionById(id))
       .filter(Boolean)
       .sort((a, b) => new Date(a.date) - new Date(b.date));
 
     let remaining = Number(payment.amount) || 0;
     sessions.forEach(session => {
-      const patient = getPatient(session.patientId);
-      const rate = (session.paymentAmount !== null && session.paymentAmount !== undefined)
-        ? session.paymentAmount
-        : (patient ? patient.sessionRate : 0);
+      const rate = getSessionAmount(session);
 
       session.paymentId     = payment.id;
       session.paymentMethod = payment.isSplit
@@ -718,4 +1010,9 @@ function initDefaultAppState() {
   AppState.payments       = defaults.payments;
   AppState.blockedPeriods = defaults.blockedPeriods;
   AppState.settings       = defaults.settings;
+  AppState.migrationIssues = [];
+
+  if (typeof SecurityService !== 'undefined') {
+    SecurityService.bootstrapFromLoadedState();
+  }
 }

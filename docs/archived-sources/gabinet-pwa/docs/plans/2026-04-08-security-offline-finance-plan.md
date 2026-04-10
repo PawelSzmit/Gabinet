@@ -35,25 +35,25 @@ Plan obejmuje:
 ## Source Context
 
 - Prośba użytkownika: plan zmian dla pięciu findingów z review.
-- Review źródłowe: [docs/review-kodu-2026-04-08.md](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/docs/review-kodu-2026-04-08.md)
+- Review źródłowe: [docs/review-kodu-2026-04-08.md](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/docs/review-kodu-2026-04-08.md)
 - Kluczowe pliki:
-  - [js/data.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/data.js)
-  - [js/drive.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/drive.js)
-  - [js/views/calendar.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/views/calendar.js)
-  - [js/views/finance.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/views/finance.js)
-  - [js/views/patients.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/views/patients.js)
-  - [js/views/settings.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/views/settings.js)
-  - [js/app.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/app.js)
-  - [index.html](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/index.html)
-  - [sw.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/sw.js)
+  - [js/data.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/data.js)
+  - [js/drive.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/drive.js)
+  - [js/views/calendar.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/views/calendar.js)
+  - [js/views/finance.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/views/finance.js)
+  - [js/views/patients.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/views/patients.js)
+  - [js/views/settings.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/views/settings.js)
+  - [js/app.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/app.js)
+  - [index.html](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/index.html)
+  - [sw.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/sw.js)
 
 ## Current State
 
 ### Lokalny wzorzec, który warto zachować
 
-- `AppState` w [js/data.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/data.js) jest faktycznym centrum danych.
+- `AppState` w [js/data.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/data.js) jest faktycznym centrum danych.
 - Fabryki `createPatient`, `createSession`, `createPayment`, `createAppSettings` już pilnują kształtu danych.
-- `persistData()` w [js/drive.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/drive.js) jest jednym punktem wejścia po zmianie danych.
+- `persistData()` w [js/drive.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/drive.js) jest jednym punktem wejścia po zmianie danych.
 - Widoki domenowe są już rozdzielone do `js/views/*`, więc warto wzmacniać ten kierunek zamiast dopisywać logikę do `js/app.js`.
 
 ### Dług techniczny, który wpływa na plan
@@ -105,7 +105,7 @@ Docelowo aplikacja powinna mieć trzy wyraźne warstwy:
 - Objective:
   - wprowadzić docelowy kształt danych, który obsłuży historyczne kwoty, szyfrowane pola i lokalny snapshot bez łamania starych danych.
 - Files:
-  - [js/data.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/data.js)
+  - [js/data.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/data.js)
   - opcjonalnie nowy plik: `js/security.js`
   - opcjonalnie nowy plik: `js/local-store.js`
 - Patterns to follow:
@@ -143,9 +143,9 @@ Docelowo aplikacja powinna mieć trzy wyraźne warstwy:
 - Objective:
   - usunąć rozjazd między “sesja opłacona” a “rekord płatności istnieje”.
 - Files:
-  - [js/views/finance.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/views/finance.js)
-  - [js/views/calendar.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/views/calendar.js)
-  - [js/data.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/data.js)
+  - [js/views/finance.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/views/finance.js)
+  - [js/views/calendar.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/views/calendar.js)
+  - [js/data.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/data.js)
 - Patterns to follow:
   - `createPayment()`,
   - istniejące `paymentId`, `paymentMethod`, `paymentDate`, `isPaid`,
@@ -173,12 +173,12 @@ Docelowo aplikacja powinna mieć trzy wyraźne warstwy:
 - Objective:
   - spełnić obietnicę szyfrowania bez udawania bezpieczeństwa.
 - Files:
-  - [js/data.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/data.js)
+  - [js/data.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/data.js)
   - nowy plik: `js/security.js`
-  - [js/views/calendar.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/views/calendar.js)
-  - [js/views/patients.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/views/patients.js)
-  - [js/app.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/app.js)
-  - [index.html](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/index.html)
+  - [js/views/calendar.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/views/calendar.js)
+  - [js/views/patients.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/views/patients.js)
+  - [js/app.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/app.js)
+  - [index.html](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/index.html)
 - Patterns to follow:
   - jawne helpery zamiast szyfrowania “po cichu” w widokach,
   - centralny dostęp do stanu przez `AppState`.
@@ -210,10 +210,10 @@ Docelowo aplikacja powinna mieć trzy wyraźne warstwy:
 - Objective:
   - usunąć przechowywanie access tokena w `localStorage` bez rozbicia podstawowego flow aplikacji.
 - Files:
-  - [js/drive.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/drive.js)
-  - [js/app.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/app.js)
-  - [js/views/settings.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/views/settings.js)
-  - [index.html](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/index.html)
+  - [js/drive.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/drive.js)
+  - [js/app.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/app.js)
+  - [js/views/settings.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/views/settings.js)
+  - [index.html](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/index.html)
 - Patterns to follow:
   - istniejący `DriveService.init()`,
   - `requestToken()` wywoływane z kliknięcia użytkownika.
@@ -246,11 +246,11 @@ Docelowo aplikacja powinna mieć trzy wyraźne warstwy:
   - zapewnić realny offline po odświeżeniu, bez konfliktu z Drive.
 - Files:
   - nowy plik: `js/local-store.js`
-  - [js/drive.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/drive.js)
-  - [js/app.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/app.js)
-  - [js/views/settings.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/views/settings.js)
-  - [sw.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/sw.js)
-  - opcjonalnie usunięcie albo oznaczenie martwego [service-worker.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/service-worker.js)
+  - [js/drive.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/drive.js)
+  - [js/app.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/app.js)
+  - [js/views/settings.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/views/settings.js)
+  - [sw.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/sw.js)
+  - opcjonalnie usunięcie albo oznaczenie martwego [service-worker.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/service-worker.js)
 - Patterns to follow:
   - `persistData()` jako punkt po mutacji,
   - istniejący banner offline i loading sync.
@@ -289,8 +289,8 @@ Docelowo aplikacja powinna mieć trzy wyraźne warstwy:
 - Objective:
   - usunąć lub odizolować stare ścieżki, które psują nowy model bezpieczeństwa i finansów.
 - Files:
-  - [js/app.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/app.js)
-  - [index.html](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/index.html)
+  - [js/app.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/app.js)
+  - [index.html](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/index.html)
 - Planned decisions:
   - nie rozwijać starego fallbackowego CRUD-u w `js/app.js`,
   - ograniczyć go do roli “boot + router + helpery”, jeśli to możliwe,
@@ -339,10 +339,10 @@ Kolejność wykonania:
 
 ## Nearby Existing Patterns Worth Copying
 
-- Fabryki modelu w [js/data.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/data.js)
-- `persistData()` i debounce zapisu w [js/drive.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/drive.js)
+- Fabryki modelu w [js/data.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/data.js)
+- `persistData()` i debounce zapisu w [js/drive.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/drive.js)
 - Widoki domenowe z własnymi helperami w `js/views/*`
-- `toast()` z [js/utils.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/utils.js)
+- `toast()` z [js/utils.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/utils.js)
 
 ## Explicit Test Scenarios
 

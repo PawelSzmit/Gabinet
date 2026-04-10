@@ -187,6 +187,24 @@ const FinanceViews = (() => {
     return getSessions().filter((session) => monthKey(session.date) === key);
   }
 
+  function paymentsForMonth(key) {
+    return getPayments().filter((payment) => monthKey(payment.date) === key);
+  }
+
+  function currentMonthPayments() {
+    return paymentsForMonth(monthKey(new Date()));
+  }
+
+  function paymentDayKey(paymentDate) {
+    const date = paymentDate instanceof Date ? paymentDate : new Date(paymentDate);
+    if (Number.isNaN(date.getTime())) return '';
+    return [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, '0'),
+      String(date.getDate()).padStart(2, '0'),
+    ].join('-');
+  }
+
   function outstandingSessions() {
     return getSessions().filter((session) => {
       if (session.isPaid || !session.isPaymentRequired) return false;
@@ -210,37 +228,20 @@ const FinanceViews = (() => {
     return grouped;
   }
 
-  function revenueByMethod(periodSessions) {
+  function revenueByMethod(periodPayments) {
     const totals = { aliorBank: 0, ingBank: 0, cash: 0 };
-    const payMap = new Map(AppState.payments.map(p => [p.id, p]));
-    periodSessions.forEach((session) => {
-      if (!session.isPaid) return;
-      const sessAmt = sessionAmount(session);
-      // Look up the payment record for split logic
-      const payment = session.paymentId ? payMap.get(session.paymentId) : null;
-
-      if (payment && payment.isSplit && payment.splitAmounts && payment.amount > 0) {
-        // Distribute proportionally: session's share of total payment
-        const fraction = sessAmt / payment.amount;
-        const m1 = payment.method || 'cash';
-        const m2 = payment.splitMethod || 'cash';
-        totals[m1] = (totals[m1] || 0) + parseFloat((payment.splitAmounts.primary * fraction).toFixed(2));
-        totals[m2] = (totals[m2] || 0) + parseFloat((payment.splitAmounts.secondary * fraction).toFixed(2));
-      } else {
-        let method = session.paymentMethod;
-        // If split payment but splitAmounts missing or amount=0, fall back to primary method
-        if (payment && payment.isSplit && (!payment.splitAmounts || payment.amount === 0)) {
-          method = payment.method || 'cash';
-        } else if (isCompoundMethod(method)) {
-          method = method.split('+')[0]; // fallback: use primary
-        }
-        if (!method && payment) method = payment.method;
-        method = method || 'cash';
-        // Only add to known buckets — skip unknown compound strings
-        if (Object.prototype.hasOwnProperty.call(totals, method)) {
-          totals[method] = (totals[method] || 0) + sessAmt;
-        }
+    periodPayments.forEach((payment) => {
+      if (payment.isSplit && payment.splitAmounts) {
+        const primaryMethod = payment.method || 'cash';
+        const secondaryMethod = payment.splitMethod || 'cash';
+        totals[primaryMethod] = (totals[primaryMethod] || 0) + (Number(payment.splitAmounts.primary) || 0);
+        totals[secondaryMethod] = (totals[secondaryMethod] || 0) + (Number(payment.splitAmounts.secondary) || 0);
+        return;
       }
+
+      const method = payment.method || 'cash';
+      if (!Object.prototype.hasOwnProperty.call(totals, method)) return;
+      totals[method] = (totals[method] || 0) + (Number(payment.amount) || 0);
     });
     return totals;
   }
@@ -251,9 +252,8 @@ const FinanceViews = (() => {
     for (let index = limit - 1; index >= 0; index -= 1) {
       const monthDate = new Date(now.getFullYear(), now.getMonth() - index, 1);
       const key = monthKey(monthDate);
-      const total = getSessions()
-        .filter((session) => monthKey(session.date) === key && session.isPaid)
-        .reduce((sum, session) => sum + sessionAmount(session), 0);
+      const total = paymentsForMonth(key)
+        .reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
       points.push({
         label: monthDate.toLocaleDateString('pl-PL', { month: 'short' }),
         value: total,
@@ -281,10 +281,11 @@ const FinanceViews = (() => {
 
   function renderDashboard() {
     const monthSessions = currentMonthSessions();
+    const monthPayments = currentMonthPayments();
     const completed = monthSessions.filter((session) => session.status === 'completed').length;
-    const paid = monthSessions.filter((session) => session.isPaid).length;
-    const monthRevenue = monthSessions.filter((session) => session.isPaid)
-      .reduce((sum, session) => sum + sessionAmount(session), 0);
+    const coveredSessions = monthPayments.reduce((sum, payment) => sum + ((payment.sessionIds || []).length), 0);
+    const monthRevenue = monthPayments
+      .reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
     const outstanding = outstandingSessions();
     const outstandingTotal = outstanding.reduce((sum, session) => {
       const full = sessionAmount(session);
@@ -293,7 +294,7 @@ const FinanceViews = (() => {
         : full;
       return sum + owed;
     }, 0);
-    const methods = revenueByMethod(monthSessions);
+    const methods = revenueByMethod(monthPayments);
     const debtMap = outstandingByPatient();
     const debtRows = Object.keys(debtMap).map((patientId) => {
       const patient = getPatient(patientId);
@@ -306,9 +307,9 @@ const FinanceViews = (() => {
         '</div>'
       );
     }).join('');
-    const yearlyRevenue = getSessions()
-      .filter((session) => new Date(session.date).getFullYear() === new Date().getFullYear() && session.isPaid)
-      .reduce((sum, session) => sum + sessionAmount(session), 0);
+    const yearlyRevenue = getPayments()
+      .filter((payment) => new Date(payment.date).getFullYear() === new Date().getFullYear())
+      .reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
     const averageMonthlyRevenue = yearlyRevenue / (new Date().getMonth() + 1);
 
     return (
@@ -325,7 +326,7 @@ const FinanceViews = (() => {
             '<div class="fin-highlight">' +
               '<span class="fin-highlight__eyebrow">Bieżący miesiąc</span>' +
               '<strong>' + escHtml(formatCurrency(monthRevenue)) + '</strong>' +
-              '<span>' + paid + ' opłaconych sesji i ' + completed + ' odbytych spotkań.</span>' +
+              '<span>' + monthPayments.length + ' płatności zapisanych i ' + coveredSessions + ' sesji objętych rozliczeniami.</span>' +
             '</div>' +
           '</div>' +
           '<div class="fin-metric-grid">' +
@@ -351,7 +352,7 @@ const FinanceViews = (() => {
             '<div class="fin-actions-list">' +
               '<div class="fin-action-row"><strong>' + outstanding.length + ' sesji do rozliczenia</strong></div>' +
               '<div class="fin-action-row"><strong>' + Object.keys(debtMap).length + ' pacjentów z należnościami</strong></div>' +
-              '<div class="fin-action-row"><strong>' + paid + ' opłaconych w tym miesiącu</strong></div>' +
+              '<div class="fin-action-row"><strong>' + completed + ' odbytych spotkań w tym miesiącu</strong></div>' +
             '</div>' +
           '</section>' +
         '</div>' +
@@ -391,8 +392,9 @@ const FinanceViews = (() => {
           var matchesSplit = payment.isSplit && payment.splitMethod === paymentFilters.method;
           if (!matchesPrimary && !matchesSplit) return false;
         }
-        if (paymentFilters.from && payment.date < paymentFilters.from) return false;
-        if (paymentFilters.to && payment.date > paymentFilters.to) return false;
+        const paymentDateKey = paymentDayKey(payment.date);
+        if (paymentFilters.from && paymentDateKey < paymentFilters.from) return false;
+        if (paymentFilters.to && paymentDateKey > paymentFilters.to) return false;
         return true;
       })
       .sort((a, b) => b.date.localeCompare(a.date));
@@ -905,24 +907,13 @@ const FinanceViews = (() => {
       ? { primary: parseFloat((amount - splitAmt2Raw).toFixed(2)), secondary: parseFloat(splitAmt2Raw.toFixed(2)) }
       : null;
 
-    const previous = existingId ? getPayments().find((payment) => payment.id === existingId) : null;
+    try {
+      if (typeof savePaymentRecord !== 'function') {
+        throw new Error('Brak helpera savePaymentRecord.');
+      }
 
-    if (previous) {
-      (previous.sessionIds || []).forEach((sessionId) => {
-        const session = getSessions().find((item) => item.id === sessionId);
-        if (!session) return;
-        session.isPaid = false;
-        session.paymentId = null;
-        session.paymentMethod = null;
-        session.paymentDate = null;
-      });
-    }
-
-    const effectiveMethod = isSplit ? method + '+' + splitMethod : method;
-
-    let paymentRecord = previous;
-    if (!paymentRecord) {
-      paymentRecord = createPayment({
+      savePaymentRecord({
+        id: existingId || null,
         patientId,
         date,
         amount,
@@ -931,54 +922,12 @@ const FinanceViews = (() => {
         splitMethod,
         splitAmounts,
         sessionIds,
-        sessionsCount: sessionIds.length,
         note,
       });
-      AppState.payments.push(paymentRecord);
-    } else {
-      paymentRecord.patientId = patientId;
-      paymentRecord.date = date;
-      paymentRecord.amount = amount;
-      paymentRecord.method = method;
-      paymentRecord.isSplit = isSplit;
-      paymentRecord.splitMethod = splitMethod;
-      paymentRecord.splitAmounts = splitAmounts;
-      paymentRecord.sessionIds = sessionIds;
-      paymentRecord.sessionsCount = sessionIds.length;
-      paymentRecord.note = note;
+    } catch (error) {
+      toast('Nie udało się zapisać płatności: ' + error.message, 'error');
+      return;
     }
-
-    // Sort sessions by date so we pay oldest first
-    const sortedSessions = sessionIds
-      .map(id => getSessions().find(item => item.id === id))
-      .filter(Boolean)
-      .sort((a, b) => new Date(a.date) - new Date(b.date));
-
-    let remaining = amount;
-    sortedSessions.forEach((session) => {
-      const rate = sessionAmount(session);
-      session.paymentId = paymentRecord.id;
-      session.paymentMethod = effectiveMethod;
-      session.paymentDate = date;
-      if (remaining >= rate) {
-        session.isPaid = true;
-        session.isPartiallyPaid = false;
-        session.partialPaymentAmount = null;
-        remaining -= rate;
-      } else if (remaining > 0) {
-        session.isPaid = false;
-        session.isPartiallyPaid = true;
-        session.partialPaymentAmount = remaining;
-        remaining = 0;
-      } else {
-        session.isPaid = false;
-        session.isPartiallyPaid = false;
-        session.partialPaymentAmount = null;
-        session.paymentId = null;
-        session.paymentMethod = null;
-        session.paymentDate = null;
-      }
-    });
 
     persistData();
     closePaymentSheet();
@@ -996,20 +945,9 @@ const FinanceViews = (() => {
   }
 
   function deletePayment(paymentId) {
-    const payment = getPayments().find((item) => item.id === paymentId);
+    if (typeof deletePaymentRecord !== 'function') return;
+    const payment = deletePaymentRecord(paymentId);
     if (!payment) return;
-    (payment.sessionIds || []).forEach((sessionId) => {
-
-      const session = getSessions().find((item) => item.id === sessionId);
-      if (!session) return;
-      session.isPaid = false;
-      session.isPartiallyPaid = false;
-      session.partialPaymentAmount = null;
-      session.paymentId = null;
-      session.paymentMethod = null;
-      session.paymentDate = null;
-    });
-    AppState.payments = AppState.payments.filter((item) => item.id !== paymentId);
     persistData();
     if (containerRef) render(containerRef);
     toast('Płatność usunięta.', 'success');

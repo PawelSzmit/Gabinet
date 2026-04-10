@@ -40,8 +40,8 @@ Bring the fallback sheets back under the same rules as the main app.
 
 In this project the practical fix was:
 
-- add `_syncFallbackSessionPayment()` and `_removeSessionFromPaymentRegistry()` in [js/app.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/app.js),
-- use `recordPaymentForSessions()` and `detachPaymentFromSessions()` from [js/data.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/data.js),
+- add `_syncFallbackSessionPayment()` and `_removeSessionFromPaymentRegistry()` in [js/app.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/app.js),
+- use `recordPaymentForSessions()` and `detachPaymentFromSessions()` from [js/data.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/data.js),
 - require `therapyStartDate` in the fallback patient form,
 - build a minimal `sessionDayConfigs` entry from weekday and time,
 - remove fallback writes to `phone` and `email`.
@@ -49,9 +49,9 @@ In this project the practical fix was:
 ## Diagnostic Commands
 
 ```bash
-node --check /Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/app.js
-rg -n "_syncFallbackSessionPayment|_removeSessionFromPaymentRegistry|pat-therapy-start|pat-session-weekday" /Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/app.js
-rg -n "recordPaymentForSessions|detachPaymentFromSessions|createPatient" /Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/data.js
+node --check /Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/app.js
+rg -n "_syncFallbackSessionPayment|_removeSessionFromPaymentRegistry|pat-therapy-start|pat-session-weekday" /Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/app.js
+rg -n "recordPaymentForSessions|detachPaymentFromSessions|createPatient" /Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/data.js
 ```
 
 ## Prevention
@@ -63,10 +63,10 @@ rg -n "recordPaymentForSessions|detachPaymentFromSessions|createPatient" /Users/
 
 ## Related
 
-- [js/app.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/app.js)
-- [js/data.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/data.js)
-- [review-faza-6.md](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/docs/completed/2026-04-08-security-offline-finance/review-faza-6.md)
-- [2026-04-08-security-offline-finance-podsumowanie.md](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/docs/completed/2026-04-08-security-offline-finance/2026-04-08-security-offline-finance-podsumowanie.md)
+- [js/app.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/app.js)
+- [js/data.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/data.js)
+- [review-faza-6.md](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/docs/completed/2026-04-08-security-offline-finance/review-faza-6.md)
+- [2026-04-08-security-offline-finance-podsumowanie.md](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/docs/completed/2026-04-08-security-offline-finance/2026-04-08-security-offline-finance-podsumowanie.md)
 
 ## Context
 
