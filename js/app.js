@@ -120,6 +120,8 @@ const App = {
     await Encryption.init();
 
     let bootedFromLocalSnapshot = false;
+    let localSnapshotSerialized = null;
+    let localSnapshotStats = this._getStateStats();
     if (typeof LocalStore !== 'undefined' && typeof LocalStore.init === 'function') {
       try {
         await LocalStore.init();
@@ -128,6 +130,8 @@ const App = {
           try {
             deserializeAppData(snapshot.serializedData);
             bootedFromLocalSnapshot = true;
+            localSnapshotSerialized = snapshot.serializedData;
+            localSnapshotStats = this._getStatsFromSerializedSnapshot(snapshot.serializedData);
           } catch (snapshotError) {
             console.warn('[App] Local snapshot could not be restored:', snapshotError);
             if (typeof LocalStore.clear === 'function') {
@@ -151,6 +155,10 @@ const App = {
     if (hasToken) {
       try {
         await DriveService.loadData();
+        await this._recoverLocalSnapshotIfDriveLooksEmpty({
+          localSnapshotSerialized,
+          localSnapshotStats,
+        });
         this._afterSignIn();
       } catch (err) {
         console.warn('[App] Could not load Drive data on startup:', err);
@@ -256,6 +264,22 @@ const App = {
   async onSignIn(token) {
     const preserveView = this._isVisible('app-shell');
     this.showSplash();
+    let localSnapshotSerialized = null;
+    let localSnapshotStats = this._getStateStats();
+    if (
+      typeof LocalStore !== 'undefined' &&
+      typeof LocalStore.loadSnapshot === 'function'
+    ) {
+      try {
+        const snapshot = await LocalStore.loadSnapshot();
+        if (snapshot && snapshot.serializedData) {
+          localSnapshotSerialized = snapshot.serializedData;
+          localSnapshotStats = this._getStatsFromSerializedSnapshot(snapshot.serializedData);
+        }
+      } catch (snapshotError) {
+        console.warn('[App] Could not inspect local snapshot before sign-in:', snapshotError);
+      }
+    }
     try {
       if (
         typeof LocalStore !== 'undefined' &&
@@ -268,6 +292,10 @@ const App = {
         }
       } else {
         await DriveService.loadData();
+        await this._recoverLocalSnapshotIfDriveLooksEmpty({
+          localSnapshotSerialized,
+          localSnapshotStats,
+        });
       }
     } catch (err) {
       console.warn('[App] Drive load after sign-in failed:', err);
@@ -518,6 +546,75 @@ const App = {
   _isVisible(id) {
     const el = document.getElementById(id);
     return !!(el && !el.hidden);
+  },
+
+  _getStateStats() {
+    return {
+      patients: Array.isArray(AppState && AppState.patients) ? AppState.patients.length : 0,
+      sessions: Array.isArray(AppState && AppState.sessions) ? AppState.sessions.length : 0,
+      payments: Array.isArray(AppState && AppState.payments) ? AppState.payments.length : 0,
+    };
+  },
+
+  _getStatsFromSerializedSnapshot(serializedData) {
+    if (typeof serializedData !== 'string' || !serializedData.trim()) {
+      return { patients: 0, sessions: 0, payments: 0 };
+    }
+
+    try {
+      const parsed = JSON.parse(serializedData);
+      return {
+        patients: Array.isArray(parsed && parsed.patients) ? parsed.patients.length : 0,
+        sessions: Array.isArray(parsed && parsed.sessions) ? parsed.sessions.length : 0,
+        payments: Array.isArray(parsed && parsed.payments) ? parsed.payments.length : 0,
+      };
+    } catch (_) {
+      return { patients: 0, sessions: 0, payments: 0 };
+    }
+  },
+
+  _hasMeaningfulData(stats) {
+    if (!stats) return false;
+    return (stats.patients || 0) > 0 || (stats.sessions || 0) > 0 || (stats.payments || 0) > 0;
+  },
+
+  async _recoverLocalSnapshotIfDriveLooksEmpty(options = {}) {
+    const localSnapshotSerialized = options.localSnapshotSerialized || null;
+    const localSnapshotStats = options.localSnapshotStats || null;
+    const driveStats = this._getStateStats();
+
+    if (!localSnapshotSerialized) return false;
+    if (!this._hasMeaningfulData(localSnapshotStats)) return false;
+    if (this._hasMeaningfulData(driveStats)) return false;
+
+    console.warn('[App] Drive returned an empty dataset. Restoring richer local snapshot instead.');
+    deserializeAppData(localSnapshotSerialized);
+
+    if (typeof LocalStore !== 'undefined' && typeof LocalStore.storeSerializedSnapshot === 'function') {
+      try {
+        await LocalStore.storeSerializedSnapshot(localSnapshotSerialized, {
+          hasPendingSync: true,
+          lastLocalWriteAt: new Date().toISOString(),
+          source: 'local-recovery',
+        });
+      } catch (snapshotError) {
+        console.warn('[App] Could not refresh recovered local snapshot:', snapshotError);
+      }
+    }
+
+    if (typeof DriveService !== 'undefined' && typeof DriveService.saveData === 'function' && DriveService.isSignedIn()) {
+      try {
+        await DriveService.saveData();
+      } catch (saveError) {
+        console.warn('[App] Could not push recovered local snapshot to Drive:', saveError);
+      }
+    }
+
+    if (typeof toast === 'function') {
+      toast('Przywrocono lokalna kopie danych, bo Google Drive zwrocil pusty stan.', 'warning', 5000);
+    }
+
+    return true;
   },
 
   _sleep(ms) {
