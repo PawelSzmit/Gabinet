@@ -232,6 +232,10 @@ const SettingsView = (() => {
           <div class="sv-row sv-row-btn blue" id="sv-export-btn">
             <span>⬇️ Eksportuj dane (JSON)</span>
           </div>
+          <div class="sv-row sv-row-btn blue" id="sv-import-btn">
+            <span>⬆️ Importuj dane z pliku JSON</span>
+          </div>
+          <input type="file" id="sv-import-file" accept=".json" style="display:none;">
           <div class="sv-row sv-row-btn orange" id="sv-recover-btn">
             <span>🔧 Odzyskaj pelne dane z Drive</span>
           </div>
@@ -423,6 +427,30 @@ const SettingsView = (() => {
         } catch (err) {
           if (typeof toast === 'function') toast('Blad eksportu: ' + err.message, 'error');
         }
+      });
+    }
+
+    const importBtn = document.getElementById('sv-import-btn');
+    const importFile = document.getElementById('sv-import-file');
+    if (importBtn && importFile) {
+      importBtn.addEventListener('click', () => importFile.click());
+      importFile.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        if (!confirm('Zaimportowac dane z pliku "' + file.name + '"? Obecne dane zostana zastapione.')) {
+          importFile.value = '';
+          return;
+        }
+        try {
+          const text = await file.text();
+          deserializeAppData(text);
+          if (typeof persistData !== 'undefined') await persistData();
+          if (typeof toast === 'function') toast('Dane zaimportowane pomyslnie!', 'success');
+          setTimeout(() => location.reload(), 1200);
+        } catch (err) {
+          if (typeof toast === 'function') toast('Blad importu: ' + err.message, 'error');
+        }
+        importFile.value = '';
       });
     }
   }
