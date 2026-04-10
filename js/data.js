@@ -348,6 +348,92 @@ function getPaymentById(id) {
   return AppState.payments.find((payment) => payment.id === id);
 }
 
+function clearSessionPaymentState(session) {
+  if (!session) return;
+  session.isPaid = false;
+  session.isPartiallyPaid = false;
+  session.partialPaymentAmount = null;
+  session.paymentId = null;
+  session.paymentMethod = null;
+  session.paymentDate = null;
+}
+
+function getPaymentTotalForSessions(sessionIds = []) {
+  return sessionIds.reduce((sum, sessionId) => {
+    const session = getSessionById(sessionId);
+    return sum + getSessionAmount(session);
+  }, 0);
+}
+
+function savePaymentRecord(data = {}) {
+  const uniqueSessionIds = Array.from(new Set(Array.isArray(data.sessionIds) ? data.sessionIds : []));
+  if (uniqueSessionIds.length === 0) {
+    throw new Error('Platnosc musi obejmowac przynajmniej jedna sesje.');
+  }
+
+  const sessions = uniqueSessionIds.map(getSessionById).filter(Boolean);
+  if (sessions.length !== uniqueSessionIds.length) {
+    throw new Error('Co najmniej jedna wybrana sesja juz nie istnieje.');
+  }
+
+  const patientId = data.patientId || sessions[0].patientId || null;
+  if (sessions.some((session) => session.patientId !== patientId)) {
+    throw new Error('Jedna platnosc nie moze obejmowac sesji roznych pacjentow.');
+  }
+
+  const previousRecord = data.id ? getPaymentById(data.id) : null;
+  const amount = normalizeNullableNumber(data.amount);
+  const normalizedAmount = amount !== null ? amount : getPaymentTotalForSessions(uniqueSessionIds);
+  const isSplit = data.isSplit === true;
+  const splitMethod = isSplit ? (data.splitMethod || 'cash') : null;
+  const splitAmounts = isSplit && data.splitAmounts
+    ? {
+        primary: normalizeNullableNumber(data.splitAmounts.primary) ?? 0,
+        secondary: normalizeNullableNumber(data.splitAmounts.secondary) ?? 0,
+      }
+    : null;
+
+  let paymentRecord = previousRecord;
+  if (!paymentRecord) {
+    paymentRecord = createPayment({
+      id: data.id || undefined,
+      patientId,
+      date: data.date || new Date().toISOString().slice(0, 10),
+      amount: normalizedAmount,
+      method: data.method || 'cash',
+      isSplit,
+      splitMethod,
+      splitAmounts,
+      sessionIds: uniqueSessionIds,
+      sessionsCount: uniqueSessionIds.length,
+      note: data.note || '',
+    });
+    AppState.payments.push(paymentRecord);
+  } else {
+    paymentRecord.patientId = patientId;
+    paymentRecord.date = data.date ? normalizeSessionDate(data.date) : paymentRecord.date;
+    paymentRecord.amount = normalizedAmount;
+    paymentRecord.method = data.method || 'cash';
+    paymentRecord.isSplit = isSplit;
+    paymentRecord.splitMethod = splitMethod;
+    paymentRecord.splitAmounts = splitAmounts;
+    paymentRecord.sessionIds = uniqueSessionIds;
+    paymentRecord.sessionsCount = uniqueSessionIds.length;
+    paymentRecord.note = data.note || '';
+  }
+
+  reconcilePaymentStatus();
+  return paymentRecord;
+}
+
+function deletePaymentRecord(paymentId) {
+  const paymentRecord = getPaymentById(paymentId);
+  if (!paymentRecord) return null;
+  AppState.payments = AppState.payments.filter((payment) => payment.id !== paymentId);
+  reconcilePaymentStatus();
+  return paymentRecord;
+}
+
 /**
  * Returns all sessions belonging to a patient, sorted ascending by date.
  * @param {string} patientId
@@ -848,17 +934,14 @@ function migrateLegacyPaidSessionsToPayments() {
  * inconsistencies caused by rescheduling, duplicate-session bugs, etc.
  */
 function reconcilePaymentStatus() {
-  // Step 1 — clear payment flags on all sessions that appear in any payment.
+  // Step 1 — clear payment flags on sessions touched by any payment
+  // or still carrying stale payment state from an older link.
   const referenced = new Set();
   AppState.payments.forEach(p => (p.sessionIds || []).forEach(id => referenced.add(id)));
   AppState.sessions.forEach(s => {
-    if (!referenced.has(s.id)) return;
-    s.isPaid = false;
-    s.isPartiallyPaid = false;
-    s.partialPaymentAmount = null;
-    s.paymentId = null;
-    s.paymentMethod = null;
-    s.paymentDate = null;
+    const hasPaymentState = !!(s.paymentId || s.paymentMethod || s.paymentDate || s.isPaid || s.isPartiallyPaid);
+    if (!referenced.has(s.id) && !hasPaymentState) return;
+    clearSessionPaymentState(s);
   });
 
   // Step 2 — re-apply each payment using oldest-session-first distribution.

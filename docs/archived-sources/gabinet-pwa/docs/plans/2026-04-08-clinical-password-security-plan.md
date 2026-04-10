@@ -33,25 +33,25 @@ Plan obejmuje:
 
 ## Source Context
 
-- Wymagania produktu: [docs/brainstorms/2026-04-08-clinical-password-ux-requirements.md](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/docs/brainstorms/2026-04-08-clinical-password-ux-requirements.md)
-- Szerszy plan programu naprawczego: [docs/plans/2026-04-08-security-offline-finance-plan.md](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/docs/plans/2026-04-08-security-offline-finance-plan.md)
+- Wymagania produktu: [docs/brainstorms/2026-04-08-clinical-password-ux-requirements.md](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/docs/brainstorms/2026-04-08-clinical-password-ux-requirements.md)
+- Szerszy plan programu naprawczego: [docs/plans/2026-04-08-security-offline-finance-plan.md](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/docs/plans/2026-04-08-security-offline-finance-plan.md)
 - Aktywne zadanie, które będzie trzeba później zaktualizować przed wykonaniem:
-  - [docs/active/2026-04-08-security-offline-finance/task.md](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/docs/active/2026-04-08-security-offline-finance/task.md)
-  - [docs/active/2026-04-08-security-offline-finance/context.md](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/docs/active/2026-04-08-security-offline-finance/context.md)
-  - [docs/active/2026-04-08-security-offline-finance/checklist.md](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/docs/active/2026-04-08-security-offline-finance/checklist.md)
+  - [docs/active/2026-04-08-security-offline-finance/task.md](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/docs/active/2026-04-08-security-offline-finance/task.md)
+  - [docs/active/2026-04-08-security-offline-finance/context.md](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/docs/active/2026-04-08-security-offline-finance/context.md)
+  - [docs/active/2026-04-08-security-offline-finance/checklist.md](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/docs/active/2026-04-08-security-offline-finance/checklist.md)
 
 ## Current State
 
 ### Co już mamy i warto zachować
 
-- `AppState` w [js/data.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/data.js) jest centrum danych.
-- `persistData()` w [js/drive.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/drive.js) jest jednym punktem zapisu po zmianie danych.
+- `AppState` w [js/data.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/data.js) jest centrum danych.
+- `persistData()` w [js/drive.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/drive.js) jest jednym punktem zapisu po zmianie danych.
 - Widoki domenowe są rozbite na `js/views/calendar.js`, `js/views/patients.js`, `js/views/settings.js`.
-- Jest już ogólny mechanizm bezczynności w [js/app.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/app.js), więc nie trzeba wymyślać timera od zera.
+- Jest już ogólny mechanizm bezczynności w [js/app.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/app.js), więc nie trzeba wymyślać timera od zera.
 
 ### Co dziś blokuje poprawne wdrożenie
 
-- `serializeAppData()` w [js/data.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/data.js) zapisuje cały stan jako zwykły JSON.
+- `serializeAppData()` w [js/data.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/data.js) zapisuje cały stan jako zwykły JSON.
 - Widoki czytają treści kliniczne bezpośrednio z pól takich jak:
   - `session.sessionNotes`,
   - `patient.sessionNotes[].content`,
@@ -59,8 +59,8 @@ Plan obejmuje:
   - `patient.therapeuticGoals[].notes`,
   - `patient.progressEntries[].title`,
   - `patient.progressEntries[].content`.
-- `AutoLock` w [js/app.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/app.js) jest dziś spięty z reautoryzacją Google, a nie z blokadą danych klinicznych.
-- Ekran auth w [index.html](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/index.html) już obiecuje szyfrowanie, ale nie ma jeszcze flow ustawienia ani odblokowania hasła klinicznego.
+- `AutoLock` w [js/app.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/app.js) jest dziś spięty z reautoryzacją Google, a nie z blokadą danych klinicznych.
+- Ekran auth w [index.html](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/index.html) już obiecuje szyfrowanie, ale nie ma jeszcze flow ustawienia ani odblokowania hasła klinicznego.
 
 ## Research Notes
 
@@ -122,22 +122,22 @@ To pozwala zachować prosty kod widoków: widok pyta tylko, czy treści kliniczn
 
 ## Files In Scope
 
-- nowy plik: [js/security.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/security.js)
-- [js/data.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/data.js)
-- [js/app.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/app.js)
-- [js/drive.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/drive.js)
-- [js/views/calendar.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/views/calendar.js)
-- [js/views/patients.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/views/patients.js)
-- [js/views/settings.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/views/settings.js)
-- [index.html](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/index.html)
+- nowy plik: [js/security.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/security.js)
+- [js/data.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/data.js)
+- [js/app.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/app.js)
+- [js/drive.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/drive.js)
+- [js/views/calendar.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/views/calendar.js)
+- [js/views/patients.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/views/patients.js)
+- [js/views/settings.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/views/settings.js)
+- [index.html](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/index.html)
 
 ## Nearby Patterns To Follow
 
-- Fabryki i normalizacja danych w [js/data.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/data.js)
-- Centralny zapis przez `persistData()` w [js/drive.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/drive.js)
-- Modal detali sesji w [js/views/calendar.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/views/calendar.js)
-- Panele i sekcje robocze pacjenta w [js/views/patients.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/views/patients.js)
-- Ustawienia jako osobny widok w [js/views/settings.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/views/settings.js)
+- Fabryki i normalizacja danych w [js/data.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/data.js)
+- Centralny zapis przez `persistData()` w [js/drive.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/drive.js)
+- Modal detali sesji w [js/views/calendar.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/views/calendar.js)
+- Panele i sekcje robocze pacjenta w [js/views/patients.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/views/patients.js)
+- Ustawienia jako osobny widok w [js/views/settings.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/views/settings.js)
 
 ## Implementation Units
 
@@ -146,8 +146,8 @@ To pozwala zachować prosty kod widoków: widok pyta tylko, czy treści kliniczn
 - Objective:
   - zdefiniować, co dokładnie jest chronione i w jakim formacie ma być zapisane.
 - Files:
-  - [js/data.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/data.js)
-  - nowy [js/security.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/security.js)
+  - [js/data.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/data.js)
+  - nowy [js/security.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/security.js)
 - Planned decisions:
   - dodać metadane ochrony klinicznej do ustawień lub top-level storage, np.:
     - `enabled`,
@@ -190,9 +190,9 @@ To pozwala zachować prosty kod widoków: widok pyta tylko, czy treści kliniczn
 - Objective:
   - wprowadzić jedno miejsce, które zarządza ustawieniem hasła, odblokowaniem i ponowną blokadą.
 - Files:
-  - nowy [js/security.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/security.js)
-  - [js/app.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/app.js)
-  - [index.html](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/index.html)
+  - nowy [js/security.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/security.js)
+  - [js/app.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/app.js)
+  - [index.html](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/index.html)
 - Planned decisions:
   - `SecurityService` trzyma tylko stan runtime:
     - `status`,
@@ -225,9 +225,9 @@ To pozwala zachować prosty kod widoków: widok pyta tylko, czy treści kliniczn
 - Objective:
   - sprawić, żeby dane zapisane na Drive i eksportowane do JSON były zaszyfrowane, a stare plaintexty migrowały się bez utraty treści.
 - Files:
-  - [js/data.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/data.js)
-  - [js/drive.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/drive.js)
-  - [js/views/settings.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/views/settings.js)
+  - [js/data.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/data.js)
+  - [js/drive.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/drive.js)
+  - [js/views/settings.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/views/settings.js)
 - Planned decisions:
   - `serializeAppData()` ma korzystać z helpera, który przed zapisem zamienia pola kliniczne na ciphertext.
   - `deserializeAppData()` ma rozpoznawać trzy przypadki:
@@ -259,11 +259,11 @@ To pozwala zachować prosty kod widoków: widok pyta tylko, czy treści kliniczn
 - Objective:
   - wdrożyć spokojny, czytelny interfejs ustawiania i odblokowania bez psucia reszty pracy.
 - Files:
-  - [js/views/patients.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/views/patients.js)
-  - [js/views/calendar.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/views/calendar.js)
-  - [js/views/settings.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/views/settings.js)
-  - [js/app.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/app.js)
-  - [index.html](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/index.html)
+  - [js/views/patients.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/views/patients.js)
+  - [js/views/calendar.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/views/calendar.js)
+  - [js/views/settings.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/views/settings.js)
+  - [js/app.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/app.js)
+  - [index.html](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/index.html)
 - Planned decisions:
   - w ustawieniach dodać sekcję "Ochrona danych klinicznych":
     - ustaw hasło,
@@ -302,9 +302,9 @@ To pozwala zachować prosty kod widoków: widok pyta tylko, czy treści kliniczn
 - Objective:
   - zamienić obecną blokadę całej aplikacji na blokadę tylko danych klinicznych.
 - Files:
-  - [js/app.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/app.js)
-  - [js/views/settings.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/views/settings.js)
-  - opcjonalnie [index.html](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/index.html)
+  - [js/app.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/app.js)
+  - [js/views/settings.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/views/settings.js)
+  - opcjonalnie [index.html](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/index.html)
 - Planned decisions:
   - obecny timer bezczynności zostaje, ale jego efekt się zmienia:
     - zamiast wyrzucać do reautoryzacji Google, woła `SecurityService.lockClinicalData()`.
@@ -332,9 +332,9 @@ To pozwala zachować prosty kod widoków: widok pyta tylko, czy treści kliniczn
 - Objective:
   - uniknąć konfliktu między nowym hasłem klinicznym a kolejnymi fazami o tokenie i offline.
 - Files:
-  - [docs/plans/2026-04-08-security-offline-finance-plan.md](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/docs/plans/2026-04-08-security-offline-finance-plan.md)
-  - [docs/active/2026-04-08-security-offline-finance/context.md](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/docs/active/2026-04-08-security-offline-finance/context.md)
-  - [docs/active/2026-04-08-security-offline-finance/checklist.md](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/docs/active/2026-04-08-security-offline-finance/checklist.md)
+  - [docs/plans/2026-04-08-security-offline-finance-plan.md](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/docs/plans/2026-04-08-security-offline-finance-plan.md)
+  - [docs/active/2026-04-08-security-offline-finance/context.md](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/docs/active/2026-04-08-security-offline-finance/context.md)
+  - [docs/active/2026-04-08-security-offline-finance/checklist.md](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/docs/active/2026-04-08-security-offline-finance/checklist.md)
 - Planned decisions:
   - potraktować ten plan jako docelową specyfikację dla nowej wersji Fazy 3.
   - przy fazie 4 i 5 pilnować, żeby:

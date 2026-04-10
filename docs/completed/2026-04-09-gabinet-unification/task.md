@@ -2,7 +2,7 @@
 
 Branch: `main`
 Recommended branch: `codex/gabinet-unification`
-Last updated: 2026-04-10 (poprawki Unit 3)
+Last updated: 2026-04-10 (Unit 5)
 
 ## Cel
 
@@ -38,9 +38,9 @@ Zadanie obejmuje piec glownego pakietu wykonawczego i jeden etap przygotowawczy:
 - Unit 0: ukonczony
 - Unit 1: ukonczony po poprawkach kompatybilnosci i krotkim smoke tescie online/offline
 - Unit 2: ukonczony
-- Unit 3: ukonczony, poprawka P1 z review naniesiona, oczekuje re-review
-- Unit 4: zablokowany do re-review fazy 3
-- Unit 5: nie rozpoczęty
+- Unit 3: ukonczony po poprawce i re-review
+- Unit 4: ukonczony
+- Unit 5: ukonczony
 
 ## Status po Unit 1
 
@@ -78,8 +78,30 @@ Zadanie obejmuje piec glownego pakietu wykonawczego i jeden etap przygotowawczy:
 - widoki nie uzywaja juz bezposrednio starego `Encryption.encrypt()` / `Encryption.decrypt()` do notatek klinicznych,
 - przy ustawianiu hasla aplikacja probuje przeniesc stare rootowe zaszyfrowane stringi kliniczne do nowego envelope,
 - backup referencyjny nadal laduje sie jako `6 / 74 / 24`, bez problemow migracji,
-- review fazy 3 wykryl bloker w scenariuszu sign-out po odblokowaniu danych klinicznych,
-- kolejnym etapem po poprawce i re-review bedzie `Unit 4`: finanse i jedno zrodlo prawdy dla platnosci.
+- poprawka i re-review zamknely bloker w scenariuszu sign-out po odblokowaniu danych klinicznych,
+- kolejnym etapem jest `Unit 4`: finanse i jedno zrodlo prawdy dla platnosci.
+
+## Status po Unit 4
+
+- zapis, edycja i usuwanie platnosci przechodza teraz przez wspolne helpery w `js/data.js`, zamiast recznie ustawiac status sesji w widoku finansow,
+- `reconcilePaymentStatus()` czyści tez stare flagi platnosci na sesjach, wiec po zmianie lub usunieciu platnosci nie zostaje juz „stary” stan na odlaczonej sesji,
+- dashboard finansowy liczy przychod po dacie platnosci i po rekordach `payments`, tak samo jak lista platnosci,
+- revenue per metoda liczy split payment bez proporcji opartych o pelna kwote sesji, wiec partial + split nie zawyzaja juz wykresu,
+- zachowane zostaly partial payment i split payment,
+- kolejnym etapem jest `Unit 5`: shell, PWA assets i cleanup.
+
+## Status po Unit 5
+
+- rootowy `sw.js` stal sie jedynym utrzymywanym service workerem aplikacji i ma juz pelna liste aktualnie ladowanych plikow root, w tym `js/security.js` i `js/local-store.js`,
+- cache PWA uzywa wzglednych sciezek, wiec shell jest mniej kruchy przy uruchamianiu z podfolderu,
+- `manifest.json` ma spojne `id`, `scope`, `start_url` i kolor motywu wzgledem rootowego shellu,
+- katalog `GabinetPWA` zostal oznaczony jako archiwalne zrodlo porownawcze, ale nie zostal jeszcze usuniety,
+- README opisuje juz aktualny uklad root zamiast starego `service-worker.js` i nieistniejacych plikow konfiguracyjnych,
+- po poprawkach po review fazy 5 root przeszedl tez koncowy smoke PWA w Chromium:
+  - reload po rejestracji service workera na desktopie,
+  - reload w emulacji mobilnej,
+  - check instalowalnosci bez bledow manifestu,
+- wszystkie unity `0-5` sa wykonane, a kolejnym krokiem jest archiwizacja taska przez `dev-docs-complete`.
 
 ## Kryteria akceptacji
 
@@ -95,4 +117,4 @@ Zadanie obejmuje piec glownego pakietu wykonawczego i jeden etap przygotowawczy:
 - wymagania: [docs/brainstorms/2026-04-09-gabinet-unification-requirements.md](/Users/pawelszmit/Desktop/Gabinet/docs/brainstorms/2026-04-09-gabinet-unification-requirements.md)
 - plan techniczny: [docs/plans/2026-04-09-gabinet-unification-plan.md](/Users/pawelszmit/Desktop/Gabinet/docs/plans/2026-04-09-gabinet-unification-plan.md)
 - plan split payment: [docs/plans/2026-04-08-001-feat-split-payment-two-methods-plan.md](/Users/pawelszmit/Desktop/Gabinet/docs/plans/2026-04-08-001-feat-split-payment-two-methods-plan.md)
-- historyczny pakiet security/offline: [docs/completed/2026-04-08-security-offline-finance/task.md](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/docs/completed/2026-04-08-security-offline-finance/task.md)
+- historyczny pakiet security/offline: [docs/completed/2026-04-08-security-offline-finance/task.md](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/docs/completed/2026-04-08-security-offline-finance/task.md)

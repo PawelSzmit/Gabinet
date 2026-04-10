@@ -6,8 +6,8 @@
 - [x] Unit 1: fundament security, offline i sync w root
 - [x] Unit 2: model danych i migracje
 - [x] Unit 3: widoki kliniczne i ustawienia
-- [ ] Unit 4: finanse i jedno zrodlo prawdy dla platnosci
-- [ ] Unit 5: shell, PWA assets i cleanup
+- [x] Unit 4: finanse i jedno zrodlo prawdy dla platnosci
+- [x] Unit 5: shell, PWA assets i cleanup
 
 ## Zrobione w Unit 0
 
@@ -204,4 +204,113 @@
 - [x] Poprawic `SecurityService.handleSignOut()`, aby po wylogowaniu nie odbudowywal `_protectedState` z odblokowanego, jawnego `AppState`
 - [x] Upewnic sie, ze po sign-out w stanie `unlocked` kolejny `serializeAppData()` nie zawiera jawnych notatek, celow ani wpisow postepu
 - [x] Dodac smoke test scenariusza z planu Unit 3: haslo ustawione, dane odblokowane, wylogowanie Google, lokalne dane zostaja, eksport/snapshot nadal szyfrowany
-- [ ] Po poprawce wykonac re-review fazy 3 przed startem `Unit 4`
+- [x] Po poprawce wykonac re-review fazy 3 przed startem `Unit 4`
+
+## Re-review fazy 3 - 2026-04-10
+
+- [x] Brak nowych findingow `P1`
+- [x] Brak nowych findingow `P2`
+- [x] Brak nowych findingow `P3`
+- [x] Poprzedni finding `P1` o wycieku danych klinicznych po sign-out zamkniety
+- [x] Smoke test potwierdza brak jawnych danych w eksporcie po sign-out
+- [x] Smoke test potwierdza, ze po ponownym unlock wracaja poprawne dane kliniczne
+- [x] Bramka po re-review: mozna przejsc do `Unit 4`
+
+## Zadania do Unit 4
+
+- [x] Przeniesc zapis i usuwanie platnosci na wspolne helpery w `js/data.js`
+- [x] Utrzymac partial payment i split payment przy zapisie, edycji i usuwaniu platnosci
+- [x] Dopilnowac, zeby po edycji lub usunieciu platnosci stare flagi sesji byly czyszczone z jednego miejsca
+- [x] Ujednolicic dashboard i liste platnosci, aby liczyly przychod po dacie platnosci i rekordach `payments`
+- [x] Ujednolicic revenue by method dla split payment tak, aby bazowal na rzeczywistych kwotach z `payment.splitAmounts`
+- [x] Zachowac kalendarz jako widok sesji, ale bez rozjazdu z autorytatywnym rekordem platnosci
+- [x] Spisac decyzje semantyczna: finanse w dashboardzie liczymy po dacie platnosci, nie po dacie sesji
+
+## Wynik Unit 4
+
+- [x] `savePaymentRecord()` i `deletePaymentRecord()` staly sie wspolnym torem zmian dla platnosci
+- [x] `reconcilePaymentStatus()` czysci tez stare flagi platnosci na sesjach, wiec odlaczone sesje nie zachowuja juz starego statusu
+- [x] Edycja platnosci nie zostawia juz poprzednio oplaconej sesji w stanie `isPaid = true`
+- [x] Usuniecie platnosci czyści stan sesji z jednego miejsca
+- [x] Dashboard i trend przychodow licza po rekordach `payments` i po `payment.date`
+- [x] Split payment w revenue by method rozbija sie bezposrednio po `splitAmounts.primary` i `splitAmounts.secondary`
+- [x] Partial payment dalej ustawia `isPartiallyPaid` i `partialPaymentAmount` na najstarszej sesji zgodnie z kwota platnosci
+
+## Weryfikacja Unit 4
+
+- [x] `node --check js/data.js`
+- [x] `node --check js/views/finance.js`
+- [x] `node --check js/views/calendar.js`
+- [x] `git diff --check`
+- [x] Targeted smoke Node/vm: partial payment ustawia `isPartiallyPaid` i `partialPaymentAmount`
+- [x] Targeted smoke Node/vm: revenue liczy po `payment.date`, a nie po dacie sesji
+- [x] Targeted smoke Node/vm: split payment rozbija metody na dokladne kwoty `40 / 60 / 200`, bez zawyzania
+- [x] Targeted smoke Node/vm: edycja platnosci czyści stary stan sesji usunietej z `sessionIds`
+- [x] Targeted smoke Node/vm: usuniecie platnosci czyści stan sesji i zostawia jeden rekord w `payments`
+
+## Do poprawy po review fazy 4
+
+- [x] Ujednolicic filtrowanie zakresu dat w liscie platnosci, aby porownywalo lokalny dzien platnosci zamiast surowego stringa ISO
+- [x] Ujednolicic zapis `payment.date` przy edycji platnosci z normalizacja uzywana przy tworzeniu nowego rekordu
+
+## Wynik poprawek po review fazy 4
+
+- [x] Lista platnosci filtruje teraz po lokalnym dniu platnosci, wiec rekord zapisany na `2026-04-07` nie wypada juz z filtra `Od = Do = 2026-04-07`
+- [x] Edycja platnosci zachowuje ten sam format `payment.date` co tworzenie nowego rekordu
+
+## Weryfikacja poprawek po review fazy 4
+
+- [x] `node --check js/data.js`
+- [x] `node --check js/views/finance.js`
+- [x] `git diff --check`
+- [x] Targeted smoke Node/vm: `paymentDayKey()` mapuje zapisane ISO na lokalny dzien `YYYY-MM-DD`
+- [x] Targeted smoke Node/vm: filtr `Od = Do = 2026-04-07` zwraca platnosc zapisana na ten dzien
+- [x] Targeted smoke Node/vm: edycja platnosci zachowuje taki sam format ISO jak utworzenie nowego rekordu
+
+## Zadania do Unit 5
+
+- [x] Uporzadkowac rootowy `sw.js` jako jedyny utrzymywany service worker aplikacji
+- [x] Dodac do cache root pliki `js/security.js` i `js/local-store.js`, z ktorych faktycznie korzysta shell
+- [x] Ujednolicic `manifest.json` z rootowym shellem i uruchamianiem z wzglednej sciezki
+- [x] Oznaczyc `GabinetPWA` jako katalog archiwalny bez przedwczesnego usuwania
+- [x] Poprawic README tak, aby opisywal aktualny root zamiast starej struktury `service-worker.js` / `config.js`
+
+## Wynik Unit 5
+
+- [x] `sw.js` cache'uje aktualny app shell root, wlacznie z `js/security.js` i `js/local-store.js`
+- [x] PWA assets root uzywaja wzglednych sciezek `./`, wiec sa spojniejsze z uruchamianiem z podfolderu
+- [x] `manifest.json` ma `id`, `scope` i `start_url` ustawione na rootowy shell
+- [x] `docs/archived-sources/gabinet-pwa/ARCHIVE.md` oznacza katalog jako archiwalne zrodlo porownawcze
+- [x] README nie odsyla juz do nieistniejacego `service-worker.js` ani `config.example.js`
+
+## Weryfikacja Unit 5
+
+- [x] `node --check sw.js`
+- [x] `python3 -m json.tool manifest.json`
+- [x] `git diff --check`
+- [x] `curl -I http://127.0.0.1:4173/index.html`
+- [x] `curl -I http://127.0.0.1:4173/sw.js`
+- [x] `curl -I http://127.0.0.1:4173/manifest.json`
+- [x] `curl -I http://127.0.0.1:4173/js/security.js`
+- [x] `curl -I http://127.0.0.1:4173/js/local-store.js`
+- [x] `rg -n "service-worker\\.js|config\\.example|config\\.js" README.md` nie znajduje juz starych odniesien
+
+## Do poprawy po review fazy 5
+
+- [x] Wykonac finalne scenariusze PWA z planu Unit 5: twarde odswiezenie po zmianie service workera, instalacja PWA oraz start po odswiezeniu na telefonie i desktopie
+- [x] Dorecznie poprawic tabele technologii w README, aby nie opisywala juz starego `Chart.js` i starej pary fontow
+
+## Wynik poprawek po review fazy 5
+
+- [x] Root przeszedl koncowy smoke PWA w Chromium dla desktopu i mobilki po reloadzie
+- [x] CDP `Page.getInstallabilityErrors` zwraca pusty wynik, wiec manifest i service worker nie blokuja instalowalnosci
+- [x] README opisuje juz aktualna pare fontow `Fraunces + Manrope` i nie odwoluje sie do `Chart.js`
+
+## Weryfikacja poprawek po review fazy 5
+
+- [x] `git diff --check`
+- [x] `rg -n "Chart\\.js|Playfair Display" README.md`
+- [x] Targeted Playwright Chromium smoke: desktop load -> service worker ready -> reload -> tytul `Gabinet`
+- [x] Targeted Playwright Chromium smoke: mobile emulation load -> reload -> tytul `Gabinet`
+- [x] Targeted CDP check: `Page.getAppManifest` bez bledow
+- [x] Targeted CDP check: `Page.getInstallabilityErrors` zwraca pusta liste

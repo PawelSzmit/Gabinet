@@ -30,8 +30,8 @@ Plan obejmuje:
 
 - wymagania: [docs/brainstorms/2026-04-09-gabinet-unification-requirements.md](/Users/pawelszmit/Desktop/Gabinet/docs/brainstorms/2026-04-09-gabinet-unification-requirements.md)
 - istniejacy plan split payment: [docs/plans/2026-04-08-001-feat-split-payment-two-methods-plan.md](/Users/pawelszmit/Desktop/Gabinet/docs/plans/2026-04-08-001-feat-split-payment-two-methods-plan.md)
-- plan security/offline z kopii rozwojowej: [docs/plans/2026-04-08-security-offline-finance-plan.md](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/docs/plans/2026-04-08-security-offline-finance-plan.md)
-- brainstorm hasla klinicznego: [docs/brainstorms/2026-04-08-clinical-password-ux-requirements.md](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/docs/brainstorms/2026-04-08-clinical-password-ux-requirements.md)
+- plan security/offline z kopii rozwojowej: [docs/plans/2026-04-08-security-offline-finance-plan.md](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/docs/plans/2026-04-08-security-offline-finance-plan.md)
+- brainstorm hasla klinicznego: [docs/brainstorms/2026-04-08-clinical-password-ux-requirements.md](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/docs/brainstorms/2026-04-08-clinical-password-ux-requirements.md)
 - wazne commity:
   - `4fe008d` - pelna synchronizacja `GabinetPWA -> ROOT`
   - `7729fde` - revert tej synchronizacji
@@ -82,15 +82,15 @@ Kluczowe pliki:
 
 Kluczowe pliki:
 
-- [js/security.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/security.js)
-- [js/local-store.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/local-store.js)
-- [js/app.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/app.js)
-- [js/data.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/data.js)
-- [js/drive.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/drive.js)
-- [js/views/calendar.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/views/calendar.js)
-- [js/views/finance.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/views/finance.js)
-- [js/views/patients.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/views/patients.js)
-- [js/views/settings.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/views/settings.js)
+- [js/security.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/security.js)
+- [js/local-store.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/local-store.js)
+- [js/app.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/app.js)
+- [js/data.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/data.js)
+- [js/drive.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/drive.js)
+- [js/views/calendar.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/views/calendar.js)
+- [js/views/finance.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/views/finance.js)
+- [js/views/patients.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/views/patients.js)
+- [js/views/settings.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/views/settings.js)
 
 ### Najwazniejsze lokalne wzorce, ktore warto zachowac
 

@@ -13,10 +13,10 @@ Last updated: 2026-04-09
 
 ## Zrodla
 
-- Review: [docs/review-kodu-2026-04-08.md](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/docs/review-kodu-2026-04-08.md)
-- Plan bazowy: [docs/plans/2026-04-08-security-offline-finance-plan.md](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/docs/plans/2026-04-08-security-offline-finance-plan.md)
-- Wymagania dla hasła: [docs/brainstorms/2026-04-08-clinical-password-ux-requirements.md](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/docs/brainstorms/2026-04-08-clinical-password-ux-requirements.md)
-- Plan techniczny dla hasła: [docs/plans/2026-04-08-clinical-password-security-plan.md](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/docs/plans/2026-04-08-clinical-password-security-plan.md)
+- Review: [docs/review-kodu-2026-04-08.md](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/docs/review-kodu-2026-04-08.md)
+- Plan bazowy: [docs/plans/2026-04-08-security-offline-finance-plan.md](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/docs/plans/2026-04-08-security-offline-finance-plan.md)
+- Wymagania dla hasła: [docs/brainstorms/2026-04-08-clinical-password-ux-requirements.md](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/docs/brainstorms/2026-04-08-clinical-password-ux-requirements.md)
+- Plan techniczny dla hasła: [docs/plans/2026-04-08-clinical-password-security-plan.md](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/docs/plans/2026-04-08-clinical-password-security-plan.md)
 
 ## Ostatni wykonany zakres
 
@@ -39,20 +39,20 @@ Follow-up po review fazy 6:
 ## Ważne pliki i obszary
 
 - Dane i migracje:
-  - [js/data.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/data.js)
+  - [js/data.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/data.js)
 - Ochrona danych klinicznych:
-  - [js/security.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/security.js)
+  - [js/security.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/security.js)
 - Lokalny snapshot i metadane synchronizacji:
-  - [js/local-store.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/local-store.js)
+  - [js/local-store.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/local-store.js)
 - Logowanie, lock i przejścia aplikacji:
-  - [js/app.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/app.js)
-  - [js/drive.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/drive.js)
+  - [js/app.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/app.js)
+  - [js/drive.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/drive.js)
 - Widoki kliniczne:
-  - [js/views/calendar.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/views/calendar.js)
-  - [js/views/patients.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/views/patients.js)
-  - [js/views/settings.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/views/settings.js)
+  - [js/views/calendar.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/views/calendar.js)
+  - [js/views/patients.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/views/patients.js)
+  - [js/views/settings.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/views/settings.js)
 - UI wejścia i obietnice produktu:
-  - [index.html](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/index.html)
+  - [index.html](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/index.html)
 
 ## Najważniejsze decyzje techniczne
 
@@ -103,21 +103,21 @@ Pola, które powinny pozostać jawne ze względów UX i działania list:
 
 ## Zmienione pliki do tej pory
 
-- [js/data.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/data.js)
-- [js/security.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/security.js)
-- [js/local-store.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/local-store.js)
-- [js/app.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/app.js)
-- [js/drive.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/drive.js)
-- [js/views/finance.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/views/finance.js)
-- [js/views/calendar.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/views/calendar.js)
-- [js/views/patients.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/views/patients.js)
-- [js/views/settings.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/js/views/settings.js)
-- [index.html](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/index.html)
-- [styles.css](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/styles.css)
-- [sw.js](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/sw.js)
-- [docs/active/2026-04-08-security-offline-finance/task.md](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/docs/active/2026-04-08-security-offline-finance/task.md)
-- [docs/active/2026-04-08-security-offline-finance/checklist.md](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/docs/active/2026-04-08-security-offline-finance/checklist.md)
-- [docs/active/2026-04-08-security-offline-finance/context.md](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/docs/active/2026-04-08-security-offline-finance/context.md)
+- [js/data.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/data.js)
+- [js/security.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/security.js)
+- [js/local-store.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/local-store.js)
+- [js/app.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/app.js)
+- [js/drive.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/drive.js)
+- [js/views/finance.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/views/finance.js)
+- [js/views/calendar.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/views/calendar.js)
+- [js/views/patients.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/views/patients.js)
+- [js/views/settings.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/js/views/settings.js)
+- [index.html](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/index.html)
+- [styles.css](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/styles.css)
+- [sw.js](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/sw.js)
+- [docs/active/2026-04-08-security-offline-finance/task.md](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/docs/active/2026-04-08-security-offline-finance/task.md)
+- [docs/active/2026-04-08-security-offline-finance/checklist.md](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/docs/active/2026-04-08-security-offline-finance/checklist.md)
+- [docs/active/2026-04-08-security-offline-finance/context.md](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/docs/active/2026-04-08-security-offline-finance/context.md)
 
 ## Dotychczasowa weryfikacja
 
@@ -181,7 +181,7 @@ Pola, które powinny pozostać jawne ze względów UX i działania list:
 ## Review fazy 6 — 2026-04-09
 
 - Status bramki: kontynuacja z zastrzeżeniami
-- Raport: [review-faza-6.md](/Users/pawelszmit/Desktop/Gabinet/GabinetPWA/docs/active/2026-04-08-security-offline-finance/review-faza-6.md)
+- Raport: [review-faza-6.md](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/docs/active/2026-04-08-security-offline-finance/review-faza-6.md)
 - Najważniejsze wnioski:
   - fallback sesji w `js/app.js` nadal omija wspólną logikę płatności przy zapisie i usuwaniu,
   - fallback pacjenta dalej potrafi tworzyć rekordy niezgodne z głównym modelem (`therapyStartDate` i harmonogram są pomijane),

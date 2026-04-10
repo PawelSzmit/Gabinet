@@ -1,4 +1,4 @@
-# Gabinet Terapeutyczny
+# Gabinet
 
 Aplikacja PWA do zarządzania gabinetem psychoterapeutycznym. Umożliwia prowadzenie kalendarza sesji, bazy pacjentów, rozliczeń finansowych i statystyk — wszystko zsynchronizowane z Google Drive.
 
@@ -53,9 +53,9 @@ Aplikacja PWA do zarządzania gabinetem psychoterapeutycznym. Umożliwia prowadz
 | Warstwa | Technologia |
 |---------|-------------|
 | Frontend | Vanilla JavaScript (ES6+), HTML5, CSS3 |
-| Styl | Liquid Glass Design System (glassmorphism) |
-| Typografia | Playfair Display (serif) + System fonts (sans-serif) |
-| Wykresy | Chart.js |
+| Styl | Wlasny CSS aplikacji |
+| Typografia | Fraunces + Manrope |
+| Wykresy | Wlasne komponenty JS/DOM |
 | Uwierzytelnianie | Google OAuth 2.0 |
 | Przechowywanie | Google Drive API v3 |
 | Szyfrowanie | Web Crypto API (AES-256-GCM) |
@@ -65,37 +65,22 @@ Aplikacja PWA do zarządzania gabinetem psychoterapeutycznym. Umożliwia prowadz
 ## Struktura projektu
 
 ```
-Gabinet-PWA/
-├── index.html              # Główny plik HTML (SPA)
+Gabinet/
+├── index.html              # Glowny shell aplikacji i landing page
+├── styles.css              # Style rootowej aplikacji
 ├── manifest.json           # Manifest PWA
-├── service-worker.js       # Service Worker (cache v6)
-├── .gitignore
-│
-├── css/
-│   ├── main.css            # Zmienne, layout, nawigacja, login
-│   ├── components.css      # Przyciski, formularze, karty, modale
-│   └── calendar.css        # Widoki kalendarza
-│
+├── sw.js                   # Service Worker rootowej aplikacji
+├── icons/                  # Ikony PWA
 ├── js/
-│   ├── config.js           # Klucze Google API (nie w repozytorium)
-│   ├── config.example.js   # Szablon konfiguracji
-│   ├── app.js              # Routing, inicjalizacja, stan globalny
-│   ├── auth.js             # Google OAuth 2.0
+│   ├── app.js              # Inicjalizacja i routing
+│   ├── data.js             # Model danych i migracje
 │   ├── drive.js            # Synchronizacja z Google Drive
-│   ├── encryption.js       # Szyfrowanie notatek (AES-256-GCM)
-│   ├── patients.js         # CRUD pacjentów
-│   ├── sessions.js         # Generowanie i zarządzanie sesjami
-│   ├── calendar.js         # Renderowanie kalendarza
-│   ├── payments.js         # Rejestracja płatności
-│   ├── finance.js          # Wykresy przychodów
-│   ├── stats.js            # Moduł statystyk
-│   ├── notes.js            # Notatki, cele, postępy
-│   ├── archive.js          # Archiwizacja pacjentów
-│   └── utils.js            # Funkcje pomocnicze
-│
-└── icons/
-    ├── icon-192.png
-    └── icon-512.png
+│   ├── encryption.js       # Kompatybilnosc ze starszym szyfrowaniem
+│   ├── security.js         # Ochrona danych klinicznych
+│   ├── local-store.js      # Lokalny snapshot offline
+│   ├── utils.js            # Funkcje pomocnicze
+│   └── views/              # Widoki aplikacji
+└── docs/                   # Task bundle, plany, notatki i archiwalne zrodla
 ```
 
 ## Instalacja i uruchomienie
@@ -114,17 +99,9 @@ Gabinet-PWA/
    cd Gabinet
    ```
 
-2. Skopiuj plik konfiguracyjny i uzupełnij klucze:
-   ```bash
-   cp js/config.example.js js/config.js
-   ```
-   Edytuj `js/config.js` i wpisz:
-   - `GOOGLE_CLIENT_ID` — identyfikator klienta OAuth 2.0
-   - `GOOGLE_API_KEY` — klucz API Google
-
-3. Skonfiguruj ograniczenia w Google Cloud Console:
-   - **API Key** → Application restrictions → HTTP referrers → dodaj domenę hostingu
+2. Skonfiguruj ograniczenia w Google Cloud Console dla klienta OAuth używanego przez aplikację:
    - **OAuth Client ID** → Authorized JavaScript origins → dodaj domenę hostingu
+   - jeśli korzystasz z własnego projektu Google, podmień identyfikator klienta w [js/drive.js](/Users/pawelszmit/Desktop/Gabinet/js/drive.js)
 
 ### Uruchomienie lokalne
 
@@ -220,7 +197,7 @@ border: 1px solid rgba(255, 255, 255, 0.5);
 - **Szyfrowanie notatek**: Treści notatek klinicznych szyfrowane algorytmem AES-256-GCM (Web Crypto API) przed zapisem na Google Drive
 - **Pseudonimy**: Pacjenci identyfikowani pseudonimem, nie imieniem i nazwiskiem
 - **OAuth 2.0**: Autoryzacja przez Google z automatycznym odświeżaniem tokena
-- **Klucze API**: Przechowywane w pliku `config.js` poza repozytorium; ograniczone do domeny w Google Cloud Console
+- **Google OAuth**: klient Google jest konfigurowany w [js/drive.js](/Users/pawelszmit/Desktop/Gabinet/js/drive.js); dostęp ograniczaj po domenie w Google Cloud Console
 
 ## Licencja
 

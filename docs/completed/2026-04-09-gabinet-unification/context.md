@@ -2,14 +2,14 @@
 
 Branch: `main`
 Recommended branch: `codex/gabinet-unification`
-Last updated: 2026-04-10 (poprawki Unit 3)
+Last updated: 2026-04-10 (Unit 5)
 
 ## Status
 
 - Data rozpoczecia: 2026-04-09
-- Ostatnio w pelni ukonczony unit: Unit 3
-- Aktywny etap: oczekiwanie na start Unit 4
-- Nastepny unit: Unit 4
+- Ostatnio w pelni ukonczony unit: Unit 5
+- Aktywny etap: finalna reczna weryfikacja przed archiwizacja taska
+- Nastepny unit: brak - wszystkie unity 0-5 sa wykonane
 
 ## Git context przy starcie
 
@@ -561,3 +561,260 @@ Wniosek praktyczny:
 
 - finding `P1` z review fazy 3 zostal zaadresowany w kodzie,
 - potrzebny jest jeszcze re-review fazy 3 jako bramka przed przejsciem do `Unit 4`.
+
+## Re-review fazy 3 - 2026-04-10
+
+- Decyzja bramki: gotowe do przejscia do `Unit 4`
+- Raport: [review-faza-3-rereview.md](/Users/pawelszmit/Desktop/Gabinet/docs/active/2026-04-09-gabinet-unification/review-faza-3-rereview.md)
+- Liczniki:
+  - `P1`: 0
+  - `P2`: 0
+  - `P3`: 0
+
+Najwazniejsze wnioski:
+
+- poprawka w [js/security.js](/Users/pawelszmit/Desktop/Gabinet/js/security.js) zamyka realny wyciek danych klinicznych po sign-out,
+- eksport po wylogowaniu nie zawiera juz jawnych notatek, celow ani wpisow postepu,
+- ponowne odblokowanie po sign-out nadal przywraca poprawne dane kliniczne,
+- nie potwierdzono nowych blockerow w obszarze Unit 3.
+
+Weryfikacja re-review:
+
+- `node --check js/security.js`
+- `node --check js/app.js`
+- `node --check js/views/patients.js`
+- `node --check js/views/calendar.js`
+- `node --check js/views/settings.js`
+- `git diff --check`
+- targeted smoke JS/Node dla scenariusza:
+  - ustaw haslo,
+  - potwierdz brak wycieku przed sign-out,
+  - wykonaj `handleSignOut()`,
+  - potwierdz brak wycieku po sign-out,
+  - wykonaj unlock i sprawdz odzyskanie danych klinicznych.
+
+Wniosek praktyczny:
+
+- Unit 3 jest domkniety po re-review,
+- kolejny krok to `Unit 4`, czyli finanse i jedno zrodlo prawdy dla platnosci.
+
+## Wykonanie Unit 4 - 2026-04-10
+
+Zakres zrealizowany w root:
+
+- [js/data.js](/Users/pawelszmit/Desktop/Gabinet/js/data.js)
+  - dodano wspolne helpery `savePaymentRecord()` i `deletePaymentRecord()`, zeby zapis, edycja i usuwanie platnosci nie dzialaly juz osobno w widoku finansow,
+  - `savePaymentRecord()` zachowuje partial payment i split payment, ale po zmianach zawsze odpala `reconcilePaymentStatus()`,
+  - `reconcilePaymentStatus()` czysci teraz nie tylko sesje nadal wskazywane przez rekordy platnosci, ale tez stare flagi platnosci pozostawione po poprzednich powiazaniach.
+- [js/views/finance.js](/Users/pawelszmit/Desktop/Gabinet/js/views/finance.js)
+  - dashboard finansowy liczy przychod po rekordach `payments` i po `payment.date`,
+  - trend przychodow i revenue by method korzystaja z tego samego modelu,
+  - split payment rozbijany jest bezposrednio po `splitAmounts`, bez starej proporcji liczonej od pelnej kwoty sesji,
+  - zapis i usuwanie platnosci przechodza przez nowe helpery z `js/data.js`, wiec widok finansow przestal sam ustawiac `isPaid`, `isPartiallyPaid` i `paymentMethod` na sesjach.
+
+Wazna decyzja semantyczna:
+
+- dla `Unit 4` przyjeto jedna zasade: dashboard i trend przychodow liczymy po dacie platnosci, nie po dacie sesji,
+- uzasadnienie praktyczne: lista platnosci juz byla oparta o `payment.date`, a baseline finansowy tez opisuje wynik „po dacie platnosci”, wiec to jest spojniejsze dla rozliczen.
+
+Weryfikacja wykonana dla Unit 4:
+
+- `node --check js/data.js`
+- `node --check js/views/finance.js`
+- `node --check js/views/calendar.js`
+- `git diff --check`
+- targeted smoke Node/vm:
+  - partial payment jednej sesji ustawia `isPartiallyPaid = true` i `partialPaymentAmount = 100`,
+  - revenue liczy `300` po dacie platnosci, mimo ze oplacone sesje byly w poprzednim miesiacu,
+  - split payment rozbija metody na `cash = 40`, `aliorBank = 60`, `ingBank = 200`,
+  - edycja platnosci czyści stan sesji, ktora wypadla z `sessionIds`,
+  - usuniecie platnosci czyści stan sesji i zostawia poprawna liczbe rekordow `payments`.
+
+Wniosek praktyczny:
+
+- `Unit 4` jest domkniety,
+- finanse maja teraz jeden tor zapisu i jedno zrodlo prawdy w rekordach platnosci,
+- kolejny krok to `Unit 5`, czyli shell, PWA assets i cleanup.
+
+## Review fazy 4 - 2026-04-10
+
+- Decyzja bramki: gotowe do dalszej pracy z zastrzezeniami
+- Raport review: [review-faza-4.md](/Users/pawelszmit/Desktop/Gabinet/docs/active/2026-04-09-gabinet-unification/review-faza-4.md)
+- Liczniki:
+  - `P1`: 0
+  - `P2`: 2
+  - `P3`: 0
+
+Najwazniejsze wnioski:
+
+- `Unit 4` dobrze domyka jeden tor zapisu i usuwania platnosci,
+- zostaly jednak dwa wazne rozjazdy wokol dat platnosci:
+  - lista platnosci filtruje zakres po surowym stringu ISO i moze ukryc rekord zapisany na wybrany lokalny dzien,
+  - edycja platnosci zapisuje `payment.date` w innym formacie niz tworzenie nowej platnosci.
+
+Weryfikacja review:
+
+- odczyt task bundle: `task.md`, `checklist.md`, `context.md`
+- odczyt planu `Unit 4` i planu split payment
+- inspekcja [js/data.js](/Users/pawelszmit/Desktop/Gabinet/js/data.js) i [js/views/finance.js](/Users/pawelszmit/Desktop/Gabinet/js/views/finance.js)
+- krotki check Node dla porownania:
+  - `2026-04-06T22:00:00.000Z < 2026-04-07 === true`
+
+Wniosek praktyczny:
+
+- nie ma blokera `P1`, wiec mozna isc dalej swiadomie,
+- najlepiej poprawic obie kwestie dat jeszcze przed finalnym cleanupem z `Unit 5`, zeby nie zamrozic finansow z cichym rozjazdem filtra i formatu danych.
+
+## Poprawki po review fazy 4 - 2026-04-10
+
+Zakres zrealizowany jako domkniecie findingow `P2` z review `Unit 4`:
+
+- [js/views/finance.js](/Users/pawelszmit/Desktop/Gabinet/js/views/finance.js)
+  - dodano helper `paymentDayKey()`, ktory mapuje zapisany `payment.date` na lokalny dzien `YYYY-MM-DD`,
+  - filtrowanie listy platnosci porownuje teraz lokalny dzien platnosci z polami `Od` / `Do`, zamiast porownywac surowy string ISO.
+- [js/data.js](/Users/pawelszmit/Desktop/Gabinet/js/data.js)
+  - branch edycji platnosci normalizuje `payment.date` tym samym torem co tworzenie nowego rekordu.
+
+Weryfikacja wykonana po poprawkach:
+
+- `node --check js/data.js`
+- `node --check js/views/finance.js`
+- `git diff --check`
+- targeted smoke Node/vm:
+  - nowa platnosc z inputem `2026-04-07` zapisuje sie jako ISO `2026-04-06T22:00:00.000Z`,
+  - `paymentDayKey()` zwraca dla niej lokalny dzien `2026-04-07`,
+  - filtr `Od = Do = 2026-04-07` zwraca ten rekord,
+  - edycja tej samej platnosci zachowuje identyczny format daty jak po utworzeniu.
+
+Wniosek praktyczny:
+
+- oba findingi `P2` z review fazy 4 zostaly zamkniete,
+- kolejny krok pozostaje bez zmian: `Unit 5`, czyli shell, PWA assets i cleanup.
+
+## Wykonanie Unit 5 - 2026-04-10
+
+Zakres zrealizowany w root:
+
+- [sw.js](/Users/pawelszmit/Desktop/Gabinet/sw.js)
+  - uporzadkowano rootowy service worker jako jedyny utrzymywany plik SW dla finalnej aplikacji,
+  - cache app shell dostal wzgledne sciezki `./`, zeby nie zakladac uruchamiania tylko spod `/`,
+  - do cache dodano `js/security.js` i `js/local-store.js`, bo root laduje je przy starcie,
+  - podniesiono wersje cache do `gabinet-v53`,
+  - dodano prosty guard `GET`, zeby SW nie przechwytywal niepotrzebnie innych metod.
+- [manifest.json](/Users/pawelszmit/Desktop/Gabinet/manifest.json)
+  - dodano `id`, `scope` i `start_url` jako wzgledne `./`,
+  - ujednolicono `theme_color` z rootowym meta theme-color.
+- [README.md](/Users/pawelszmit/Desktop/Gabinet/README.md)
+  - poprawiono opis struktury projektu do aktualnego root,
+  - usunieto stare odniesienia do `service-worker.js`, `config.js` i `config.example.js`,
+  - zaznaczono, ze `GabinetPWA` jest juz tylko katalogiem porownawczym.
+- [ARCHIVE.md](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/ARCHIVE.md)
+  - dodano prosty znacznik, ze `GabinetPWA` jest archiwalnym zrodlem porownawczym i nie jest miejscem dalszego rozwoju.
+
+Wazna decyzja wykonawcza:
+
+- `GabinetPWA` nie zostal usuniety, bo plan taska wprost zabrania kasowania duplikatu przed koncowa reczna weryfikacja,
+- zamiast tego katalog zostal oznaczony jako archiwalny, co domyka cleanup bez ryzyka utraty punktu odniesienia.
+
+Weryfikacja wykonana dla Unit 5:
+
+- `node --check sw.js`
+- `python3 -m json.tool manifest.json`
+- `git diff --check`
+- lokalny serwer HTTP:
+  - `python3 -m http.server 4173`
+- lekki smoke HTTP:
+  - `curl -I http://127.0.0.1:4173/index.html`
+  - `curl -I http://127.0.0.1:4173/sw.js`
+  - `curl -I http://127.0.0.1:4173/manifest.json`
+  - `curl -I http://127.0.0.1:4173/js/security.js`
+  - `curl -I http://127.0.0.1:4173/js/local-store.js`
+- sanity check dokumentacji:
+  - `rg -n "service-worker\\.js|config\\.example|config\\.js" README.md`
+
+Luka po tej fazie:
+
+- nie wykonano jeszcze recznego testu instalacji PWA i twardego odswiezenia w normalnej przegladarce desktop/mobile,
+- to zostaje jako finalny checkpoint przed `dev-docs-complete`.
+
+Wniosek praktyczny:
+
+- wszystkie unity `0-5` sa wykonane,
+- root jest teraz jedyna realna baza finalnej aplikacji,
+- nastepnym krokiem nie jest juz kolejny unit, tylko finalna reczna weryfikacja i zamkniecie taska.
+
+## Review fazy 5 - 2026-04-10
+
+- Decyzja bramki: gotowe do dalszej pracy z zastrzezeniami
+- Raport review: [review-faza-5.md](/Users/pawelszmit/Desktop/Gabinet/docs/active/2026-04-09-gabinet-unification/review-faza-5.md)
+- Liczniki:
+  - `P1`: 0
+  - `P2`: 1
+  - `P3`: 1
+
+Najwazniejsze wnioski:
+
+- rootowy shell i PWA assets wygladaja na uporzadkowane i nie widac zaleznosci runtime od plikow zostawionych tylko w `GabinetPWA`,
+- glowny zastrzegany punkt dotyczy bramki jakosci:
+  - `Unit 5` zostal oznaczony jako ukonczony mimo braku planowych scenariuszy koncowych dla instalacji i odswiezenia PWA,
+- README nadal ma czesc stalej dokumentacji technologicznej po starej wersji shellu.
+
+Weryfikacja review:
+
+- odczyt task bundle: `task.md`, `checklist.md`, `context.md`
+- odczyt planu `Unit 5`
+- inspekcja:
+  - [sw.js](/Users/pawelszmit/Desktop/Gabinet/sw.js)
+  - [manifest.json](/Users/pawelszmit/Desktop/Gabinet/manifest.json)
+  - [index.html](/Users/pawelszmit/Desktop/Gabinet/index.html)
+  - [README.md](/Users/pawelszmit/Desktop/Gabinet/README.md)
+  - [docs/archived-sources/gabinet-pwa/ARCHIVE.md](/Users/pawelszmit/Desktop/Gabinet/docs/archived-sources/gabinet-pwa/ARCHIVE.md)
+- szybki search:
+  - zaleznosci root -> `GabinetPWA`
+  - pozostale odniesienia do starego stacku w README
+
+Wniosek praktyczny:
+
+- nie ma blokera `P1`,
+- przed `dev-docs-complete` warto jeszcze:
+  - przejsc recznie koncowe scenariusze PWA z planu,
+  - doprecyzowac README, aby cleanup byl faktycznie domkniety.
+
+## Poprawki po review fazy 5 - 2026-04-10
+
+Zakres zrealizowany jako domkniecie findingow `P2` i `P3` z review `Unit 5`:
+
+- [README.md](/Users/pawelszmit/Desktop/Gabinet/README.md)
+  - tabela technologii opisuje juz aktualne fonty `Fraunces + Manrope`,
+  - usunieto mylacy wpis o `Chart.js`, bo root nie pokazuje juz aktywnego uzycia tej biblioteki.
+- koncowa weryfikacja PWA
+  - wykonano realny smoke w headless Chromium przez Playwright na lokalnym serwerze root,
+  - desktop i emulacja mobilna przeszly load + reload po rejestracji service workera,
+  - przez CDP sprawdzono manifest i instalowalnosc:
+    - `Page.getAppManifest` bez bledow,
+    - `Page.getInstallabilityErrors` zwraca pusta liste.
+
+Weryfikacja wykonana po poprawkach:
+
+- lokalny serwer HTTP:
+  - `python3 -m http.server 4173`
+- targeted Playwright Chromium smoke:
+  - desktop:
+    - `manifestHref = manifest.json`
+    - `navigator.serviceWorker.ready -> http://127.0.0.1:4173/sw.js`
+    - reload konczy sie z tytulem `Gabinet`
+  - mobile emulation:
+    - reload konczy sie z tytulem `Gabinet`
+    - `navigator.serviceWorker.ready -> http://127.0.0.1:4173/sw.js`
+- targeted CDP check:
+  - `Page.getAppManifest` -> `errors = []`
+  - `Page.getInstallabilityErrors` -> `installabilityErrors = []`
+- sanity check dokumentacji:
+  - `rg -n "Chart\\.js|Playfair Display" README.md`
+- `git diff --check`
+
+Wniosek praktyczny:
+
+- oba findingi z review fazy 5 zostaly zamkniete,
+- `Unit 5` ma juz nie tylko syntaktyczne i HTTP checki, ale tez koncowy smoke PWA,
+- nastepnym krokiem moze byc `dev-docs-complete`.
