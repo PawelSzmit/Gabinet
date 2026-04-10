@@ -135,7 +135,7 @@ const DriveService = {
     localStorage.removeItem(LS_FILEID_KEY);
   },
 
-  async findOrCreateFile() {
+  async findOrCreateFile({ allowCreate = false } = {}) {
     if (this.fileId) return this.fileId;
 
     const query = encodeURIComponent(
@@ -152,6 +152,10 @@ const DriveService = {
       return this.fileId;
     }
 
+    if (!allowCreate) {
+      throw new Error('DRIVE_FILE_NOT_FOUND');
+    }
+
     const emptyContent = typeof serializeAppData === 'function'
       ? await serializeAppData()
       : JSON.stringify({});
@@ -164,7 +168,7 @@ const DriveService = {
   async loadData() {
     this._setLoading(true);
     try {
-      const fileId = await this.findOrCreateFile();
+      const fileId = await this.findOrCreateFile({ allowCreate: false });
       const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
       const resp = await this.apiFetch(url);
 
@@ -207,7 +211,22 @@ const DriveService = {
           : JSON.stringify({})
       );
 
-      const fileId = await this.findOrCreateFile();
+      // Safety check: never overwrite Drive with an empty dataset if the file already exists.
+      // This prevents a migration/reload race from wiping real data.
+      if (this.fileId) {
+        try {
+          const parsed = JSON.parse(content);
+          const isEmpty = (!parsed.patients || parsed.patients.length === 0)
+            && (!parsed.sessions || parsed.sessions.length === 0)
+            && (!parsed.payments || parsed.payments.length === 0);
+          if (isEmpty) {
+            console.warn('[Drive] saveData blocked — would overwrite existing Drive file with empty AppState.');
+            return;
+          }
+        } catch (_) { /* if parse fails, allow save to proceed */ }
+      }
+
+      const fileId = await this.findOrCreateFile({ allowCreate: true });
       await this.updateFile(fileId, content);
 
       if (typeof LocalStore !== 'undefined' && typeof LocalStore.storeSerializedSnapshot === 'function') {
