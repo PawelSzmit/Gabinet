@@ -4,6 +4,7 @@
 const GOOGLE_CLIENT_ID = '554823778989-760krqf91lrhq288s5l61oaa0fe2pekp.apps.googleusercontent.com';
 const DRIVE_FILE_NAME = 'gabinet-data.json';
 const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+const APPDATA_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
 
 const LS_TOKEN_KEY = 'gabinet_access_token';
 const LS_EXPIRY_KEY = 'gabinet_token_expiry';
@@ -79,6 +80,8 @@ const DriveService = {
 
   requestToken(options = {}) {
     const interactive = options.interactive !== false;
+    const scope = options.scope || SCOPES;
+    const prompt = options.prompt !== undefined ? options.prompt : (interactive ? '' : 'none');
 
     return new Promise((resolve, reject) => {
       if (!this._tokenClient) {
@@ -93,7 +96,11 @@ const DriveService = {
 
       this._tokenResolve = resolve;
       this._tokenReject = reject;
-      this._tokenClient.requestAccessToken({ prompt: interactive ? '' : 'none' });
+      this._tokenClient.requestAccessToken({
+        prompt,
+        scope,
+        include_granted_scopes: true,
+      });
     });
   },
 
@@ -349,6 +356,196 @@ function persistData() {
 
 // ─── Data Recovery from Drive Version History ────────────────────────────────
 const DataRecovery = {
+  _safeJsonParse(text) {
+    try {
+      return JSON.parse(text);
+    } catch (_) {
+      return null;
+    }
+  },
+
+  _summarizePayload(payload) {
+    const parsed = payload && typeof payload === 'object' ? payload : {};
+    const patients = Array.isArray(parsed.patients) ? parsed.patients.length : 0;
+    const sessions = Array.isArray(parsed.sessions) ? parsed.sessions.length : 0;
+    const payments = Array.isArray(parsed.payments) ? parsed.payments.length : 0;
+    const blockedPeriods = Array.isArray(parsed.blockedPeriods) ? parsed.blockedPeriods.length : 0;
+    const score = (patients * 100000) + (sessions * 1000) + (payments * 10) + blockedPeriods;
+    return {
+      patients,
+      sessions,
+      payments,
+      blockedPeriods,
+      score,
+      hasData: patients > 0 || sessions > 0 || payments > 0 || blockedPeriods > 0,
+    };
+  },
+
+  _describeSummary(summary) {
+    return `${summary.patients} pacjentow, ${summary.sessions} sesji, ${summary.payments} platnosci`;
+  },
+
+  async _downloadFile(fileId) {
+    const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+    const resp = await DriveService.apiFetch(url);
+    if (!resp.ok) {
+      throw new Error('Nie udalo sie pobrac pliku: ' + resp.status);
+    }
+    return await resp.text();
+  },
+
+  async _listNamedFiles(options = {}) {
+    const query = encodeURIComponent(`name = '${DRIVE_FILE_NAME}' and trashed = false`);
+    const fields = 'files(id,name,modifiedTime,createdTime,parents,spaces)';
+    const spaces = options.spaces ? `&spaces=${encodeURIComponent(options.spaces)}` : '';
+    const url = `https://www.googleapis.com/drive/v3/files?q=${query}${spaces}&fields=${fields}`;
+    const resp = await DriveService.apiFetch(url);
+    if (!resp.ok) {
+      const body = await resp.text();
+      throw new Error('Nie udalo sie pobrac listy plikow: ' + resp.status + ' ' + body);
+    }
+    const json = await resp.json();
+    return Array.isArray(json.files) ? json.files : [];
+  },
+
+  async _collectCurrentCandidates(log, candidates, options = {}) {
+    const files = await this._listNamedFiles(options);
+    if (files.length === 0) {
+      log(options.spaces === 'appDataFolder'
+        ? 'Nie znaleziono pliku w appDataFolder.'
+        : 'Nie znaleziono dodatkowych plikow gabinet-data.json na Drive.');
+      return;
+    }
+
+    for (const file of files) {
+      try {
+        const text = await this._downloadFile(file.id);
+        const parsed = this._safeJsonParse(text);
+        if (!parsed) continue;
+        const summary = this._summarizePayload(parsed);
+        candidates.push({
+          source: options.sourceLabel || 'drive-current',
+          fileId: file.id,
+          modifiedTime: file.modifiedTime || file.createdTime || null,
+          text,
+          parsed,
+          summary,
+        });
+        log(`Znaleziono kandydat: ${options.sourceLabel || 'drive-current'} -> ${this._describeSummary(summary)}.`);
+      } catch (error) {
+        log(`⚠️ Nie udalo sie odczytac pliku ${file.id}: ${error.message}`);
+      }
+    }
+  },
+
+  async _collectRevisionCandidates(log, candidates) {
+    const fileId = DriveService.fileId || localStorage.getItem(LS_FILEID_KEY);
+    if (!fileId) {
+      log('Brak aktywnego pliku Drive do przeszukania historii wersji.');
+      return;
+    }
+
+    const revisions = await this.listRevisions();
+    if (revisions.length === 0) {
+      log('Brak historii wersji dla aktywnego pliku.');
+      return;
+    }
+
+    log(`Przegladam ${revisions.length} wersji aktywnego pliku...`);
+    const ordered = revisions.slice().reverse();
+    for (const rev of ordered) {
+      try {
+        const text = await this.downloadRevision(rev.id);
+        const parsed = this._safeJsonParse(text);
+        if (!parsed) continue;
+        const summary = this._summarizePayload(parsed);
+        if (!summary.hasData) continue;
+        candidates.push({
+          source: 'drive-revision',
+          fileId,
+          revisionId: rev.id,
+          modifiedTime: rev.modifiedTime || null,
+          text,
+          parsed,
+          summary,
+        });
+        log(`Wersja z ${new Date(rev.modifiedTime).toLocaleString('pl-PL')} -> ${this._describeSummary(summary)}.`);
+      } catch (error) {
+        log(`⚠️ Nie udalo sie odczytac wersji ${rev.id}: ${error.message}`);
+      }
+    }
+  },
+
+  async _ensureAppDataAccess(log) {
+    try {
+      await DriveService.requestToken({
+        interactive: true,
+        scope: `${SCOPES} ${APPDATA_SCOPE}`,
+        prompt: 'consent',
+      });
+      log('Uzyskano dostep do starego appDataFolder.');
+      return true;
+    } catch (error) {
+      log('⚠️ Nie udalo sie uzyskac dostepu do appDataFolder: ' + error.message);
+      return false;
+    }
+  },
+
+  _pickBestCandidate(candidates) {
+    return candidates
+      .filter((candidate) => candidate && candidate.summary && candidate.summary.hasData)
+      .sort((a, b) => {
+        if (b.summary.score !== a.summary.score) return b.summary.score - a.summary.score;
+        const aTime = a.modifiedTime ? new Date(a.modifiedTime).getTime() : 0;
+        const bTime = b.modifiedTime ? new Date(b.modifiedTime).getTime() : 0;
+        return bTime - aTime;
+      })[0] || null;
+  },
+
+  async restoreBestAvailableSnapshot(onProgress) {
+    const log = onProgress || console.log;
+    const candidates = [];
+
+    log('Szukam pelnych danych w obecnym pliku Drive...');
+    await this._collectCurrentCandidates(log, candidates, { sourceLabel: 'drive-current' });
+
+    log('Sprawdzam historie wersji obecnego pliku...');
+    await this._collectRevisionCandidates(log, candidates);
+
+    log('Prosze Google o jednorazowy dostep do starego ukrytego magazynu aplikacji...');
+    const hasAppDataAccess = await this._ensureAppDataAccess(log);
+    if (hasAppDataAccess) {
+      await this._collectCurrentCandidates(log, candidates, {
+        sourceLabel: 'appDataFolder',
+        spaces: 'appDataFolder',
+      });
+    }
+
+    const best = this._pickBestCandidate(candidates);
+    if (!best) {
+      throw new Error('Nie znaleziono zadnego niepustego backupu w obecnym Drive, historii wersji ani appDataFolder.');
+    }
+
+    log(`Najlepszy kandydat: ${best.source} -> ${this._describeSummary(best.summary)}.`);
+    deserializeAppData(best.text);
+
+    if (typeof LocalStore !== 'undefined' && typeof LocalStore.storeSerializedSnapshot === 'function') {
+      await LocalStore.storeSerializedSnapshot(best.text, {
+        hasPendingSync: true,
+        lastLocalWriteAt: new Date().toISOString(),
+        source: 'recovery-restore',
+      });
+    }
+
+    log('Zapisuje odzyskane dane do aktualnego pliku aplikacji...');
+    await DriveService.saveData();
+
+    return {
+      source: best.source,
+      summary: best.summary,
+      modifiedTime: best.modifiedTime || null,
+    };
+  },
 
   async listRevisions() {
     const fileId = DriveService.fileId || localStorage.getItem(LS_FILEID_KEY);

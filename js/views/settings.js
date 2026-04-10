@@ -233,7 +233,7 @@ const SettingsView = (() => {
             <span>⬇️ Eksportuj dane (JSON)</span>
           </div>
           <div class="sv-row sv-row-btn orange" id="sv-recover-btn">
-            <span>🔧 Odzyskaj czasy sesji z historii Drive</span>
+            <span>🔧 Odzyskaj pelne dane z Drive</span>
           </div>
           <div id="sv-recover-log" style="padding:8px 16px;font-size:13px;color:#8e8e93;display:none;max-height:200px;overflow-y:auto;white-space:pre-line;"></div>
         </div>
@@ -371,7 +371,7 @@ const SettingsView = (() => {
     const recoverBtn = document.getElementById('sv-recover-btn');
     if (recoverBtn) {
       recoverBtn.addEventListener('click', async () => {
-        if (!confirm('Czy chcesz sprobowac odzyskac oryginalne czasy sesji i harmonogramy pacjentow z historii wersji Google Drive?')) return;
+        if (!confirm('Czy chcesz sprobowac odzyskac pelne dane pacjentow, sesji i platnosci z Google Drive, historii wersji i starego appDataFolder?')) return;
 
         const logEl = document.getElementById('sv-recover-log');
         if (logEl) {
@@ -389,11 +389,11 @@ const SettingsView = (() => {
 
         try {
           if (typeof DataRecovery === 'undefined') throw new Error('DataRecovery nie jest dostepny.');
-          const result = await DataRecovery.recoverFromHistory(addLog);
-          if (result.sessionsFixed > 0 || result.patientsFixed > 0) {
-            if (typeof toast === 'function') toast('Dane odzyskane!', 'success');
-          } else {
-            if (typeof toast === 'function') toast('Nie znaleziono danych do naprawienia.', 'warning');
+          const result = await DataRecovery.restoreBestAvailableSnapshot(addLog);
+          addLog('✅ Przywrocono: ' + result.summary.patients + ' pacjentow, ' + result.summary.sessions + ' sesji i ' + result.summary.payments + ' platnosci.');
+          if (typeof toast === 'function') toast('Dane odzyskane i zapisane do aktualnego pliku Drive.', 'success');
+          if (typeof App !== 'undefined' && typeof App.refreshCurrentView === 'function') {
+            App.refreshCurrentView();
           }
         } catch (err) {
           addLog('❌ Blad: ' + err.message);
