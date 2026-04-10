@@ -487,12 +487,19 @@
     Brak połączenia z internetem – tryb offline
   </div>
 
+  <div id="sync-status-banner" class="sync-status-banner hidden" hidden role="status">
+    <span id="sync-status-text"></span>
+    <button id="sync-status-action" class="sync-status-banner__action" type="button" hidden>Połącz z Google</button>
+  </div>
+
   <!-- ═══════════════════════════════════════════════
        APP SCRIPTS (loaded in dependency order)
   ════════════════════════════════════════════════ -->
   <script src="js/encryption.js"></script>
   <script src="js/utils.js"></script>
   <script src="js/data.js"></script>
+  <script src="js/security.js"></script>
+  <script src="js/local-store.js"></script>
   <script src="js/drive.js"></script>
   <script src="js/views/calendar.js"></script>
   <script src="js/views/patients.js"></script>

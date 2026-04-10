@@ -2,8 +2,9 @@
 
 // ─── AutoLock ─────────────────────────────────────────────────────────────────
 const AutoLock = {
-  timer:   null,
-  timeout: 900_000, // 15 minutes
+  timer: null,
+  timeout: 900_000,
+  _initialized: false,
 
   start() {
     clearTimeout(this.timer);
@@ -17,34 +18,30 @@ const AutoLock = {
   lock() {
     clearTimeout(this.timer);
     this.timer = null;
-    // Re-use a dedicated lock screen element if available; otherwise fall
-    // back to showing the auth screen (token stays in memory).
-    const lockScreen = document.getElementById('lock-screen');
-    if (lockScreen) {
-      lockScreen.hidden = false;
-      lockScreen.classList.remove('hidden');
-      const pinInput = document.getElementById('lock-pin-input');
-      if (pinInput) pinInput.focus();
-    } else {
-      App.hideApp();
-      App.showAuth(true /* isLock */);
+    if (typeof SecurityService !== 'undefined' &&
+        typeof SecurityService.lockClinicalData === 'function') {
+      SecurityService.lockClinicalData({ silent: true });
     }
   },
 
   unlock() {
-    const lockScreen = document.getElementById('lock-screen');
-    if (lockScreen) {
-      lockScreen.hidden = true;
-      lockScreen.classList.add('hidden');
-    }
     this.start();
   },
 
   init() {
+    const timeoutSeconds = AppState.settings && AppState.settings.autoLockTimeout
+      ? AppState.settings.autoLockTimeout
+      : 120;
+    this.timeout = timeoutSeconds * 1000;
+    if (this._initialized) {
+      this.start();
+      return;
+    }
     const events = ['click', 'keydown', 'touchstart', 'mousemove', 'scroll'];
-    events.forEach(evt =>
-      document.addEventListener(evt, () => this.reset(), { passive: true })
-    );
+    events.forEach((evt) => {
+      document.addEventListener(evt, () => this.reset(), { passive: true });
+    });
+    this._initialized = true;
     this.start();
   },
 };
@@ -52,11 +49,13 @@ const AutoLock = {
 // ─── Router ───────────────────────────────────────────────────────────────────
 const Router = {
   currentView: 'calendar',
-  _history:    [],
+  currentParams: {},
+  _history: [],
 
   navigate(view, params = {}) {
-    this._history.push({ view: this.currentView });
+    this._history.push({ view: this.currentView, params: this.currentParams });
     this.currentView = view;
+    this.currentParams = { ...params };
     App.showView(view, params);
     App._updateTabBar(view);
   },
@@ -65,8 +64,40 @@ const Router = {
     const prev = this._history.pop();
     if (prev) {
       this.currentView = prev.view;
-      App.showView(prev.view, {});
+      this.currentParams = prev.params || {};
+      App.showView(prev.view, this.currentParams);
       App._updateTabBar(prev.view);
+    }
+  },
+};
+
+// ─── TabGuard — ochrona przed wieloma zakladkami ─────────────────────────────
+const TabGuard = {
+  _channel: null,
+  _tabId: Date.now() + '-' + Math.random().toString(36).slice(2),
+
+  init() {
+    if (typeof BroadcastChannel === 'undefined') return;
+    this._channel = new BroadcastChannel('gabinet-tab-sync');
+    this._channel.onmessage = (e) => this._onMessage(e.data);
+    this._send({ type: 'tab-open', tabId: this._tabId });
+  },
+
+  notifyDataSaved() {
+    if (!this._channel) return;
+    this._send({ type: 'data-saved', tabId: this._tabId, ts: Date.now() });
+  },
+
+  _send(msg) {
+    try {
+      this._channel.postMessage(msg);
+    } catch (_) {}
+  },
+
+  _onMessage(msg) {
+    if (!msg || msg.tabId === this._tabId) return;
+    if (msg.type === 'data-saved' && typeof toast === 'function') {
+      toast('Dane zostaly zmienione w innej zakladce. Odswiez strone, aby zobaczyc aktualny stan.', 'warning', 6000);
     }
   },
 };
@@ -75,11 +106,10 @@ const Router = {
 const App = {
   _lockMode: false,
 
-  // ── init ──────────────────────────────────────────────────────────────────
   async init() {
     this.showSplash();
+    TabGuard.init();
 
-    // One-time migration: clear stale tokens/fileId from the appdata-scope era.
     if (!localStorage.getItem('gabinet_scope_v2_migrated')) {
       localStorage.removeItem('gabinet_access_token');
       localStorage.removeItem('gabinet_token_expiry');
@@ -87,14 +117,34 @@ const App = {
       localStorage.setItem('gabinet_scope_v2_migrated', '1');
     }
 
-    // Initialise encryption key (generates or loads from localStorage).
     await Encryption.init();
 
-    // Wait for Google Identity Services script, then init DriveService.
+    let bootedFromLocalSnapshot = false;
+    if (typeof LocalStore !== 'undefined' && typeof LocalStore.init === 'function') {
+      try {
+        await LocalStore.init();
+        const snapshot = await LocalStore.loadSnapshot();
+        if (snapshot && snapshot.serializedData) {
+          try {
+            deserializeAppData(snapshot.serializedData);
+            bootedFromLocalSnapshot = true;
+          } catch (snapshotError) {
+            console.warn('[App] Local snapshot could not be restored:', snapshotError);
+            if (typeof LocalStore.clear === 'function') {
+              await LocalStore.clear();
+            }
+            if (typeof initDefaultAppState === 'function') {
+              initDefaultAppState();
+            }
+          }
+        }
+      } catch (localError) {
+        console.warn('[App] Local snapshot init failed:', localError);
+      }
+    }
+
     await this._waitForGIS();
     DriveService.init();
-
-    // Minimum splash display time (UX).
     await this._sleep(1500);
 
     const hasToken = DriveService.loadStoredToken();
@@ -104,15 +154,23 @@ const App = {
         this._afterSignIn();
       } catch (err) {
         console.warn('[App] Could not load Drive data on startup:', err);
-        // Still show the app with whatever local state we have.
-        this._afterSignIn();
+        if (bootedFromLocalSnapshot) {
+          this._afterSignIn({ preserveView: true });
+        } else {
+          this.hideSplash();
+          this.showAuth(false);
+        }
+      }
+    } else if (bootedFromLocalSnapshot) {
+      this._afterSignIn({ source: 'local-snapshot' });
+      if (typeof toast === 'function') {
+        toast('Wczytano lokalna kopie danych z tego urzadzenia.', 'info', 3500);
       }
     } else {
       this.hideSplash();
       this.showAuth(false);
     }
 
-    // Wire up all Google sign-in buttons (nav + hero + closing CTA).
     document.querySelectorAll('[data-action="google-signin"]').forEach((btn) => {
       btn.addEventListener('click', () => this._handleSignInClick());
     });
@@ -124,7 +182,6 @@ const App = {
       });
     });
 
-    // Lock screen PIN / re-auth submit.
     const pinForm = document.getElementById('lock-pin-form');
     if (pinForm) {
       pinForm.addEventListener('submit', (e) => {
@@ -133,14 +190,27 @@ const App = {
       });
     }
 
-    // Sign-out button (top-level, outside settings view).
     const signOutBtn = document.getElementById('btn-sign-out');
     if (signOutBtn) {
       signOutBtn.addEventListener('click', () => this._handleSignOut());
     }
+
+    const syncActionBtn = document.getElementById('sync-status-action');
+    if (syncActionBtn) {
+      syncActionBtn.addEventListener('click', () => this._handleSignInClick());
+    }
+
+    document.addEventListener('local-store:change', () => this.refreshSyncStatusUi());
+    document.addEventListener('clinical-security-changed', () => {
+      this.refreshSyncStatusUi();
+      if (Router.currentView === 'settings') {
+        this.refreshCurrentView();
+      }
+    });
+
+    this.refreshSyncStatusUi();
   },
 
-  // ── _waitForGIS ───────────────────────────────────────────────────────────
   _waitForGIS() {
     return new Promise((resolve) => {
       if (window.google && window.google.accounts) {
@@ -153,37 +223,69 @@ const App = {
           resolve();
         }
       }, 100);
-      // Resolve anyway after 5 s to avoid an infinite wait when the script
-      // is blocked (e.g. ad-blockers, offline).
-      setTimeout(() => { clearInterval(interval); resolve(); }, 5000);
+      setTimeout(() => {
+        clearInterval(interval);
+        resolve();
+      }, 5000);
     });
   },
 
-  // ── _afterSignIn ──────────────────────────────────────────────────────────
-  _afterSignIn() {
+  _afterSignIn(options = {}) {
+    const preserveView = options.preserveView === true;
     this.hideSplash();
     this.hideAuth();
     this.showApp();
+    if (typeof SecurityService !== 'undefined' && typeof SecurityService.bootstrapFromLoadedState === 'function') {
+      SecurityService.bootstrapFromLoadedState();
+    }
     this._generateSessionsIfNeeded();
     AutoLock.init();
-    Router.navigate('calendar', { viewMode: 'monthly', focusDate: new Date().toISOString() });
+    if (preserveView) {
+      this.refreshCurrentView();
+    } else {
+      Router.navigate('calendar', { viewMode: 'monthly', focusDate: new Date().toISOString() });
+    }
+    if (typeof SecurityService !== 'undefined' &&
+        typeof SecurityService.getStatus === 'function' &&
+        SecurityService.getStatus() === 'migration-required') {
+      toast('Aby bezpiecznie zapisac istniejace notatki kliniczne, ustaw haslo w Ustawieniach.', 'warning', 5000);
+    }
+    this.refreshSyncStatusUi();
   },
 
-  // ── onSignIn ──────────────────────────────────────────────────────────────
   async onSignIn(token) {
+    const preserveView = this._isVisible('app-shell');
     this.showSplash();
     try {
-      await DriveService.loadData();
+      if (
+        typeof LocalStore !== 'undefined' &&
+        typeof LocalStore.shouldPreferLocalSnapshot === 'function' &&
+        LocalStore.shouldPreferLocalSnapshot()
+      ) {
+        await DriveService.saveData();
+        if (typeof toast === 'function') {
+          toast('Lokalne dane zostaly zsynchronizowane z Google Drive.', 'success', 3500);
+        }
+      } else {
+        await DriveService.loadData();
+      }
     } catch (err) {
       console.warn('[App] Drive load after sign-in failed:', err);
     }
-    this._afterSignIn();
+    this._afterSignIn({ preserveView });
   },
 
-  // ── _handleSignInClick ────────────────────────────────────────────────────
   async _handleSignInClick() {
-    const btn = document.getElementById('btn-google-signin');
-    if (btn) { btn.disabled = true; btn.textContent = 'Łączenie\u2026'; }
+    const buttons = [
+      document.getElementById('btn-google-signin'),
+      document.getElementById('sync-status-action'),
+      document.getElementById('sv-connect-btn'),
+    ];
+    buttons.forEach((btn) => {
+      if (!btn) return;
+      btn.disabled = true;
+      btn.textContent = 'Laczenie...';
+    });
 
     try {
       const token = await DriveService.requestToken();
@@ -192,45 +294,72 @@ const App = {
       console.error('[App] Sign-in failed:', err);
       const authError = document.getElementById('auth-error');
       if (authError) {
-        authError.textContent = 'Logowanie nie powiodło się. Spróbuj ponownie.';
+        authError.textContent = 'Logowanie nie powiodlo sie. Sprobuj ponownie.';
         authError.hidden = false;
         authError.classList.remove('hidden');
       }
     } finally {
-      if (btn) {
+      buttons.forEach((btn) => {
+        if (!btn) return;
         btn.disabled = false;
-        btn.textContent = 'Zaloguj się';
-      }
+        btn.textContent = 'Polacz z Google';
+      });
     }
   },
 
-  // ── _handleSignOut ────────────────────────────────────────────────────────
   _handleSignOut() {
     Modal.confirm(
-      'Wylogowanie',
-      'Czy na pewno chcesz się wylogować? Dane lokalne zostaną zachowane na Drive.',
+      'Odlaczenie Google',
+      'Czy na pewno chcesz odlaczyc Google Drive? Lokalne dane na tym urzadzeniu pozostana dostepne.',
       () => {
         DriveService.signOut();
-        this.hideApp();
-        this.showAuth(false);
+        if (typeof SecurityService !== 'undefined' && typeof SecurityService.handleSignOut === 'function') {
+          SecurityService.handleSignOut();
+        }
+        if (
+          typeof LocalStore !== 'undefined' &&
+          typeof LocalStore.hasSnapshot === 'function' &&
+          LocalStore.hasSnapshot()
+        ) {
+          this.showApp();
+          this.hideAuth();
+          this.refreshCurrentView();
+        } else {
+          this.hideApp();
+          this.showAuth(false);
+        }
+        this.refreshSyncStatusUi();
+        if (typeof toast === 'function') {
+          toast('Google Drive zostal odlaczony. Mozesz dalej pracowac na danych lokalnych.', 'info', 4500);
+        }
       }
     );
   },
 
-  // ── _handlePinSubmit ──────────────────────────────────────────────────────
-  // Uses Google token refresh as the "unlock" mechanism instead of a PIN.
   _handlePinSubmit() {
-    DriveService.requestToken()
-      .then(() => AutoLock.unlock())
+    const request = (
+      typeof SecurityService !== 'undefined' &&
+      typeof SecurityService.isStorageReady === 'function' &&
+      SecurityService.isStorageReady()
+    )
+      ? SecurityService.requestClinicalAccess()
+      : DriveService.requestToken();
+
+    Promise.resolve(request)
+      .then((ok) => {
+        if (ok === false) return;
+        AutoLock.unlock();
+      })
       .catch(() => {
         const msg = document.getElementById('lock-error-msg');
-        if (msg) { msg.textContent = 'Nie udało się zweryfikować tożsamości.'; }
+        if (msg) {
+          msg.textContent = 'Nie udalo sie zweryfikowac tozsamosci.';
+        }
       });
   },
 
-  // ── splash / auth / app visibility ───────────────────────────────────────
-  showSplash()  { this._show('splash-screen'); },
-  hideSplash()  { this._hide('splash-screen'); },
+  showSplash() { this._show('splash-screen'); },
+  hideSplash() { this._hide('splash-screen'); },
 
   showAuth(isLock = false) {
     this._lockMode = isLock;
@@ -241,17 +370,77 @@ const App = {
       const title = screen.querySelector('.auth-hero__title');
       if (title) {
         title.textContent = isLock
-          ? 'Zaloguj się ponownie, aby wrócić do spokojnej pracy.'
-          : 'Cyfrowy porządek dla gabinetu psychoterapeutycznego.';
+          ? 'Zaloguj sie ponownie, aby wrocic do spokojnej pracy.'
+          : 'Cyfrowy porzadek dla gabinetu psychoterapeutycznego.';
       }
     }
+    const authError = document.getElementById('auth-error');
+    if (authError) {
+      authError.hidden = true;
+      authError.classList.add('hidden');
+      authError.textContent = '';
+    }
+    const signInBtn = document.getElementById('btn-google-signin');
+    if (signInBtn) {
+      signInBtn.disabled = false;
+      signInBtn.textContent = 'Polacz z Google';
+    }
+    this.refreshSyncStatusUi();
   },
+
   hideAuth() { this._hide('auth-screen'); },
+  showApp() { this._show('app-shell'); },
+  hideApp() { this._hide('app-shell'); },
 
-  showApp()  { this._show('app-shell'); },
-  hideApp()  { this._hide('app-shell'); },
+  refreshCurrentView() {
+    if (!this._isVisible('app-shell')) return;
 
-  // ── showView ──────────────────────────────────────────────────────────────
+    if (Router.currentView === 'calendar' && typeof CalendarViews !== 'undefined') {
+      CalendarViews.render();
+      return;
+    }
+
+    if (Router.currentView === 'patients' && typeof PatientViews !== 'undefined') {
+      const params = (Router.currentParams && Object.keys(Router.currentParams).length > 0)
+        ? Router.currentParams
+        : (PatientViews._currentPatientId ? { patientId: PatientViews._currentPatientId } : {});
+      PatientViews.render(params);
+      this._updateTabBar('patients');
+      return;
+    }
+
+    this.showView(Router.currentView, Router.currentParams || {});
+    this._updateTabBar(Router.currentView);
+  },
+
+  refreshSyncStatusUi() {
+    const banner = document.getElementById('sync-status-banner');
+    const text = document.getElementById('sync-status-text');
+    const action = document.getElementById('sync-status-action');
+    if (!banner || !text || !action) return;
+
+    if (typeof LocalStore === 'undefined' || typeof LocalStore.getSyncStatusSummary !== 'function') {
+      banner.hidden = true;
+      banner.classList.add('hidden');
+      return;
+    }
+
+    const summary = LocalStore.getSyncStatusSummary();
+    if (!summary || !summary.bannerVisible) {
+      banner.hidden = true;
+      banner.classList.add('hidden');
+      text.textContent = '';
+      action.hidden = true;
+      return;
+    }
+
+    text.textContent = summary.note || summary.status || '';
+    action.textContent = summary.actionLabel || 'Polacz z Google';
+    action.hidden = !summary.actionLabel;
+    banner.hidden = false;
+    banner.classList.remove('hidden');
+  },
+
   showView(name, params = {}) {
     const container = document.getElementById('view-container');
     if (!container) return;
@@ -263,7 +452,7 @@ const App = {
         case 'today':
         case 'calendar': renderCalendar(params); break;
         case 'patients': renderPatients(params); break;
-        case 'finance':  renderFinance(params);  break;
+        case 'finance': renderFinance(params); break;
         case 'settings': renderSettings(params); break;
         default:
           container.innerHTML =
@@ -273,41 +462,33 @@ const App = {
     });
   },
 
-  // ── switchTab ─────────────────────────────────────────────────────────────
   switchTab(name) {
     Router.navigate(name);
   },
 
-  // ── _updateTabBar ─────────────────────────────────────────────────────────
   _updateTabBar(activeView) {
-    document.querySelectorAll('.tab-btn').forEach(btn => {
+    document.querySelectorAll('.tab-btn').forEach((btn) => {
       const isActive = btn.dataset.view === activeView;
       btn.classList.toggle('active', isActive);
-      // Remove the static HTML class that was only used for initial render
       btn.classList.remove('tab-btn--active');
       btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
     });
   },
 
-  // ── _generateSessionsIfNeeded ─────────────────────────────────────────────
-  // Ensures the current calendar month has session slots for every patient
-  // whose schedule is active. Delegates to data.js helpers when available.
   _generateSessionsIfNeeded() {
     if (typeof generateCurrentMonthSessions !== 'function') return;
 
-    const now       = new Date();
-    const yearMonth = now.getFullYear() + '-' +
-                      String(now.getMonth() + 1).padStart(2, '0');
+    const now = new Date();
+    const yearMonth = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
 
     if (typeof AppState !== 'undefined' && AppState.generatedMonths) {
       if (AppState.generatedMonths.includes(yearMonth)) return;
     }
 
-    // Generate sessions for all active patients.
     if (typeof AppState !== 'undefined' && AppState.patients) {
       AppState.patients
-        .filter(function(p) { return !p.isArchived && p.isActive; })
-        .forEach(function(p) { generateCurrentMonthSessions(p); });
+        .filter((p) => !p.isArchived && p.isActive)
+        .forEach((p) => { generateCurrentMonthSessions(p); });
     }
 
     if (typeof AppState !== 'undefined') {
@@ -318,7 +499,6 @@ const App = {
     persistData();
   },
 
-  // ── helpers ───────────────────────────────────────────────────────────────
   _show(id) {
     const el = document.getElementById(id);
     if (el) {
@@ -335,8 +515,13 @@ const App = {
     }
   },
 
+  _isVisible(id) {
+    const el = document.getElementById(id);
+    return !!(el && !el.hidden);
+  },
+
   _sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   },
 };
 
@@ -762,9 +947,10 @@ function renderSettings(params) {
       '<section class="settings-section">' +
         '<h3 class="settings-section__title">Bezpiecze\u0144stwo</h3>' +
         '<label class="settings-field settings-field--row">' +
-          '<span>Automatyczna blokada (2 min)</span>' +
-          '<input type="checkbox" id="set-autolock"' +
-                 (settings.autoLockEnabled !== false ? ' checked' : '') + ' />' +
+          '<span>Auto-lock danych klinicznych (minuty)</span>' +
+          '<input type="number" id="set-autolock-timeout"' +
+                 ' value="' + _getAutoLockTimeoutMinutes(settings) + '"' +
+                 ' min="1" step="1" />' +
         '</label>' +
       '</section>' +
 
@@ -784,6 +970,18 @@ function renderSettings(params) {
   document.getElementById('btn-sign-out-settings').addEventListener('click', function() {
     App._handleSignOut();
   });
+}
+
+function _getAutoLockTimeoutMinutes(settings) {
+  const seconds = settings && settings.autoLockTimeout
+    ? parseInt(settings.autoLockTimeout, 10)
+    : 120;
+  return Math.max(1, Math.round((Number.isFinite(seconds) ? seconds : 120) / 60));
+}
+
+function _getAutoLockTimeoutSeconds(value) {
+  const minutes = parseInt(value, 10);
+  return (Number.isFinite(minutes) && minutes > 0 ? minutes : 2) * 60;
 }
 
 // ─── Session sheet helpers ─────────────────────────────────────────────────────
@@ -1065,10 +1263,13 @@ function _saveSettings() {
     parseFloat(document.getElementById('set-default-fee').value) || null;
   AppState.settings.sessionDuration =
     parseInt(document.getElementById('set-session-duration').value, 10) || 50;
-  AppState.settings.autoLockEnabled =
-    document.getElementById('set-autolock').checked;
+  AppState.settings.autoLockTimeout =
+    _getAutoLockTimeoutSeconds(document.getElementById('set-autolock-timeout').value);
 
   persistData();
+  if (typeof AutoLock !== 'undefined' && typeof AutoLock.init === 'function') {
+    AutoLock.init();
+  }
 
   const btn = document.getElementById('btn-save-settings');
   if (btn) {

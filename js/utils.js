@@ -255,6 +255,19 @@ function qsa(sel, parent) {
 }
 
 /**
+ * Escapes a string for safe HTML interpolation.
+ * This is shared by views so each file does not reimplement its own variant.
+ */
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
  * Adds an event listener; returns the remove function.
  * @param {EventTarget} element
  * @param {string}      evt

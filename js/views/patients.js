@@ -53,6 +53,44 @@ function escHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
+function getClinicalFieldState(value, options = {}) {
+  if (typeof SecurityService !== 'undefined'
+      && typeof SecurityService.getClinicalDisplayState === 'function') {
+    return SecurityService.getClinicalDisplayState(value, options);
+  }
+
+  const emptyLabel = options.emptyLabel || 'Brak danych.';
+  if (typeof value === 'string') {
+    return {
+      hasData: value.trim().length > 0,
+      isProtected: false,
+      text: value.trim().length > 0 ? value : emptyLabel,
+      rawText: value,
+    };
+  }
+
+  return {
+    hasData: false,
+    isProtected: false,
+    text: emptyLabel,
+    rawText: '',
+  };
+}
+
+function clinicalDataUnlocked() {
+  return typeof SecurityService !== 'undefined'
+    && typeof SecurityService.canReadClinicalData === 'function'
+    && SecurityService.canReadClinicalData();
+}
+
+function clinicalActionLabel() {
+  if (typeof SecurityService !== 'undefined'
+      && typeof SecurityService.getClinicalActionLabel === 'function') {
+    return SecurityService.getClinicalActionLabel();
+  }
+  return 'Odblokuj notatki';
+}
+
 // =============================================================================
 // PatientViews — main export object
 // =============================================================================
@@ -102,38 +140,6 @@ const PatientViews = {
     container.innerHTML = this.renderPatientDetail(patientId);
     this._injectStyles();
     this._bindDetailEvents(patientId);
-    this._decryptNotePreviews(patientId);
-  },
-
-  _decryptNotePreviews(patientId) {
-    const patient = getPatient(patientId);
-    if (!patient) return;
-    const container = document.getElementById('view-container');
-    if (!container) return;
-
-    const fillBody = (row, encryptedContent) => {
-      if (!row) return;
-      const el = row.querySelector('.pv-note-body');
-      if (!el) return;
-      Encryption.decrypt(encryptedContent).then(decrypted => {
-        el.textContent = decrypted && decrypted.trim() ? decrypted : '(pusta notatka)';
-      }).catch(() => {
-        el.textContent = '(nie mo\u017cna odczyta\u0107)';
-      });
-    };
-
-    // Manual notes
-    (patient.sessionNotes || []).forEach(n => {
-      if (!n.content) return;
-      fillBody(container.querySelector('.pv-note-row[data-noteid="' + n.id + '"]'), n.content);
-    });
-
-    // Calendar session notes
-    getPatientSessions(patientId)
-      .filter(s => s.sessionNotes && s.sessionNotes.trim())
-      .forEach(s => {
-        fillBody(container.querySelector('.pv-note-row[data-sessionnoteid="' + s.id + '"]'), s.sessionNotes);
-      });
   },
 
   _renderFormPage(patientId) {
@@ -344,7 +350,9 @@ const PatientViews = {
     const color          = avatarColor(patient.firstName || patient.pseudonym);
     const duration       = getPatientTherapyDuration(patient);
     const fullName       = ((patient.firstName || '') + ' ' + (patient.lastName || '')).trim();
-    const sessionNotesWithContent = sessions.filter(s => s.sessionNotes && s.sessionNotes.trim());
+    const sessionNotesWithContent = sessions.filter(s => typeof SecurityService !== 'undefined'
+      ? SecurityService.hasClinicalContent(s.sessionNotes)
+      : !!(typeof s.sessionNotes === 'string' && s.sessionNotes.trim()));
     const notesCount     = (patient.sessionNotes || []).length + sessionNotesWithContent.length;
     const goalsCount     = (patient.therapeuticGoals || []).length;
     const progressCount  = (patient.progressEntries || []).length;
@@ -355,6 +363,7 @@ const PatientViews = {
     const cancelTherapist   = cancelledSessions.filter(s => s.cancellationReason === 'therapist').length;
     const cancelOther       = cancelledSessions.filter(s => !s.cancellationReason).length;
     const cancelTotal       = cancelledSessions.length;
+    const clinicalUnlocked  = clinicalDataUnlocked();
 
     const pseudonymDl = patient.pseudonym
       ? '<dt>Pseudonim</dt><dd>' + escHtml(patient.pseudonym) + '</dd>'
@@ -439,18 +448,29 @@ const PatientViews = {
           '<section class="pv-section pv-section--workspace" id="pv-clinical">' +
             '<h2 class="pv-section-title">Kliniczne</h2>' +
             '<div class="pv-workspace-grid">' +
-              '<article class="pv-panel-card">' +
-                '<h3>Cele terapeutyczne ' +
-                  '<button class="pv-section-add-btn" id="pv-add-goal" data-id="' + escHtml(patientId) + '">+ Dodaj</button>' +
-                '</h3>' +
-                this._renderGoalsSection(patient) +
-              '</article>' +
-              '<article class="pv-panel-card pv-panel-card--wide">' +
-                '<h3>Notatki i obserwacje ' +
-                  '<button class="pv-section-add-btn" id="pv-add-note" data-id="' + escHtml(patientId) + '">+ Dodaj</button>' +
-                '</h3>' +
-                this._renderNotesSection(patient) +
-              '</article>' +
+              (clinicalUnlocked
+                ? (
+                  '<article class="pv-panel-card">' +
+                    '<h3>Cele terapeutyczne ' +
+                      '<button class="pv-section-add-btn" id="pv-add-goal" data-id="' + escHtml(patientId) + '">+ Dodaj</button>' +
+                    '</h3>' +
+                    this._renderGoalsSection(patient) +
+                  '</article>' +
+                  '<article class="pv-panel-card pv-panel-card--wide">' +
+                    '<h3>Notatki i obserwacje ' +
+                      '<button class="pv-section-add-btn" id="pv-add-note" data-id="' + escHtml(patientId) + '">+ Dodaj</button>' +
+                    '</h3>' +
+                    this._renderNotesSection(patient) +
+                  '</article>'
+                )
+                : (
+                  '<article class="pv-panel-card pv-panel-card--wide">' +
+                    this._renderClinicalLockCard(
+                      'Dane kliniczne sa zablokowane',
+                      'Aby zobaczyc albo edytowac notatki, cele i obserwacje, podaj haslo do danych klinicznych.'
+                    ) +
+                  '</article>'
+                )) +
             '</div>' +
           '</section>' +
 
@@ -468,6 +488,15 @@ const PatientViews = {
                       (cancelOther > 0 ? '<dt>Bez kategorii</dt><dd>' + cancelOther + '</dd>' : '') +
                     '</dl>'
                   : '<p class="pv-empty-msg" style="padding:8px 0">Brak odwołanych sesji.</p>') +
+              '</article>' +
+              '<article class="pv-panel-card">' +
+                '<h3>Wpisy postępów</h3>' +
+                (clinicalUnlocked
+                  ? this._renderProgressSection(patient)
+                  : this._renderClinicalLockCard(
+                      'Historia postepow jest zablokowana',
+                      'Wpisy kliniczne wroca po odblokowaniu danych klinicznych.'
+                    )) +
               '</article>' +
               '<article class="pv-panel-card">' +
                 '<h3>Cykle terapii</h3>' +
@@ -532,10 +561,14 @@ const PatientViews = {
     const rows = patient.therapeuticGoals.map(g => {
       const statusObj = GOAL_STATUS[g.status];
       const statusName = statusObj ? statusObj.name : g.status;
+      const titleState = getClinicalFieldState(g.title, {
+        emptyLabel: '(bez tytulu)',
+        protectedLabel: 'Cel terapeutyczny zabezpieczony',
+      });
       return (
         '<div class="pv-goal-row" data-goalid="' + escHtml(g.id) + '">' +
           '<span class="pv-goal-icon">' + (icons[g.status] || '&#9203;') + '</span>' +
-          '<span class="pv-goal-title">' + escHtml(g.title) + '</span>' +
+          '<span class="pv-goal-title">' + escHtml(titleState.text) + '</span>' +
           '<span class="pv-goal-status pv-goal-status--' + escHtml(g.status) + '">' + escHtml(statusName) + '</span>' +
           '<button class="pv-row-delete-btn" data-goalid="' + escHtml(g.id) + '"' +
             ' data-patientid="' + escHtml(patient.id) + '" title="Usu\u0144 cel">&#10005;</button>' +
@@ -555,7 +588,9 @@ const PatientViews = {
     }));
 
     const sessionNotes = getPatientSessions(patient.id)
-      .filter(s => s.sessionNotes && s.sessionNotes.trim())
+      .filter(s => typeof SecurityService !== 'undefined'
+        ? SecurityService.hasClinicalContent(s.sessionNotes)
+        : !!(typeof s.sessionNotes === 'string' && s.sessionNotes.trim()))
       .map(s => ({
         date:    s.date,
         type:    'session',
@@ -573,6 +608,10 @@ const PatientViews = {
 
     const rows = all.map(item => {
       const isSession  = item.type === 'session';
+      const contentState = getClinicalFieldState(item.content, {
+        emptyLabel: '(pusta notatka)',
+        protectedLabel: 'Dane kliniczne sa zablokowane.',
+      });
       const dataAttr   = isSession
         ? 'data-sessionnoteid="' + escHtml(item.id) + '"'
         : 'data-noteid="' + escHtml(item.id) + '"';
@@ -590,12 +629,23 @@ const PatientViews = {
             typeTag +
             deleteBtn +
           '</div>' +
-          '<p class="pv-note-body">\u2026</p>' +
+          '<p class="pv-note-body">' + escHtml(contentState.text) + '</p>' +
         '</div>'
       );
     }).join('');
 
     return '<div class="pv-notes-list">' + rows + '</div>';
+  },
+
+  _renderClinicalLockCard(title, description) {
+    return (
+      '<div class="pv-clinical-guard">' +
+        '<div class="pv-clinical-guard__icon">🔒</div>' +
+        '<h4 class="pv-clinical-guard__title">' + escHtml(title) + '</h4>' +
+        '<p class="pv-clinical-guard__text">' + escHtml(description) + '</p>' +
+        '<button class="pv-btn pv-btn-add pv-clinical-unlock-btn" type="button">' + escHtml(clinicalActionLabel()) + '</button>' +
+      '</div>'
+    );
   },
 
   _renderSessionsSection(sessions) {
@@ -626,15 +676,25 @@ const PatientViews = {
     if (!patient.progressEntries || patient.progressEntries.length === 0) {
       return '<p class="pv-empty-sub">Brak wpisów postępu.</p>';
     }
-    const rows = patient.progressEntries.slice().reverse().map(entry => (
-      '<div class="pv-note-row">' +
-        '<div class="pv-note-header">' +
-          '<span class="pv-note-date">' + escHtml(formatDateMedium(entry.date)) + '</span>' +
-          '<span class="pv-goal-status pv-goal-status--inProgress">' + escHtml(entry.category || 'Wpis') + '</span>' +
-        '</div>' +
-        '<p class="pv-note-preview"><strong>' + escHtml(entry.title || 'Wpis') + '</strong><br>' + escHtml(entry.content || '') + '</p>' +
-      '</div>'
-    )).join('');
+    const rows = patient.progressEntries.slice().reverse().map(entry => {
+      const titleState = getClinicalFieldState(entry.title, {
+        emptyLabel: 'Wpis',
+        protectedLabel: 'Tytul wpisu zabezpieczony',
+      });
+      const contentState = getClinicalFieldState(entry.content, {
+        emptyLabel: '',
+        protectedLabel: 'Tresc wpisu jest zablokowana.',
+      });
+      return (
+        '<div class="pv-note-row">' +
+          '<div class="pv-note-header">' +
+            '<span class="pv-note-date">' + escHtml(formatDateMedium(entry.date)) + '</span>' +
+            '<span class="pv-goal-status pv-goal-status--inProgress">' + escHtml(entry.category || 'Wpis') + '</span>' +
+          '</div>' +
+          '<p class="pv-note-preview"><strong>' + escHtml(titleState.text) + '</strong><br>' + escHtml(contentState.text) + '</p>' +
+        '</div>'
+      );
+    }).join('');
     return '<div class="pv-notes-list">' + rows + '</div>';
   },
 
@@ -1151,10 +1211,22 @@ const PatientViews = {
       deleteBtn.addEventListener('click', () => this.deletePatient(patientId));
     }
 
+    document.querySelectorAll('.pv-clinical-unlock-btn').forEach((clinicalUnlockBtn) => {
+      clinicalUnlockBtn.addEventListener('click', async () => {
+        if (typeof SecurityService === 'undefined') return;
+        const ok = await SecurityService.requestClinicalAccess();
+        if (ok) this._renderDetailPage(patientId);
+      });
+    });
+
     // Add goal
     const addGoal = document.getElementById('pv-add-goal');
     if (addGoal) {
-      addGoal.addEventListener('click', () => {
+      addGoal.addEventListener('click', async () => {
+        if (typeof SecurityService !== 'undefined') {
+          const ok = await SecurityService.requestClinicalAccess();
+          if (!ok) return;
+        }
         const modal = document.getElementById('pv-modal-goal');
         if (!modal) return;
         modal.dataset.patientid = patientId;
@@ -1169,7 +1241,11 @@ const PatientViews = {
     // Add note
     const addNote = document.getElementById('pv-add-note');
     if (addNote) {
-      addNote.addEventListener('click', () => {
+      addNote.addEventListener('click', async () => {
+        if (typeof SecurityService !== 'undefined') {
+          const ok = await SecurityService.requestClinicalAccess();
+          if (!ok) return;
+        }
         const modal = document.getElementById('pv-modal-note');
         if (!modal) return;
         modal.dataset.patientid = patientId;
@@ -1205,7 +1281,11 @@ const PatientViews = {
     const goalSave   = document.getElementById('pv-goal-save');
     const goalCancel = document.getElementById('pv-goal-cancel');
     if (goalSave) {
-      goalSave.addEventListener('click', () => {
+      goalSave.addEventListener('click', async () => {
+        if (typeof SecurityService !== 'undefined') {
+          const ok = await SecurityService.requestClinicalAccess();
+          if (!ok) return;
+        }
         const modal    = document.getElementById('pv-modal-goal');
         const pid      = (modal && modal.dataset.patientid) || patientId;
         const titleEl  = document.getElementById('goal-title');
@@ -1237,6 +1317,10 @@ const PatientViews = {
     const noteCancel = document.getElementById('pv-note-cancel');
     if (noteSave) {
       noteSave.addEventListener('click', async () => {
+        if (typeof SecurityService !== 'undefined') {
+          const ok = await SecurityService.requestClinicalAccess();
+          if (!ok) return;
+        }
         const modal     = document.getElementById('pv-modal-note');
         const pid       = (modal && modal.dataset.patientid) || patientId;
         const contentEl = document.getElementById('note-content');
@@ -1246,11 +1330,10 @@ const PatientViews = {
         if (!content) { toast('Wpisz tre\u015b\u0107 notatki.', 'warning'); return; }
         const patient = getPatient(pid);
         if (!patient) return;
-        const encryptedContent = await Encryption.encrypt(content);
         patient.sessionNotes.push({
           id: uuid(),
           date: date ? new Date(date).toISOString() : new Date().toISOString(),
-          content: encryptedContent,
+          content,
           sessionId: null
         });
         persistData();
@@ -1362,7 +1445,11 @@ const PatientViews = {
 
     // Delete therapeutic goal
     container.querySelectorAll('.pv-row-delete-btn[data-goalid]').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
+        if (typeof SecurityService !== 'undefined') {
+          const ok = await SecurityService.requestClinicalAccess();
+          if (!ok) return;
+        }
         const pid    = btn.dataset.patientid || patientId;
         const goalid = btn.dataset.goalid;
         const p      = getPatient(pid);
@@ -1376,7 +1463,11 @@ const PatientViews = {
 
     // Delete session note
     container.querySelectorAll('.pv-row-delete-btn[data-noteid]').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
+        if (typeof SecurityService !== 'undefined') {
+          const ok = await SecurityService.requestClinicalAccess();
+          if (!ok) return;
+        }
         const pid    = btn.dataset.patientid || patientId;
         const noteid = btn.dataset.noteid;
         const p      = getPatient(pid);
@@ -1783,6 +1874,10 @@ const PatientViews = {
       '.pv-schedule-time,.pv-vacation-dates,.pv-sess-date,.pv-row-duration{color:var(--text-secondary,rgba(36,49,38,.68))}',
       '.pv-cycle-sessions-badge{margin-left:.4rem;font-size:.75rem;font-weight:700;background:rgba(73,102,79,.1);color:var(--green,#49664f);border-radius:999px;padding:.1rem .5rem;white-space:nowrap}',
       '.pv-cycle-separator{height:1px;background:var(--separator,rgba(73,102,79,.18));margin:.4rem 0}',
+      '.pv-clinical-guard{padding:1.25rem;border:1px dashed rgba(73,102,79,.24);border-radius:20px;background:rgba(73,102,79,.04);display:flex;flex-direction:column;align-items:flex-start;gap:.75rem}',
+      '.pv-clinical-guard__icon{font-size:1.35rem}',
+      '.pv-clinical-guard__title{margin:0;font-size:1rem;color:var(--text,#243126)}',
+      '.pv-clinical-guard__text{margin:0;color:var(--text-secondary,rgba(36,49,38,.68));font-size:.9rem;line-height:1.6}',
       '.pv-goal-icon{font-size:1rem;flex-shrink:0}',
       '.pv-goal-status{font-size:.74rem;padding:.2rem .48rem;border-radius:999px;font-weight:800}',
       '.pv-goal-status--inProgress{background:var(--blue-light,#dbe7d7);color:var(--blue,#49664f)}',

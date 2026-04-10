@@ -2,11 +2,8 @@
 // settings.js – Settings view for Gabinet PWA
 
 const SettingsView = (() => {
-
-  // ─── helpers ─────────────────────────────────────────────────────────────
-
   function esc(s) {
-    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    return escapeHtml(s);
   }
 
   function formatDateRange(start, end) {
@@ -16,7 +13,42 @@ const SettingsView = (() => {
     return s + ' – ' + e;
   }
 
-  // ─── Styles ──────────────────────────────────────────────────────────────
+  function getClinicalSecuritySummary() {
+    if (typeof SecurityService === 'undefined' || typeof SecurityService.getUiSummary !== 'function') {
+      return {
+        status: 'Ochrona niedostepna',
+        note: 'Nie udalo sie wczytac modulu ochrony danych klinicznych.',
+        primaryLabel: null,
+        changeLabel: null,
+      };
+    }
+    return SecurityService.getUiSummary();
+  }
+
+  function getSyncSummary() {
+    if (typeof LocalStore === 'undefined' || typeof LocalStore.getSyncStatusSummary !== 'function') {
+      return {
+        status: 'Stan synchronizacji niedostepny',
+        note: 'Ta przegladarka nie udostepnia lokalnego snapshotu offline.',
+        actionLabel: null,
+        actionId: null,
+        actionClass: 'blue',
+      };
+    }
+
+    const summary = LocalStore.getSyncStatusSummary();
+    const connected = typeof DriveService !== 'undefined'
+      && typeof DriveService.isSignedIn === 'function'
+      && DriveService.isSignedIn();
+
+    return {
+      status: summary.status,
+      note: summary.note,
+      actionLabel: connected ? 'Odlacz Google Drive' : (summary.actionLabel || 'Polacz z Google'),
+      actionId: connected ? 'sv-signout-btn' : 'sv-connect-btn',
+      actionClass: connected ? 'danger' : 'blue',
+    };
+  }
 
   function injectStyles() {
     if (document.getElementById('sv-styles')) return;
@@ -63,8 +95,10 @@ const SettingsView = (() => {
       .sv-account-name { font-size: 15px; font-weight: 600; }
       .sv-account-email { font-size: 13px; color: #8e8e93; }
       .sv-regen-ok { font-size: 13px; color: #34c759; padding: 4px 16px 12px; display: none; }
+      .sv-row-note { align-items: flex-start; }
+      .sv-row-note span { font-size: 13px; line-height: 1.5; color: #5d6a60; }
+      .sv-security-status { font-size: 15px; font-weight: 600; color: #243126; text-align: right; }
 
-      /* Block period sheet */
       .sv-sheet-bg { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 900;
                      display: flex; align-items: flex-end; }
       .sv-sheet { background: #fff; border-radius: 20px 20px 0 0; width: 100%; max-width: 680px;
@@ -111,26 +145,25 @@ const SettingsView = (() => {
     document.head.appendChild(s);
   }
 
-  // ─── Render ──────────────────────────────────────────────────────────────
-
   function render(container) {
     injectStyles();
     const settings = (typeof AppState !== 'undefined' && AppState.settings) ? AppState.settings : {};
     const userInfo = _getUserInfo();
+    const securitySummary = getClinicalSecuritySummary();
+    const syncSummary = getSyncSummary();
 
     container.innerHTML = `
       <div class="sv-wrap">
 
-        <!-- THERAPIST DATA -->
         <div class="sv-section-title">Dane terapeuty</div>
         <div class="sv-section">
           <div class="sv-row">
-            <label for="sv-name">Imię i nazwisko</label>
+            <label for="sv-name">Imie i nazwisko</label>
             <input type="text" id="sv-name" value="${esc(settings.therapistName || '')}" placeholder="Jan Kowalski">
           </div>
           <div class="sv-row">
             <label for="sv-addr">Adres gabinetu</label>
-            <input type="text" id="sv-addr" value="${esc(settings.therapistAddress || '')}" placeholder="ul. Przykładowa 1, Warszawa">
+            <input type="text" id="sv-addr" value="${esc(settings.therapistAddress || '')}" placeholder="ul. Przykladowa 1, Warszawa">
           </div>
           <div class="sv-row">
             <label for="sv-nip">NIP</label>
@@ -138,22 +171,50 @@ const SettingsView = (() => {
           </div>
         </div>
 
-        <!-- ACCOUNT -->
         <div class="sv-section-title">Konto Google</div>
         <div class="sv-section">
           <div class="sv-account">
             <div class="sv-account-avatar">${userInfo.initial}</div>
             <div class="sv-account-info">
-              <div class="sv-account-name">${esc(userInfo.name || 'Użytkownik')}</div>
+              <div class="sv-account-name">${esc(userInfo.name || 'Uzytkownik')}</div>
               <div class="sv-account-email">${esc(userInfo.email || 'Dane na Google Drive')}</div>
             </div>
           </div>
-          <div class="sv-row sv-row-btn danger" id="sv-signout-btn">
-            <span>Wyloguj się</span>
+          <div class="sv-row">
+            <label>Stan danych</label>
+            <div class="sv-value sv-security-status">${esc(syncSummary.status)}</div>
           </div>
+          <div class="sv-row sv-row-note">
+            <span>${esc(syncSummary.note)}</span>
+          </div>
+          ${syncSummary.actionLabel ? `
+            <div class="sv-row sv-row-btn ${esc(syncSummary.actionClass)}" id="${esc(syncSummary.actionId)}">
+              <span>${esc(syncSummary.actionLabel)}</span>
+            </div>
+          ` : ''}
         </div>
 
-        <!-- BLOCKED PERIODS -->
+        <div class="sv-section-title">Ochrona danych klinicznych</div>
+        <div class="sv-section">
+          <div class="sv-row">
+            <label>Status</label>
+            <div class="sv-value sv-security-status">${esc(securitySummary.status)}</div>
+          </div>
+          <div class="sv-row sv-row-note">
+            <span>${esc(securitySummary.note)}</span>
+          </div>
+          ${securitySummary.primaryLabel ? `
+            <div class="sv-row sv-row-btn blue" id="sv-clinical-primary-btn">
+              <span>${esc(securitySummary.primaryLabel)}</span>
+            </div>
+          ` : ''}
+          ${securitySummary.changeLabel ? `
+            <div class="sv-row sv-row-btn blue" id="sv-clinical-change-btn">
+              <span>${esc(securitySummary.changeLabel)}</span>
+            </div>
+          ` : ''}
+        </div>
+
         <div class="sv-section-title">Zablokowane terminy</div>
         <div class="sv-section" id="sv-blocked-list">
           ${renderBlockedList()}
@@ -162,13 +223,12 @@ const SettingsView = (() => {
           </div>
         </div>
 
-        <!-- DATA MANAGEMENT -->
-        <div class="sv-section-title">Zarządzanie danymi</div>
+        <div class="sv-section-title">Zarzadzanie danymi</div>
         <div class="sv-section">
           <div class="sv-row sv-row-btn orange" id="sv-regen-btn">
-            <span>🔄 Generuj sesje na bieżący miesiąc</span>
+            <span>🔄 Generuj sesje na biezacy miesiac</span>
           </div>
-          <div class="sv-regen-ok" id="sv-regen-ok">✅ Sesje zostały wygenerowane</div>
+          <div class="sv-regen-ok" id="sv-regen-ok">✅ Sesje zostaly wygenerowane</div>
           <div class="sv-row sv-row-btn blue" id="sv-export-btn">
             <span>⬇️ Eksportuj dane (JSON)</span>
           </div>
@@ -178,35 +238,34 @@ const SettingsView = (() => {
           <div id="sv-recover-log" style="padding:8px 16px;font-size:13px;color:#8e8e93;display:none;max-height:200px;overflow-y:auto;white-space:pre-line;"></div>
         </div>
 
-        <!-- ABOUT -->
         <div class="sv-section-title">O aplikacji</div>
         <div class="sv-section">
           <div class="sv-about">
             <div class="sv-about-icon">🔒</div>
             <div class="sv-about-title">Gabinet</div>
             <div class="sv-about-version">Wersja 1.0 PWA</div>
-            <div class="sv-about-desc">Aplikacja do zarządzania gabinetem psychoterapeutycznym</div>
+            <div class="sv-about-desc">Aplikacja do zarzadzania gabinetem psychoterapeutycznym</div>
           </div>
           <div class="sv-feature-row"><span class="sv-ficon">☁️</span><span class="sv-ftext">Dane przechowywane na Twoim Google Drive</span></div>
-          <div class="sv-feature-row"><span class="sv-ficon">🔒</span><span class="sv-ftext">Brak zewnętrznych serwerów i baz danych</span></div>
-          <div class="sv-feature-row"><span class="sv-ficon">📵</span><span class="sv-ftext">Działa offline po pierwszym uruchomieniu</span></div>
-          <div class="sv-feature-row"><span class="sv-ficon">💳</span><span class="sv-ftext">Obsługa gotówki i przelewów bankowych</span></div>
+          <div class="sv-feature-row"><span class="sv-ficon">🔒</span><span class="sv-ftext">Brak zewnetrznych serwerow i baz danych</span></div>
+          <div class="sv-feature-row"><span class="sv-ficon">📵</span><span class="sv-ftext">Lokalna kopia danych pozwala wrocic do pracy po odswiezeniu offline</span></div>
+          <div class="sv-feature-row"><span class="sv-ficon">💳</span><span class="sv-ftext">Obsluga gotowki i przelewow bankowych</span></div>
         </div>
 
       </div>
     `;
 
-    bindEvents(container, settings);
+    bindEvents(container);
   }
 
   function renderBlockedList() {
     const periods = (typeof AppState !== 'undefined') ? (AppState.blockedPeriods || []) : [];
     if (periods.length === 0) {
-      return '<div class="sv-row"><span style="color:#8e8e93;font-size:14px">Brak zablokowanych terminów</span></div>';
+      return '<div class="sv-row"><span style="color:#8e8e93;font-size:14px">Brak zablokowanych terminow</span></div>';
     }
-    return periods.map(p => `
+    return periods.map((p) => `
       <div class="sv-blocked-row" data-id="${esc(p.id)}">
-        <button class="sv-blocked-del" data-del="${esc(p.id)}" title="Usuń">×</button>
+        <button class="sv-blocked-del" data-del="${esc(p.id)}" title="Usun">×</button>
         <div class="sv-blocked-dates">${esc(formatDateRange(p.startDate, p.endDate))}</div>
         ${p.reason ? `<div class="sv-blocked-reason">${esc(p.reason)}</div>` : ''}
       </div>
@@ -221,70 +280,104 @@ const SettingsView = (() => {
         return {
           name: info.name || '',
           email: info.email || '',
-          initial: (info.name || info.email || 'U')[0].toUpperCase()
+          initial: (info.name || info.email || 'U')[0].toUpperCase(),
         };
       }
     } catch (e) {}
     return { name: '', email: '', initial: 'U' };
   }
 
-  // ─── Events ──────────────────────────────────────────────────────────────
-
-  function bindEvents(container, settings) {
-    // Auto-save settings fields with debounce
+  function bindEvents(container) {
     const saveDebounced = _debounce(saveSettings, 800);
-    ['sv-name', 'sv-addr', 'sv-nip'].forEach(id => {
+    ['sv-name', 'sv-addr', 'sv-nip'].forEach((id) => {
       const input = document.getElementById(id);
       if (input) input.addEventListener('input', saveDebounced);
     });
 
-    // Sign out
     const signOutBtn = document.getElementById('sv-signout-btn');
     if (signOutBtn) {
       signOutBtn.addEventListener('click', () => {
-        if (confirm('Czy na pewno chcesz się wylogować? Dane pozostaną na Google Drive.')) {
-          if (typeof DriveService !== 'undefined') DriveService.signOut();
-          location.reload();
+        if (typeof App !== 'undefined' && typeof App._handleSignOut === 'function') {
+          App._handleSignOut();
         }
       });
     }
 
-    // Add blocked period
+    const connectBtn = document.getElementById('sv-connect-btn');
+    if (connectBtn) {
+      connectBtn.addEventListener('click', () => {
+        if (typeof App !== 'undefined' && typeof App._handleSignInClick === 'function') {
+          App._handleSignInClick();
+        }
+      });
+    }
+
+    const clinicalPrimaryBtn = document.getElementById('sv-clinical-primary-btn');
+    if (clinicalPrimaryBtn) {
+      clinicalPrimaryBtn.addEventListener('click', async () => {
+        if (typeof SecurityService === 'undefined') return;
+        if (SecurityService.isUnlocked && SecurityService.isUnlocked()) {
+          if (typeof SecurityService.lockClinicalData === 'function') {
+            await SecurityService.lockClinicalData();
+          }
+          render(container);
+          return;
+        }
+        if (typeof SecurityService.requestClinicalAccess === 'function') {
+          const ok = await SecurityService.requestClinicalAccess();
+          if (ok) render(container);
+        }
+      });
+    }
+
+    const clinicalChangeBtn = document.getElementById('sv-clinical-change-btn');
+    if (clinicalChangeBtn) {
+      clinicalChangeBtn.addEventListener('click', async () => {
+        if (typeof SecurityService !== 'undefined' && typeof SecurityService.openChangePasswordFlow === 'function') {
+          const changed = await SecurityService.openChangePasswordFlow();
+          if (changed) render(container);
+        }
+      });
+    }
+
     const addBtn = document.getElementById('sv-add-blocked-btn');
     if (addBtn) addBtn.addEventListener('click', showBlockPeriodSheet);
 
-    // Delete blocked period (event delegation)
     const blockedList = document.getElementById('sv-blocked-list');
     if (blockedList) {
-      blockedList.addEventListener('click', e => {
+      blockedList.addEventListener('click', (e) => {
         const delBtn = e.target.closest('[data-del]');
         if (delBtn) deleteBlockedPeriod(delBtn.dataset.del);
       });
     }
 
-    // Regenerate sessions
     const regenBtn = document.getElementById('sv-regen-btn');
     if (regenBtn) {
       regenBtn.addEventListener('click', () => {
         if (typeof AppState !== 'undefined' && AppState.patients) {
-          AppState.patients.filter(p => !p.isArchived && p.isActive).forEach(patient => {
+          AppState.patients.filter((p) => !p.isArchived && p.isActive).forEach((patient) => {
             if (typeof regenerateCurrentMonth === 'function') regenerateCurrentMonth(patient);
           });
           if (typeof persistData !== 'undefined') persistData();
         }
         const ok = document.getElementById('sv-regen-ok');
-        if (ok) { ok.style.display = 'block'; setTimeout(() => { ok.style.display = 'none'; }, 3000); }
+        if (ok) {
+          ok.style.display = 'block';
+          setTimeout(() => { ok.style.display = 'none'; }, 3000);
+        }
       });
     }
 
-    // Recover data from Drive history
     const recoverBtn = document.getElementById('sv-recover-btn');
     if (recoverBtn) {
       recoverBtn.addEventListener('click', async () => {
-        if (!confirm('Czy chcesz spróbować odzyskać oryginalne czasy sesji i harmonogramy pacjentów z historii wersji Google Drive?')) return;
+        if (!confirm('Czy chcesz sprobowac odzyskac oryginalne czasy sesji i harmonogramy pacjentow z historii wersji Google Drive?')) return;
 
         const logEl = document.getElementById('sv-recover-log');
-        if (logEl) { logEl.style.display = 'block'; logEl.textContent = ''; }
+        if (logEl) {
+          logEl.style.display = 'block';
+          logEl.textContent = '';
+        }
 
         const addLog = (msg) => {
           if (logEl) logEl.textContent += msg + '\n';
@@ -295,7 +388,7 @@ const SettingsView = (() => {
         recoverBtn.style.opacity = '0.5';
 
         try {
-          if (typeof DataRecovery === 'undefined') throw new Error('DataRecovery nie jest dostępny.');
+          if (typeof DataRecovery === 'undefined') throw new Error('DataRecovery nie jest dostepny.');
           const result = await DataRecovery.recoverFromHistory(addLog);
           if (result.sessionsFixed > 0 || result.patientsFixed > 0) {
             if (typeof toast === 'function') toast('Dane odzyskane!', 'success');
@@ -303,8 +396,8 @@ const SettingsView = (() => {
             if (typeof toast === 'function') toast('Nie znaleziono danych do naprawienia.', 'warning');
           }
         } catch (err) {
-          addLog('❌ Błąd: ' + err.message);
-          if (typeof toast === 'function') toast('Błąd odzyskiwania: ' + err.message, 'error');
+          addLog('❌ Blad: ' + err.message);
+          if (typeof toast === 'function') toast('Blad odzyskiwania: ' + err.message, 'error');
         } finally {
           recoverBtn.style.pointerEvents = '';
           recoverBtn.style.opacity = '';
@@ -312,12 +405,13 @@ const SettingsView = (() => {
       });
     }
 
-    // Export data
     const exportBtn = document.getElementById('sv-export-btn');
     if (exportBtn) {
-      exportBtn.addEventListener('click', () => {
+      exportBtn.addEventListener('click', async () => {
         try {
-          const json = typeof serializeAppData === 'function' ? serializeAppData() : JSON.stringify(AppState, null, 2);
+          const json = typeof serializeAppData === 'function'
+            ? await serializeAppData()
+            : JSON.stringify(AppState, null, 2);
           const blob = new Blob([json], { type: 'application/json' });
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
@@ -327,7 +421,7 @@ const SettingsView = (() => {
           URL.revokeObjectURL(url);
           if (typeof toast === 'function') toast('Dane wyeksportowane', 'success');
         } catch (err) {
-          if (typeof toast === 'function') toast('Błąd eksportu: ' + err.message, 'error');
+          if (typeof toast === 'function') toast('Blad eksportu: ' + err.message, 'error');
         }
       });
     }
@@ -336,37 +430,34 @@ const SettingsView = (() => {
   function saveSettings() {
     const nameEl = document.getElementById('sv-name');
     const addrEl = document.getElementById('sv-addr');
-    const nipEl  = document.getElementById('sv-nip');
+    const nipEl = document.getElementById('sv-nip');
     if (typeof AppState === 'undefined') return;
     if (!AppState.settings) AppState.settings = {};
-    if (nameEl) AppState.settings.therapistName    = nameEl.value.trim();
+    if (nameEl) AppState.settings.therapistName = nameEl.value.trim();
     if (addrEl) AppState.settings.therapistAddress = addrEl.value.trim();
-    if (nipEl)  AppState.settings.therapistNIP      = nipEl.value.trim();
+    if (nipEl) AppState.settings.therapistNIP = nipEl.value.trim();
     if (typeof persistData !== 'undefined') persistData();
   }
 
   function deleteBlockedPeriod(id) {
-    if (!confirm('Usunąć zablokowany termin?')) return;
+    if (!confirm('Usunac zablokowany termin?')) return;
     if (typeof AppState !== 'undefined') {
-      AppState.blockedPeriods = (AppState.blockedPeriods || []).filter(p => p.id !== id);
+      AppState.blockedPeriods = (AppState.blockedPeriods || []).filter((p) => p.id !== id);
       if (typeof persistData !== 'undefined') persistData();
     }
-    // Refresh list
     const list = document.getElementById('sv-blocked-list');
     if (list) {
       const addBtn = list.querySelector('#sv-add-blocked-btn');
       list.innerHTML = renderBlockedList() + (addBtn ? addBtn.outerHTML : '');
       const newAddBtn = list.querySelector('#sv-add-blocked-btn');
       if (newAddBtn) newAddBtn.addEventListener('click', showBlockPeriodSheet);
-      list.addEventListener('click', e => {
+      list.addEventListener('click', (e) => {
         const delBtn = e.target.closest('[data-del]');
         if (delBtn) deleteBlockedPeriod(delBtn.dataset.del);
       });
     }
-    if (typeof toast === 'function') toast('Termin usunięty', 'success');
+    if (typeof toast === 'function') toast('Termin usuniety', 'success');
   }
-
-  // ─── Block Period Sheet ───────────────────────────────────────────────────
 
   function showBlockPeriodSheet() {
     const today = new Date().toISOString().slice(0, 10);
@@ -388,7 +479,7 @@ const SettingsView = (() => {
               <input type="date" id="sv-bp-end" value="${today}">
             </div>
             <div class="sv-sheet-field">
-              <label>Powód (opcjonalnie)</label>
+              <label>Powod (opcjonalnie)</label>
               <input type="text" id="sv-bp-reason" placeholder="np. Urlop, Szkolenie">
             </div>
             <button class="sv-btn-primary" id="sv-bp-save">Zablokuj termin</button>
@@ -400,21 +491,21 @@ const SettingsView = (() => {
 
     const bg = document.getElementById('sv-bp-bg');
     document.getElementById('sv-bp-close').addEventListener('click', () => bg.remove());
-    bg.addEventListener('click', e => { if (e.target === bg) bg.remove(); });
+    bg.addEventListener('click', (e) => { if (e.target === bg) bg.remove(); });
 
     document.getElementById('sv-bp-save').addEventListener('click', () => {
-      const start  = document.getElementById('sv-bp-start').value;
-      const end    = document.getElementById('sv-bp-end').value;
+      const start = document.getElementById('sv-bp-start').value;
+      const end = document.getElementById('sv-bp-end').value;
       const reason = document.getElementById('sv-bp-reason').value.trim();
 
-      if (!start || !end) { alert('Uzupełnij daty.'); return; }
-      if (end < start) { alert('Data końcowa musi być po dacie początkowej.'); return; }
+      if (!start || !end) { alert('Uzupelnij daty.'); return; }
+      if (end < start) { alert('Data koncowa musi byc po dacie poczatkowej.'); return; }
 
       const period = {
         id: typeof uuid === 'function' ? uuid() : Date.now().toString(),
         startDate: start,
         endDate: end,
-        reason: reason
+        reason,
       };
 
       if (typeof AppState !== 'undefined') {
@@ -425,13 +516,12 @@ const SettingsView = (() => {
 
       bg.remove();
 
-      // Refresh blocked list in DOM
       const list = document.getElementById('sv-blocked-list');
       if (list) {
-        list.innerHTML = renderBlockedList() +
-          '<div class="sv-row sv-row-btn blue" id="sv-add-blocked-btn"><span>+ Dodaj zablokowany termin</span></div>';
+        list.innerHTML = renderBlockedList()
+          + '<div class="sv-row sv-row-btn blue" id="sv-add-blocked-btn"><span>+ Dodaj zablokowany termin</span></div>';
         list.querySelector('#sv-add-blocked-btn').addEventListener('click', showBlockPeriodSheet);
-        list.addEventListener('click', e => {
+        list.addEventListener('click', (e) => {
           const delBtn = e.target.closest('[data-del]');
           if (delBtn) deleteBlockedPeriod(delBtn.dataset.del);
         });
@@ -441,8 +531,6 @@ const SettingsView = (() => {
     });
   }
 
-  // ─── Debounce (local fallback) ────────────────────────────────────────────
-
   function _debounce(fn, ms) {
     let t;
     return function() {
@@ -451,12 +539,9 @@ const SettingsView = (() => {
     };
   }
 
-  // ─── Public API ───────────────────────────────────────────────────────────
-
   return {
     render(container) {
       render(container || document.getElementById('view-container'));
-    }
+    },
   };
-
 })();
