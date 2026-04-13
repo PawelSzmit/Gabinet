@@ -54,6 +54,7 @@ const FinanceViews = (() => {
       '.fin-method-badge.badge-alior{background:rgba(191,97,82,.12);color:var(--red,#bf6152)}',
       '.fin-method-badge.badge-ing{background:rgba(204,139,86,.14);color:var(--orange,#cc8b56)}',
       '.fin-method-badge.badge-cash{background:rgba(107,144,115,.14);color:var(--green,#6b9073)}',
+      '.fin-method-badge.badge-pm4{background:rgba(73,102,79,.1);color:var(--blue,#49664f)}',
       '.fin-method-badge.badge-split{background:rgba(73,102,79,.1);color:var(--blue,#49664f)}',
       '.fin-split-label{display:flex;align-items:center;gap:.5rem;font-size:.88rem;font-weight:600;cursor:pointer;color:var(--text,#243126)}',
       '.fin-split-label input[type=checkbox]{width:17px;height:17px;accent-color:var(--blue,#49664f);cursor:pointer}',
@@ -166,20 +167,118 @@ const FinanceViews = (() => {
       : (patient ? patient.sessionRate : 0);
   }
 
-  const METHOD_LABELS = { aliorBank: 'Alior Bank', ingBank: 'ING Bank', cash: 'Gotówka' };
-
-  function paymentMethodLabel(method) {
-    if (!method) return '—';
-    if (isCompoundMethod(method)) {
-      return method.split('+').map(m => METHOD_LABELS[m] || m).join(' + ');
+  function normalizeFinanceMethodId(methodId) {
+    if (typeof normalizePaymentMethodId === 'function') {
+      return normalizePaymentMethodId(methodId);
     }
-    return METHOD_LABELS[method] || method;
+    return methodId || null;
   }
 
-  function paymentMethodClass(method) {
-    const map = { aliorBank: 'badge-alior', ingBank: 'badge-ing', cash: 'badge-cash' };
-    if (!method || isCompoundMethod(method)) return 'badge-split';
-    return map[method] || 'badge-cash';
+  function paymentPrimaryMethodId(payment) {
+    return normalizeFinanceMethodId(payment && (payment.methodId || payment.method));
+  }
+
+  function paymentSecondaryMethodId(payment) {
+    return normalizeFinanceMethodId(payment && (payment.splitMethodId || payment.splitMethod));
+  }
+
+  function paymentMethodLabelForDate(methodId, referenceDate) {
+    const normalizedMethodId = normalizeFinanceMethodId(methodId);
+    if (!normalizedMethodId) return '—';
+
+    if (typeof getResolvedPaymentMethodLabelForDate === 'function') {
+      return getResolvedPaymentMethodLabelForDate(normalizedMethodId, referenceDate);
+    }
+
+    if (typeof getPaymentMethodLabelForDate === 'function') {
+      return getPaymentMethodLabelForDate(normalizedMethodId, referenceDate) || normalizedMethodId;
+    }
+
+    return normalizedMethodId;
+  }
+
+  function paymentMethodCurrentLabel(methodId, fallbackDate) {
+    const normalizedMethodId = normalizeFinanceMethodId(methodId);
+    if (!normalizedMethodId) return '—';
+
+    if (typeof getCurrentPaymentMethodLabel === 'function') {
+      const label = getCurrentPaymentMethodLabel(normalizedMethodId);
+      if (label) return label;
+    }
+
+    if (typeof getPaymentMethodLabelForDate === 'function') {
+      const label = getPaymentMethodLabelForDate(normalizedMethodId, fallbackDate || new Date());
+      if (label) return label;
+    }
+
+    return normalizedMethodId;
+  }
+
+  function paymentMethodClass(methodId, isSplit) {
+    if (isSplit) return 'badge-split';
+    const normalizedMethodId = normalizeFinanceMethodId(methodId);
+    const map = {
+      pm1: 'badge-alior',
+      pm2: 'badge-ing',
+      pm3: 'badge-cash',
+      pm4: 'badge-pm4',
+    };
+    return map[normalizedMethodId] || 'badge-split';
+  }
+
+  function paymentCompoundLabel(payment) {
+    if (!payment) return '—';
+    const date = payment.date || new Date();
+    const primaryId = paymentPrimaryMethodId(payment);
+    if (!payment.isSplit) {
+      return paymentMethodLabelForDate(primaryId, date);
+    }
+    const secondaryId = paymentSecondaryMethodId(payment);
+    return paymentMethodLabelForDate(primaryId, date) + ' + ' + paymentMethodLabelForDate(secondaryId, date);
+  }
+
+  function activeMethodOptions(referenceDate) {
+    if (typeof getActivePaymentMethodOptions === 'function') {
+      return getActivePaymentMethodOptions(referenceDate).map((option) => ({
+        id: normalizeFinanceMethodId(option.id),
+        label: option.label,
+      })).filter((option) => option.id && option.label);
+    }
+    return [];
+  }
+
+  function paymentMethodOptionsForDate(referenceDate, selectedIds = []) {
+    const options = [];
+    const seen = new Set();
+
+    activeMethodOptions(referenceDate).forEach((option) => {
+      if (!option.id || seen.has(option.id)) return;
+      seen.add(option.id);
+      options.push(option);
+    });
+
+    selectedIds
+      .map(normalizeFinanceMethodId)
+      .filter(Boolean)
+      .forEach((methodId) => {
+        if (seen.has(methodId)) return;
+        seen.add(methodId);
+        options.push({
+          id: methodId,
+          label: paymentMethodLabelForDate(methodId, referenceDate),
+        });
+      });
+
+    return options;
+  }
+
+  function splitSecondaryMethodOptions(options, primaryMethodId) {
+    const normalizedPrimary = normalizeFinanceMethodId(primaryMethodId);
+    return (Array.isArray(options) ? options : []).filter((option) => option.id !== normalizedPrimary);
+  }
+
+  function currentFilterMethodOptions() {
+    return activeMethodOptions(new Date());
   }
 
   function currentMonthSessions() {
@@ -229,19 +328,18 @@ const FinanceViews = (() => {
   }
 
   function revenueByMethod(periodPayments) {
-    const totals = { aliorBank: 0, ingBank: 0, cash: 0 };
+    const totals = {};
     periodPayments.forEach((payment) => {
+      const primaryMethod = paymentPrimaryMethodId(payment);
+      const secondaryMethod = paymentSecondaryMethodId(payment);
       if (payment.isSplit && payment.splitAmounts) {
-        const primaryMethod = payment.method || 'cash';
-        const secondaryMethod = payment.splitMethod || 'cash';
-        totals[primaryMethod] = (totals[primaryMethod] || 0) + (Number(payment.splitAmounts.primary) || 0);
-        totals[secondaryMethod] = (totals[secondaryMethod] || 0) + (Number(payment.splitAmounts.secondary) || 0);
+        if (primaryMethod) totals[primaryMethod] = (totals[primaryMethod] || 0) + (Number(payment.splitAmounts.primary) || 0);
+        if (secondaryMethod) totals[secondaryMethod] = (totals[secondaryMethod] || 0) + (Number(payment.splitAmounts.secondary) || 0);
         return;
       }
 
-      const method = payment.method || 'cash';
-      if (!Object.prototype.hasOwnProperty.call(totals, method)) return;
-      totals[method] = (totals[method] || 0) + (Number(payment.amount) || 0);
+      if (!primaryMethod) return;
+      totals[primaryMethod] = (totals[primaryMethod] || 0) + (Number(payment.amount) || 0);
     });
     return totals;
   }
@@ -295,6 +393,10 @@ const FinanceViews = (() => {
       return sum + owed;
     }, 0);
     const methods = revenueByMethod(monthPayments);
+    const methodIds = Array.from(new Set(
+      currentFilterMethodOptions().map((option) => option.id)
+        .concat(Object.keys(methods))
+    ));
     const debtMap = outstandingByPatient();
     const debtRows = Object.keys(debtMap).map((patientId) => {
       const patient = getPatient(patientId);
@@ -341,9 +443,12 @@ const FinanceViews = (() => {
           '<section class="fin-section">' +
             '<h2 class="fin-section-title">Metody płatności</h2>' +
             '<div class="fin-method-list">' +
-              '<div class="fin-method-row"><span class="fin-method-label"><span class="fin-method-badge badge-alior">Alior Bank</span></span><span class="fin-method-amount">' + escHtml(formatCurrency(methods.aliorBank)) + '</span></div>' +
-              '<div class="fin-method-row"><span class="fin-method-label"><span class="fin-method-badge badge-ing">ING Bank</span></span><span class="fin-method-amount">' + escHtml(formatCurrency(methods.ingBank)) + '</span></div>' +
-              '<div class="fin-method-row"><span class="fin-method-label"><span class="fin-method-badge badge-cash">Gotówka</span></span><span class="fin-method-amount">' + escHtml(formatCurrency(methods.cash)) + '</span></div>' +
+              (methodIds.map((methodId) => (
+                '<div class="fin-method-row">' +
+                  '<span class="fin-method-label"><span class="fin-method-badge ' + paymentMethodClass(methodId, false) + '">' + escHtml(paymentMethodCurrentLabel(methodId, new Date())) + '</span></span>' +
+                  '<span class="fin-method-amount">' + escHtml(formatCurrency(methods[methodId] || 0)) + '</span>' +
+                '</div>'
+              )).join('') || '<p class="fin-empty">Brak aktywnych metod płatności.</p>') +
             '</div>' +
           '</section>' +
 
@@ -379,8 +484,8 @@ const FinanceViews = (() => {
 
   function paymentDisplayAmount(payment, filterMethod) {
     if (filterMethod === 'all' || !payment.isSplit || !payment.splitAmounts) return payment.amount;
-    if (payment.method === filterMethod) return payment.splitAmounts.primary;
-    if (payment.splitMethod === filterMethod) return payment.splitAmounts.secondary;
+    if (paymentPrimaryMethodId(payment) === filterMethod) return payment.splitAmounts.primary;
+    if (paymentSecondaryMethodId(payment) === filterMethod) return payment.splitAmounts.secondary;
     return payment.amount;
   }
 
@@ -388,8 +493,8 @@ const FinanceViews = (() => {
     return getPayments()
       .filter((payment) => {
         if (paymentFilters.method !== 'all') {
-          var matchesPrimary = payment.method === paymentFilters.method;
-          var matchesSplit = payment.isSplit && payment.splitMethod === paymentFilters.method;
+          var matchesPrimary = paymentPrimaryMethodId(payment) === paymentFilters.method;
+          var matchesSplit = payment.isSplit && paymentSecondaryMethodId(payment) === paymentFilters.method;
           if (!matchesPrimary && !matchesSplit) return false;
         }
         const paymentDateKey = paymentDayKey(payment.date);
@@ -401,6 +506,10 @@ const FinanceViews = (() => {
   }
 
   function renderPayments() {
+    const filterOptions = currentFilterMethodOptions();
+    if (paymentFilters.method !== 'all' && !filterOptions.some((option) => option.id === paymentFilters.method)) {
+      paymentFilters.method = 'all';
+    }
     const payments = filteredPayments();
     const total = payments.reduce((sum, payment) => sum + paymentDisplayAmount(payment, paymentFilters.method), 0);
     return (
@@ -410,9 +519,9 @@ const FinanceViews = (() => {
             '<button class="fin-action fin-action--primary" id="fin-open-add-payment">Zarejestruj płatność</button>' +
             '<div class="fin-filter-row">' +
               '<button class="fin-chip ' + (paymentFilters.method === 'all' ? 'active' : '') + '" data-method="all">Wszystkie</button>' +
-              '<button class="fin-chip ' + (paymentFilters.method === 'aliorBank' ? 'active' : '') + '" data-method="aliorBank">Alior</button>' +
-              '<button class="fin-chip ' + (paymentFilters.method === 'ingBank' ? 'active' : '') + '" data-method="ingBank">ING</button>' +
-              '<button class="fin-chip ' + (paymentFilters.method === 'cash' ? 'active' : '') + '" data-method="cash">Gotówka</button>' +
+              filterOptions.map((option) => (
+                '<button class="fin-chip ' + (paymentFilters.method === option.id ? 'active' : '') + '" data-method="' + escHtml(option.id) + '">' + escHtml(option.label) + '</button>'
+              )).join('') +
             '</div>' +
           '</div>' +
           '<div class="fin-filter-row">' +
@@ -431,7 +540,7 @@ const FinanceViews = (() => {
                 '<div class="fin-payment-main" data-payment-detail="' + escHtml(payment.id) + '">' +
                   '<div class="fin-payment-top">' +
                     '<span class="fin-payment-date">' + escHtml(formatDateLong(payment.date)) + '</span>' +
-                    '<span class="fin-method-badge ' + paymentMethodClass(payment.isSplit ? payment.method + '+' + payment.splitMethod : payment.method) + '">' + escHtml(paymentMethodLabel(payment.isSplit ? payment.method + '+' + payment.splitMethod : payment.method)) + '</span>' +
+                    '<span class="fin-method-badge ' + paymentMethodClass(paymentPrimaryMethodId(payment), payment.isSplit) + '">' + escHtml(paymentCompoundLabel(payment)) + '</span>' +
                     '<span class="fin-payment-amount">' + escHtml(formatCurrency(paymentDisplayAmount(payment, paymentFilters.method))) + '</span>' +
                   '</div>' +
                   '<span class="fin-payment-patient">' + escHtml(display) + '</span>' +
@@ -442,8 +551,8 @@ const FinanceViews = (() => {
                   (payment.note ? '<div class="fin-payment-note">' + escHtml(payment.note) + '</div>' : '') +
                   (payment.isSplit && payment.splitAmounts
                     ? '<div class="fin-payment-note" style="margin-top:6px;font-weight:700">'
-                      + escHtml(paymentMethodLabel(payment.method)) + ': ' + escHtml(formatCurrency(payment.splitAmounts.primary))
-                      + ' · ' + escHtml(paymentMethodLabel(payment.splitMethod)) + ': ' + escHtml(formatCurrency(payment.splitAmounts.secondary))
+                      + escHtml(paymentMethodLabelForDate(paymentPrimaryMethodId(payment), payment.date)) + ': ' + escHtml(formatCurrency(payment.splitAmounts.primary))
+                      + ' · ' + escHtml(paymentMethodLabelForDate(paymentSecondaryMethodId(payment), payment.date)) + ': ' + escHtml(formatCurrency(payment.splitAmounts.secondary))
                       + '</div>'
                     : '') +
                 '</div>' +
@@ -580,12 +689,16 @@ const FinanceViews = (() => {
     }, 0);
   }
 
-  function renderMethodToggle(id, selected) {
+  function renderMethodToggle(id, selected, options, emptyText) {
+    const methodOptions = Array.isArray(options) ? options : [];
+    if (!methodOptions.length) {
+      return '<div class="fin-empty">' + escHtml(emptyText || 'Brak dostepnych metod platnosci dla wybranej daty.') + '</div>';
+    }
     return (
       '<div class="fin-method-toggle" id="' + id + '">' +
-        '<button class="fin-method-btn ' + (selected === 'aliorBank' ? 'active' : '') + '" type="button" data-method="aliorBank">Alior Bank</button>' +
-        '<button class="fin-method-btn ' + (selected === 'ingBank' ? 'active' : '') + '" type="button" data-method="ingBank">ING Bank</button>' +
-        '<button class="fin-method-btn ' + (selected === 'cash' ? 'active' : '') + '" type="button" data-method="cash">Gotówka</button>' +
+        methodOptions.map((option) => (
+          '<button class="fin-method-btn ' + (selected === option.id ? 'active' : '') + '" type="button" data-method="' + escHtml(option.id) + '">' + escHtml(option.label) + '</button>'
+        )).join('') +
       '</div>'
     );
   }
@@ -594,8 +707,13 @@ const FinanceViews = (() => {
     const isEdit = Boolean(payment);
     const patients = AppState.activePatients.slice().sort((a, b) => displayPatientName(a).localeCompare(displayPatientName(b), 'pl'));
     const isSplit = payment ? Boolean(payment.isSplit) : false;
-    const selectedMethod  = payment ? payment.method : 'cash';
-    const selectedMethod2 = (payment && payment.splitMethod) ? payment.splitMethod : 'cash';
+    const paymentDateValue = paymentDayKey(payment ? payment.date : new Date()) || new Date().toISOString().slice(0, 10);
+    const baseSelectedMethod = payment ? paymentPrimaryMethodId(payment) : null;
+    const baseSelectedMethod2 = payment ? paymentSecondaryMethodId(payment) : null;
+    const methodOptions = paymentMethodOptionsForDate(paymentDateValue, [baseSelectedMethod, baseSelectedMethod2]);
+    const selectedMethod = baseSelectedMethod || (methodOptions[0] ? methodOptions[0].id : '');
+    const secondaryMethodOptions = splitSecondaryMethodOptions(methodOptions, selectedMethod);
+    const selectedMethod2 = baseSelectedMethod2 || (secondaryMethodOptions[0] ? secondaryMethodOptions[0].id : '');
     const splitAmount2    = (payment && payment.splitAmounts) ? payment.splitAmounts.secondary : '';
     const patientId = payment ? payment.patientId : (prefill ? (prefill.patientId || '') : '');
     const selectedIds = payment ? (payment.sessionIds || []) : (prefill ? (prefill.sessionIds || []) : []);
@@ -619,11 +737,11 @@ const FinanceViews = (() => {
             '</div>' +
             '<div class="fin-form-group">' +
               '<label for="fin-sheet-date">Data płatności</label>' +
-              '<input class="fin-input" type="date" id="fin-sheet-date" value="' + escHtml(payment ? payment.date : new Date().toISOString().slice(0, 10)) + '">' +
+              '<input class="fin-input" type="date" id="fin-sheet-date" value="' + escHtml(paymentDateValue) + '">' +
             '</div>' +
             '<div class="fin-form-group fin-form-group--full">' +
               '<label>Metoda płatności</label>' +
-              renderMethodToggle('fin-method-toggle', selectedMethod) +
+              '<div id="fin-method-toggle-wrap">' + renderMethodToggle('fin-method-toggle', selectedMethod, methodOptions, 'Brak aktywnych metod platnosci dla wybranej daty.') + '</div>' +
               '<input type="hidden" id="fin-sheet-method" value="' + escHtml(selectedMethod) + '">' +
             '</div>' +
             // Split toggle
@@ -636,7 +754,7 @@ const FinanceViews = (() => {
             // Second method row (hidden unless split)
             '<div class="fin-form-group fin-form-group--full" id="fin-split-row" style="' + (isSplit ? '' : 'display:none') + '">' +
               '<label>Druga forma płatności</label>' +
-              renderMethodToggle('fin-method2-toggle', selectedMethod2) +
+              '<div id="fin-method2-toggle-wrap">' + renderMethodToggle('fin-method2-toggle', selectedMethod2, secondaryMethodOptions, 'Brak drugiej aktywnej metody dla wybranej daty.') + '</div>' +
               '<input type="hidden" id="fin-sheet-method2" value="' + escHtml(selectedMethod2) + '">' +
               '<div class="fin-split-amount-row">' +
                 '<div class="fin-split-amount-item">' +
@@ -690,11 +808,19 @@ const FinanceViews = (() => {
     const sheet = document.getElementById('fin-payment-sheet');
     if (!sheet) return;
     const patientSelect = sheet.querySelector('#fin-sheet-patient');
+    const paymentDateInput = sheet.querySelector('#fin-sheet-date');
     const sessionsWrap = sheet.querySelector('#fin-sheet-sessions');
     const amountInput = sheet.querySelector('#fin-sheet-amount');
     const balanceInfo = sheet.querySelector('#fin-sheet-balance-info');
     const methodInput = sheet.querySelector('#fin-sheet-method');
+    const methodInput2 = sheet.querySelector('#fin-sheet-method2');
+    const methodToggleWrap = sheet.querySelector('#fin-method-toggle-wrap');
+    const method2ToggleWrap = sheet.querySelector('#fin-method2-toggle-wrap');
     const selectedIds = payment ? (payment.sessionIds || []) : (prefill ? (prefill.sessionIds || []) : []);
+    const splitToggle = sheet.querySelector('#fin-split-toggle');
+    const splitRow = sheet.querySelector('#fin-split-row');
+    const splitAmt2 = sheet.querySelector('#fin-split-amount2');
+    const splitAmt1 = sheet.querySelector('#fin-split-amount1');
 
     function updateBalanceInfo() {
       const expected = selectedTotal(sheet);
@@ -738,12 +864,6 @@ const FinanceViews = (() => {
       }
     }
 
-    // Split toggle: show/hide second method row
-    const splitToggle = sheet.querySelector('#fin-split-toggle');
-    const splitRow    = sheet.querySelector('#fin-split-row');
-    const splitAmt2   = sheet.querySelector('#fin-split-amount2');
-    const splitAmt1   = sheet.querySelector('#fin-split-amount1');
-
     function updateSplitAmount1() {
       if (!splitAmt1 || !splitAmt2) return;
       const total = parseFloat(amountInput.value) || 0;
@@ -769,6 +889,48 @@ const FinanceViews = (() => {
       refreshTotal();
     }
 
+    function bindMethodToggle(toggleElement, hiddenInput) {
+      if (!toggleElement || !hiddenInput) return;
+      toggleElement.querySelectorAll('.fin-method-btn').forEach((button) => {
+        button.addEventListener('click', () => {
+          toggleElement.querySelectorAll('.fin-method-btn').forEach((item) => item.classList.remove('active'));
+          button.classList.add('active');
+          hiddenInput.value = button.dataset.method;
+          if (hiddenInput === methodInput) {
+            refreshMethodOptions();
+          }
+        });
+      });
+    }
+
+    function refreshMethodOptions() {
+      const dateValue = paymentDateInput ? paymentDateInput.value : new Date().toISOString().slice(0, 10);
+      const options = paymentMethodOptionsForDate(dateValue, [methodInput.value, methodInput2 ? methodInput2.value : null]);
+      const selectedPrimary = options.some((option) => option.id === methodInput.value)
+        ? methodInput.value
+        : (options[0] ? options[0].id : '');
+
+      methodInput.value = selectedPrimary;
+      if (methodToggleWrap) {
+        methodToggleWrap.innerHTML = renderMethodToggle('fin-method-toggle', selectedPrimary, options, 'Brak aktywnych metod platnosci dla wybranej daty.');
+        bindMethodToggle(methodToggleWrap.querySelector('#fin-method-toggle'), methodInput);
+      }
+
+      if (methodInput2) {
+        const secondaryOptions = splitSecondaryMethodOptions(options, selectedPrimary);
+        const selectedSecondary = secondaryOptions.some((option) => option.id === methodInput2.value)
+          ? methodInput2.value
+          : ((secondaryOptions[0] || {}).id || '');
+        methodInput2.value = selectedSecondary;
+        if (method2ToggleWrap) {
+          method2ToggleWrap.innerHTML = renderMethodToggle('fin-method2-toggle', selectedSecondary, secondaryOptions, 'Brak drugiej aktywnej metody dla wybranej daty.');
+          bindMethodToggle(method2ToggleWrap.querySelector('#fin-method2-toggle'), methodInput2);
+        }
+      }
+
+      updateSplitAmount1();
+    }
+
     if (patientSelect) {
       patientSelect.addEventListener('change', () => {
         sessionsWrap.innerHTML = patientSelect.value
@@ -778,36 +940,14 @@ const FinanceViews = (() => {
       });
     }
 
-    // Primary method toggle
-    const methodToggle = sheet.querySelector('#fin-method-toggle');
-    if (methodToggle) {
-      methodToggle.querySelectorAll('.fin-method-btn').forEach((button) => {
-        button.addEventListener('click', () => {
-          methodToggle.querySelectorAll('.fin-method-btn').forEach((item) => item.classList.remove('active'));
-          button.classList.add('active');
-          methodInput.value = button.dataset.method;
-        });
-      });
-    }
-
-    // Second method toggle (split)
-    const methodInput2 = sheet.querySelector('#fin-sheet-method2');
-    const method2Toggle = sheet.querySelector('#fin-method2-toggle');
-    if (method2Toggle) {
-      method2Toggle.querySelectorAll('.fin-method-btn').forEach((button) => {
-        button.addEventListener('click', () => {
-          method2Toggle.querySelectorAll('.fin-method-btn').forEach((item) => item.classList.remove('active'));
-          button.classList.add('active');
-          if (methodInput2) methodInput2.value = button.dataset.method;
-        });
-      });
-    }
-
     if (splitToggle && splitRow) {
       splitToggle.addEventListener('change', () => {
         splitRow.style.display = splitToggle.checked ? '' : 'none';
         if (splitToggle.checked) updateSplitAmount1();
       });
+    }
+    if (paymentDateInput) {
+      paymentDateInput.addEventListener('change', refreshMethodOptions);
     }
     if (splitAmt2) {
       splitAmt2.addEventListener('input', updateSplitAmount1);
@@ -817,10 +957,12 @@ const FinanceViews = (() => {
       amountInput.addEventListener('input', () => {
         amountInput.dataset.userEdited = '1';
         updateBalanceInfo();
+        updateSplitAmount1();
       });
     }
 
     bindCheckboxes();
+    refreshMethodOptions();
     if (!payment && selectedIds.length === 0) refreshTotal();
 
     sheet.querySelector('#fin-close-sheet').addEventListener('click', closePaymentSheet);
@@ -851,18 +993,22 @@ const FinanceViews = (() => {
     if (!sheet) return;
     const patientId = sheet.querySelector('#fin-sheet-patient').value;
     const date = sheet.querySelector('#fin-sheet-date').value;
-    const method = sheet.querySelector('#fin-sheet-method').value || 'cash';
+    const method = normalizeFinanceMethodId(sheet.querySelector('#fin-sheet-method').value);
     const note = sheet.querySelector('#fin-sheet-note').value.trim();
     const sessionIds = selectedSessionIds(sheet);
 
     // Split fields
     const splitToggle = sheet.querySelector('#fin-split-toggle');
     const isSplit = splitToggle ? splitToggle.checked : false;
-    const splitMethod = isSplit ? (sheet.querySelector('#fin-sheet-method2').value || 'cash') : null;
+    const splitMethod = isSplit ? normalizeFinanceMethodId(sheet.querySelector('#fin-sheet-method2').value) : null;
     const splitAmt2Raw = isSplit ? parseFloat(sheet.querySelector('#fin-split-amount2').value) : 0;
 
-    if (isSplit && splitMethod && !['aliorBank', 'ingBank', 'cash'].includes(splitMethod)) {
+    if (!method) {
       toast('Nieprawidłowa metoda płatności', 'warning');
+      return;
+    }
+    if (isSplit && !splitMethod) {
+      toast('Nieprawidłowa druga metoda płatności', 'warning');
       return;
     }
 
@@ -872,6 +1018,14 @@ const FinanceViews = (() => {
     }
     if (!date) {
       toast('Podaj datę płatności.', 'warning');
+      return;
+    }
+    if (typeof getPaymentMethodLabelForDate === 'function' && !getPaymentMethodLabelForDate(method, date)) {
+      toast('Wybrana metoda nie ma nazwy dla tej daty płatności.', 'warning');
+      return;
+    }
+    if (isSplit && typeof getPaymentMethodLabelForDate === 'function' && !getPaymentMethodLabelForDate(splitMethod, date)) {
+      toast('Druga metoda nie ma nazwy dla tej daty płatności.', 'warning');
       return;
     }
     if (!sessionIds.length) {
@@ -918,8 +1072,10 @@ const FinanceViews = (() => {
         date,
         amount,
         method,
+        methodId: method,
         isSplit,
         splitMethod,
+        splitMethodId: splitMethod,
         splitAmounts,
         sessionIds,
         note,
@@ -976,10 +1132,10 @@ const FinanceViews = (() => {
             '<div class="fin-detail-row"><span>Pacjent</span><strong>' + escHtml(display + (fullName ? ` (${fullName})` : '')) + '</strong></div>' +
             '<div class="fin-detail-row"><span>Data płatności</span><strong>' + escHtml(formatDateLong(payment.date)) + '</strong></div>' +
             (payment.isSplit
-              ? '<div class="fin-detail-row"><span>Metoda</span><strong class="fin-method-badge badge-split">' + escHtml(paymentMethodLabel(payment.method)) + ' + ' + escHtml(paymentMethodLabel(payment.splitMethod)) + '</strong></div>' +
-                '<div class="fin-detail-row fin-detail-split"><span>' + escHtml(paymentMethodLabel(payment.method)) + '</span><strong>' + escHtml(formatCurrency(payment.splitAmounts ? payment.splitAmounts.primary : 0)) + '</strong></div>' +
-                '<div class="fin-detail-row fin-detail-split"><span>' + escHtml(paymentMethodLabel(payment.splitMethod)) + '</span><strong>' + escHtml(formatCurrency(payment.splitAmounts ? payment.splitAmounts.secondary : 0)) + '</strong></div>'
-              : '<div class="fin-detail-row"><span>Metoda</span><strong class="fin-method-badge ' + paymentMethodClass(payment.method) + '">' + escHtml(paymentMethodLabel(payment.method)) + '</strong></div>') +
+              ? '<div class="fin-detail-row"><span>Metoda</span><strong class="fin-method-badge badge-split">' + escHtml(paymentCompoundLabel(payment)) + '</strong></div>' +
+                '<div class="fin-detail-row fin-detail-split"><span>' + escHtml(paymentMethodLabelForDate(paymentPrimaryMethodId(payment), payment.date)) + '</span><strong>' + escHtml(formatCurrency(payment.splitAmounts ? payment.splitAmounts.primary : 0)) + '</strong></div>' +
+                '<div class="fin-detail-row fin-detail-split"><span>' + escHtml(paymentMethodLabelForDate(paymentSecondaryMethodId(payment), payment.date)) + '</span><strong>' + escHtml(formatCurrency(payment.splitAmounts ? payment.splitAmounts.secondary : 0)) + '</strong></div>'
+              : '<div class="fin-detail-row"><span>Metoda</span><strong class="fin-method-badge ' + paymentMethodClass(paymentPrimaryMethodId(payment), false) + '">' + escHtml(paymentMethodLabelForDate(paymentPrimaryMethodId(payment), payment.date)) + '</strong></div>') +
             '<div class="fin-detail-row"><span>Kwota łączna</span><strong>' + escHtml(formatCurrency(payment.amount)) + '</strong></div>' +
             (payment.note ? '<div class="fin-detail-row"><span>Notatka</span><strong>' + escHtml(payment.note) + '</strong></div>' : '') +
             '<div class="fin-detail-sessions">' +
