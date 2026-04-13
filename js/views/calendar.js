@@ -578,6 +578,7 @@ const CalendarViews = {
     const amount  = session.paymentAmount !== null ? session.paymentAmount : patient.sessionRate;
     const color   = this._sessionColor(session);
     const numLabel = session.sessionNumber ? 'Sesja #' + session.sessionNumber : '';
+    const paymentMethodSummary = this._paymentMethodSummary(session);
     const paymentSection = session.isPaymentRequired
       ? ('<div class="cal-detail-section">'
           + '<h4 class="cal-detail-section-title">Płatność</h4>'
@@ -591,11 +592,22 @@ const CalendarViews = {
               + (session.isPaid ? 'Opłacona' : session.isPartiallyPaid ? 'Częściowo opłacona (' + formatPLN(session.partialPaymentAmount) + ')' : 'Nieopłacona')
             + '</span>'
           + '</div>'
-          + (session.isPaid && session.paymentMethod
+          + (paymentMethodSummary
               ? '<div class="cal-detail-row">'
-                + '<span class="cal-detail-label">Metoda</span>'
-                + '<span class="cal-detail-value">' + this._paymentMethodName(session.paymentMethod) + '</span>'
-                + '</div>' : '')
+                + '<span class="cal-detail-label">' + (paymentMethodSummary.isSplit ? 'Metody' : 'Metoda') + '</span>'
+                + '<span class="cal-detail-value">' + paymentMethodSummary.combinedLabel + '</span>'
+                + '</div>'
+                + (paymentMethodSummary.isSplit
+                    ? '<div class="cal-detail-row">'
+                      + '<span class="cal-detail-label">Pierwsza metoda</span>'
+                      + '<span class="cal-detail-value">' + paymentMethodSummary.primaryLabel + '</span>'
+                      + '</div>'
+                      + '<div class="cal-detail-row">'
+                      + '<span class="cal-detail-label">Druga metoda</span>'
+                      + '<span class="cal-detail-value">' + paymentMethodSummary.secondaryLabel + '</span>'
+                      + '</div>'
+                    : '')
+              : '')
           + (session.isPaid && session.paymentDate
               ? '<div class="cal-detail-row">'
                 + '<span class="cal-detail-label">Data płatności</span>'
@@ -1162,13 +1174,61 @@ const CalendarViews = {
     return '<span class="cal-badge" style="background:' + s.bg + '">' + s.label + '</span>';
   },
 
-  _paymentMethodName(method) {
-    const map = { aliorBank: 'Alior Bank', ingBank: 'ING Bank', cash: 'Gotówka' };
+  _paymentMethodName(method, referenceDate) {
     if (!method) return '—';
-    if (isCompoundMethod(method)) {
-      return method.split('+').map(m => map[m] || m).join(' + ');
-    }
-    return map[method] || method;
+    const parsed = typeof parseStoredPaymentMethod === 'function'
+      ? parseStoredPaymentMethod(method, null)
+      : { primaryRaw: method, secondaryRaw: null, primaryId: null, secondaryId: null };
+    const fallbackDate = referenceDate || new Date();
+    const resolveLabel = (methodId, rawValue) => {
+      if (methodId && typeof getResolvedPaymentMethodLabelForDate === 'function') {
+        return getResolvedPaymentMethodLabelForDate(methodId, fallbackDate);
+      }
+      return rawValue || '—';
+    };
+    const primaryLabel = resolveLabel(parsed.primaryId, parsed.primaryRaw);
+    if (!parsed.secondaryRaw) return primaryLabel;
+    const secondaryLabel = resolveLabel(parsed.secondaryId, parsed.secondaryRaw);
+    return primaryLabel + ' + ' + secondaryLabel;
+  },
+
+  _paymentMethodSummary(session) {
+    if (!session) return null;
+
+    const paymentRecord = session.paymentId && typeof getPaymentById === 'function'
+      ? getPaymentById(session.paymentId)
+      : null;
+    if (!paymentRecord && !session.paymentMethod) return null;
+    const referenceDate = (paymentRecord && paymentRecord.date) || session.paymentDate || session.date || new Date();
+    const parsed = paymentRecord
+      ? {
+          primaryId: paymentRecord.methodId || paymentRecord.method || null,
+          secondaryId: paymentRecord.isSplit ? (paymentRecord.splitMethodId || paymentRecord.splitMethod || null) : null,
+          primaryRaw: paymentRecord.method || null,
+          secondaryRaw: paymentRecord.isSplit ? (paymentRecord.splitMethod || null) : null,
+        }
+      : (typeof parseStoredPaymentMethod === 'function'
+          ? parseStoredPaymentMethod(session.paymentMethod, null)
+          : { primaryId: null, secondaryId: null, primaryRaw: session.paymentMethod, secondaryRaw: null });
+
+    const resolveLabel = (methodId, rawValue) => {
+      if (methodId && typeof getResolvedPaymentMethodLabelForDate === 'function') {
+        return getResolvedPaymentMethodLabelForDate(methodId, referenceDate);
+      }
+      return rawValue || '—';
+    };
+
+    const primaryLabel = resolveLabel(parsed.primaryId, parsed.primaryRaw);
+    const secondaryLabel = parsed.secondaryRaw || parsed.secondaryId
+      ? resolveLabel(parsed.secondaryId, parsed.secondaryRaw)
+      : '';
+
+    return {
+      isSplit: !!secondaryLabel,
+      primaryLabel,
+      secondaryLabel,
+      combinedLabel: secondaryLabel ? (primaryLabel + ' + ' + secondaryLabel) : primaryLabel,
+    };
   },
 
   _isDateBlocked(date) {

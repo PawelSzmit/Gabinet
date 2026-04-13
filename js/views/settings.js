@@ -98,6 +98,36 @@ const SettingsView = (() => {
       .sv-row-note { align-items: flex-start; }
       .sv-row-note span { font-size: 13px; line-height: 1.5; color: #5d6a60; }
       .sv-security-status { font-size: 15px; font-weight: 600; color: #243126; text-align: right; }
+      .sv-payment-card { padding: 14px 16px 16px; border-bottom: 1px solid #f2f2f7; }
+      .sv-payment-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+      .sv-payment-title { font-size: 15px; font-weight: 600; color: #000; }
+      .sv-payment-status { font-size: 12px; padding: 4px 8px; border-radius: 999px; background: #eef6ef; color: #2d6a38; }
+      .sv-payment-status.inactive { background: #f2f2f7; color: #636366; }
+      .sv-payment-input {
+        width: 100%; border: 1px solid #d8d8de; border-radius: 12px; padding: 12px 14px;
+        font-size: 15px; color: #3a3a3c; box-sizing: border-box; background: #fff;
+      }
+      .sv-payment-input:focus { outline: none; border-color: #007aff; box-shadow: 0 0 0 3px rgba(0,122,255,.12); }
+      .sv-payment-input.has-error { border-color: #ff3b30; box-shadow: 0 0 0 3px rgba(255,59,48,.12); }
+      .sv-payment-help { margin-top: 8px; font-size: 12px; color: #6c6c70; line-height: 1.5; }
+      .sv-payment-error { margin-top: 8px; font-size: 12px; color: #c62828; display: none; }
+      .sv-payment-history { margin-top: 10px; display: grid; gap: 6px; }
+      .sv-payment-history-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12px; color: #5d6a60; }
+      .sv-payment-history-label { font-weight: 600; color: #243126; }
+      .sv-payment-history-empty { font-size: 12px; color: #8e8e93; }
+      .sv-payment-actions { display: flex; gap: 10px; padding: 14px 16px 16px; }
+      .sv-payment-btn {
+        flex: 1; border-radius: 12px; border: 1px solid #d8d8de; background: #fff; color: #243126;
+        padding: 12px 14px; font-size: 15px; font-weight: 600; cursor: pointer;
+      }
+      .sv-payment-btn.primary { background: #007aff; border-color: #007aff; color: #fff; }
+      .sv-payment-btn:disabled { opacity: .45; cursor: default; }
+      .sv-confirm-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 950; display: flex; align-items: center; justify-content: center; padding: 20px; }
+      .sv-confirm-dialog { width: 100%; max-width: 460px; background: #fff; border-radius: 18px; box-shadow: 0 24px 60px rgba(0,0,0,.18); padding: 20px; }
+      .sv-confirm-title { font-size: 18px; font-weight: 700; color: #111; margin-bottom: 8px; }
+      .sv-confirm-text { font-size: 14px; line-height: 1.6; color: #4a4a4f; margin-bottom: 14px; }
+      .sv-confirm-list { margin: 0 0 18px; padding-left: 18px; display: grid; gap: 8px; color: #243126; font-size: 14px; }
+      .sv-confirm-actions { display: flex; gap: 10px; }
 
       .sv-sheet-bg { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 900;
                      display: flex; align-items: flex-end; }
@@ -126,6 +156,19 @@ const SettingsView = (() => {
         .sv-row label { color: #fff; }
         .sv-row input[type=text], .sv-row input[type=number], .sv-row select,
         .sv-row .sv-value { color: #ebebf5; }
+        .sv-payment-title { color: #fff; }
+        .sv-payment-status { background: rgba(52,199,89,.16); color: #8ee2a1; }
+        .sv-payment-status.inactive { background: rgba(255,255,255,.08); color: #b8b8be; }
+        .sv-payment-input { background: #2c2c2e; border-color: #3a3a3c; color: #fff; }
+        .sv-payment-help { color: #b8b8be; }
+        .sv-payment-history-label { color: #f4ede4; }
+        .sv-payment-history-item { color: #b8b8be; }
+        .sv-payment-history-empty { color: #8e8e93; }
+        .sv-payment-btn { background: #2c2c2e; border-color: #3a3a3c; color: #f4ede4; }
+        .sv-payment-btn.primary { background: #007aff; border-color: #007aff; color: #fff; }
+        .sv-confirm-dialog { background: #1c1c1e; }
+        .sv-confirm-title { color: #fff; }
+        .sv-confirm-text, .sv-confirm-list { color: #ebebf5; }
         .sv-blocked-row { border-bottom-color: #2c2c2e; }
         .sv-blocked-row .sv-blocked-dates { color: #fff; }
         .sv-about-title { color: #fff; }
@@ -145,12 +188,219 @@ const SettingsView = (() => {
     document.head.appendChild(s);
   }
 
+  function getPaymentMethodCards() {
+    if (typeof getPaymentMethodSettingsSnapshot === 'function') {
+      return getPaymentMethodSettingsSnapshot(new Date());
+    }
+
+    return ['pm1', 'pm2', 'pm3', 'pm4'].map((id, index) => ({
+      id,
+      currentLabel: '',
+      history: [],
+      isActive: false,
+      order: index + 1,
+    }));
+  }
+
+  function formatHistoryRange(entry) {
+    if (!entry || !entry.validFrom) return '';
+    const from = formatDateMedium(new Date(entry.validFrom));
+    if (!entry.archivedAt) return 'od ' + from;
+    const until = formatDateMedium(new Date(entry.archivedAt));
+    return from + ' - ' + until;
+  }
+
+  function renderPaymentMethodHistory(history) {
+    const items = Array.isArray(history) ? history.filter(Boolean).slice(0, 3) : [];
+    if (!items.length) {
+      return '<div class="sv-payment-history-empty">Brak starszych nazw.</div>';
+    }
+
+    return items.map((entry) => (
+      '<div class="sv-payment-history-item">'
+        + '<span class="sv-payment-history-label">' + esc(entry.label || 'Bez nazwy') + '</span>'
+        + '<span>' + esc(formatHistoryRange(entry)) + '</span>'
+      + '</div>'
+    )).join('');
+  }
+
+  function renderPaymentMethodCards(cards) {
+    return cards.map((card, index) => {
+      const currentLabel = card && card.currentLabel ? card.currentLabel : '';
+      const statusLabel = currentLabel ? 'Aktywna' : 'Nieaktywna';
+      const statusClass = currentLabel ? '' : ' inactive';
+      const history = renderPaymentMethodHistory((card && card.history) || []);
+      return (
+        '<div class="sv-payment-card" data-method-card="' + esc(card.id) + '">'
+          + '<div class="sv-payment-head">'
+            + '<div class="sv-payment-title">Metoda ' + (index + 1) + '</div>'
+            + '<span class="sv-payment-status' + statusClass + '" data-method-status="' + esc(card.id) + '">' + statusLabel + '</span>'
+          + '</div>'
+          + '<input type="text" class="sv-payment-input" id="sv-payment-' + esc(card.id) + '" data-method-input="' + esc(card.id) + '" data-initial-value="' + esc(currentLabel) + '" value="' + esc(currentLabel) + '" placeholder="Np. Karta, BLIK, Gotowka">'
+          + '<div class="sv-payment-help">Puste pole wylacza metode. Nazwa musi miec litere albo cyfre.</div>'
+          + '<div class="sv-payment-error" data-method-error="' + esc(card.id) + '"></div>'
+          + '<div class="sv-payment-history">' + history + '</div>'
+        + '</div>'
+      );
+    }).join('');
+  }
+
+  function collectPaymentMethodDrafts(section) {
+    const drafts = {};
+    if (!section) return drafts;
+
+    section.querySelectorAll('[data-method-input]').forEach((input) => {
+      drafts[input.dataset.methodInput] = input.value;
+    });
+    return drafts;
+  }
+
+  function setPaymentMethodErrors(section, errors) {
+    if (!section) return;
+    section.querySelectorAll('[data-method-input]').forEach((input) => {
+      const methodId = input.dataset.methodInput;
+      const error = errors && errors[methodId] ? errors[methodId] : '';
+      const errorEl = section.querySelector('[data-method-error="' + methodId + '"]');
+      input.classList.toggle('has-error', !!error);
+      if (errorEl) {
+        errorEl.textContent = error;
+        errorEl.style.display = error ? 'block' : 'none';
+      }
+    });
+  }
+
+  function refreshPaymentMethodStatuses(section) {
+    if (!section) return;
+    section.querySelectorAll('[data-method-input]').forEach((input) => {
+      const methodId = input.dataset.methodInput;
+      const statusEl = section.querySelector('[data-method-status="' + methodId + '"]');
+      if (!statusEl) return;
+      const hasValue = input.value.trim().length > 0;
+      statusEl.textContent = hasValue ? 'Aktywna' : 'Nieaktywna';
+      statusEl.classList.toggle('inactive', !hasValue);
+    });
+  }
+
+  function updatePaymentMethodButtons(section, hasErrors) {
+    if (!section) return false;
+    let isDirty = false;
+
+    section.querySelectorAll('[data-method-input]').forEach((input) => {
+      const initialValue = input.dataset.initialValue || '';
+      if (input.value !== initialValue) isDirty = true;
+    });
+
+    const cancelBtn = document.getElementById('sv-payment-cancel');
+    const saveBtn = document.getElementById('sv-payment-save');
+    if (cancelBtn) cancelBtn.disabled = !isDirty;
+    if (saveBtn) saveBtn.disabled = !isDirty || !!hasErrors;
+    return isDirty;
+  }
+
+  function validatePaymentMethodSection(section) {
+    const drafts = collectPaymentMethodDrafts(section);
+    const result = typeof validatePaymentMethodDrafts === 'function'
+      ? validatePaymentMethodDrafts(drafts, new Date())
+      : { isValid: true, errors: {}, normalizedDrafts: drafts };
+
+    setPaymentMethodErrors(section, result.errors || {});
+    refreshPaymentMethodStatuses(section);
+    updatePaymentMethodButtons(section, !result.isValid);
+    return result;
+  }
+
+  function resetPaymentMethodSection(section) {
+    if (!section) return;
+    section.querySelectorAll('[data-method-input]').forEach((input) => {
+      input.value = input.dataset.initialValue || '';
+    });
+    setPaymentMethodErrors(section, {});
+    refreshPaymentMethodStatuses(section);
+    updatePaymentMethodButtons(section, false);
+  }
+
+  function buildPaymentMethodChangeList(validation) {
+    const changes = [];
+    const cards = getPaymentMethodCards();
+
+    cards.forEach((card, index) => {
+      const currentLabel = card.currentLabel || '';
+      const nextLabel = validation.normalizedDrafts[card.id] || '';
+      if (currentLabel === nextLabel) return;
+
+      if (!currentLabel && nextLabel) {
+        changes.push('Metoda ' + (index + 1) + ': wlacz jako "' + nextLabel + '"');
+      } else if (currentLabel && !nextLabel) {
+        changes.push('Metoda ' + (index + 1) + ': wylacz (teraz: "' + currentLabel + '")');
+      } else {
+        changes.push('Metoda ' + (index + 1) + ': "' + currentLabel + '" -> "' + nextLabel + '"');
+      }
+    });
+
+    return changes;
+  }
+
+  function showPaymentMethodConfirmDialog(changes, onConfirm) {
+    const existing = document.getElementById('sv-payment-confirm');
+    if (existing) existing.remove();
+
+    const html = `
+      <div class="sv-confirm-backdrop" id="sv-payment-confirm">
+        <div class="sv-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="sv-payment-confirm-title">
+          <div class="sv-confirm-title" id="sv-payment-confirm-title">Zapisac zmiany metod platnosci?</div>
+          <div class="sv-confirm-text">Zmiany zaczna obowiazywac od dzisiaj. Starsze platnosci zachowaja swoje dawne nazwy.</div>
+          <ul class="sv-confirm-list">${changes.map((item) => '<li>' + esc(item) + '</li>').join('')}</ul>
+          <div class="sv-confirm-actions">
+            <button type="button" class="sv-payment-btn" id="sv-payment-confirm-cancel">Anuluj</button>
+            <button type="button" class="sv-payment-btn primary" id="sv-payment-confirm-ok">OK</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', html);
+
+    const dialog = document.getElementById('sv-payment-confirm');
+    const close = () => {
+      if (dialog) dialog.remove();
+    };
+
+    dialog.addEventListener('click', (event) => {
+      if (event.target === dialog) close();
+    });
+    document.getElementById('sv-payment-confirm-cancel').addEventListener('click', close);
+    document.getElementById('sv-payment-confirm-ok').addEventListener('click', () => {
+      close();
+      onConfirm();
+    });
+  }
+
+  function refreshPaymentUiAfterMethodSave() {
+    const paymentSheetOpen = !!document.getElementById('fin-payment-sheet');
+
+    if (paymentSheetOpen && typeof FinanceViews !== 'undefined' && typeof FinanceViews.closePaymentSheet === 'function') {
+      FinanceViews.closePaymentSheet();
+    } else if (paymentSheetOpen) {
+      const staleSheet = document.getElementById('fin-payment-sheet');
+      if (staleSheet) staleSheet.remove();
+    }
+
+    if (typeof App !== 'undefined' && typeof App.refreshCurrentView === 'function') {
+      App.refreshCurrentView();
+    }
+
+    if (paymentSheetOpen && typeof toast === 'function') {
+      toast('Lista metod platnosci zostala zaktualizowana. Otwarty formularz platnosci zostal zamkniety.', 'info');
+    }
+  }
+
   function render(container) {
     injectStyles();
     const settings = (typeof AppState !== 'undefined' && AppState.settings) ? AppState.settings : {};
     const userInfo = _getUserInfo();
     const securitySummary = getClinicalSecuritySummary();
     const syncSummary = getSyncSummary();
+    const paymentMethods = getPaymentMethodCards();
 
     container.innerHTML = `
       <div class="sv-wrap">
@@ -168,6 +418,15 @@ const SettingsView = (() => {
           <div class="sv-row">
             <label for="sv-nip">NIP</label>
             <input type="text" id="sv-nip" value="${esc(settings.therapistNIP || '')}" placeholder="opcjonalnie">
+          </div>
+        </div>
+
+        <div class="sv-section-title">Metody platnosci</div>
+        <div class="sv-section" id="sv-payment-methods-section">
+          ${renderPaymentMethodCards(paymentMethods)}
+          <div class="sv-payment-actions">
+            <button type="button" class="sv-payment-btn" id="sv-payment-cancel" disabled>Anuluj</button>
+            <button type="button" class="sv-payment-btn primary" id="sv-payment-save" disabled>Zapisz zmiany</button>
           </div>
         </div>
 
@@ -297,6 +556,61 @@ const SettingsView = (() => {
       const input = document.getElementById(id);
       if (input) input.addEventListener('input', saveDebounced);
     });
+
+    const paymentSection = document.getElementById('sv-payment-methods-section');
+    if (paymentSection) {
+      paymentSection.querySelectorAll('[data-method-input]').forEach((input) => {
+        input.addEventListener('input', () => {
+          validatePaymentMethodSection(paymentSection);
+        });
+      });
+
+      const cancelBtn = document.getElementById('sv-payment-cancel');
+      if (cancelBtn) {
+        cancelBtn.addEventListener('click', () => {
+          resetPaymentMethodSection(paymentSection);
+        });
+      }
+
+      const saveBtn = document.getElementById('sv-payment-save');
+      if (saveBtn) {
+        saveBtn.addEventListener('click', async () => {
+          const validation = validatePaymentMethodSection(paymentSection);
+          const changes = buildPaymentMethodChangeList(validation);
+
+          if (!changes.length) {
+            if (typeof toast === 'function') toast('Nie ma zmian do zapisania.', 'info');
+            updatePaymentMethodButtons(paymentSection, false);
+            return;
+          }
+
+          if (!validation.isValid) {
+            if (typeof toast === 'function') toast('Popraw zaznaczone pola.', 'warning');
+            return;
+          }
+
+          showPaymentMethodConfirmDialog(changes, async () => {
+            try {
+              if (typeof applyPaymentMethodDrafts !== 'function') {
+                throw new Error('Brakuje helpera zapisu metod platnosci.');
+              }
+
+              applyPaymentMethodDrafts(collectPaymentMethodDrafts(paymentSection), new Date());
+              if (typeof persistData !== 'undefined') await persistData();
+              refreshPaymentUiAfterMethodSave();
+              render(container);
+              if (typeof toast === 'function') toast('Metody platnosci zostaly zapisane.', 'success');
+            } catch (error) {
+              if (typeof toast === 'function') {
+                toast('Nie udalo sie zapisac metod platnosci: ' + error.message, 'error');
+              }
+            }
+          });
+        });
+      }
+
+      validatePaymentMethodSection(paymentSection);
+    }
 
     const signOutBtn = document.getElementById('sv-signout-btn');
     if (signOutBtn) {

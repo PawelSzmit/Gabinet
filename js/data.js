@@ -83,6 +83,586 @@ function createClinicalSecuritySettings(data = {}) {
   };
 }
 
+const PAYMENT_METHOD_SLOT_IDS = ['pm1', 'pm2', 'pm3', 'pm4'];
+const LEGACY_PAYMENT_METHOD_TO_SLOT = {
+  aliorBank: 'pm1',
+  ingBank: 'pm2',
+  cash: 'pm3',
+};
+const DEFAULT_PAYMENT_METHOD_LABELS = {
+  pm1: 'Alior Bank',
+  pm2: 'ING Bank',
+  pm3: 'Gotowka',
+  pm4: '',
+};
+const PAYMENT_METHOD_MIGRATION_FALLBACK_LABEL = 'Metoda archiwalna';
+
+function normalizeDateKey(dateValue, fallback) {
+  const fallbackKey = typeof fallback === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fallback)
+    ? fallback
+    : new Date().toISOString().slice(0, 10);
+
+  if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateValue.trim())) {
+    return dateValue.trim();
+  }
+
+  const parsed = dateValue instanceof Date ? dateValue : new Date(dateValue);
+  if (Number.isNaN(parsed.getTime())) return fallbackKey;
+
+  return [
+    parsed.getFullYear(),
+    String(parsed.getMonth() + 1).padStart(2, '0'),
+    String(parsed.getDate()).padStart(2, '0'),
+  ].join('-');
+}
+
+function normalizeOptionalDateKey(dateValue) {
+  if (dateValue === undefined || dateValue === null || dateValue === '') return null;
+
+  if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateValue.trim())) {
+    return dateValue.trim();
+  }
+
+  const parsed = dateValue instanceof Date ? dateValue : new Date(dateValue);
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  return [
+    parsed.getFullYear(),
+    String(parsed.getMonth() + 1).padStart(2, '0'),
+    String(parsed.getDate()).padStart(2, '0'),
+  ].join('-');
+}
+
+function normalizePaymentMethodId(methodId) {
+  if (typeof methodId !== 'string' || !methodId) return null;
+  if (Object.prototype.hasOwnProperty.call(LEGACY_PAYMENT_METHOD_TO_SLOT, methodId)) {
+    return LEGACY_PAYMENT_METHOD_TO_SLOT[methodId];
+  }
+  return PAYMENT_METHOD_SLOT_IDS.includes(methodId) ? methodId : null;
+}
+
+function isPaymentMethodSlotId(methodId) {
+  return PAYMENT_METHOD_SLOT_IDS.includes(normalizePaymentMethodId(methodId));
+}
+
+function normalizePaymentMethodLabel(label) {
+  return String(label || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function hasLetterOrDigit(value) {
+  return /[\p{L}\p{N}]/u.test(String(value || ''));
+}
+
+function isValidPaymentMethodLabel(label) {
+  const normalized = normalizePaymentMethodLabel(label);
+  if (!normalized) return false;
+  return hasLetterOrDigit(normalized);
+}
+
+function createPaymentMethodHistoryEntry(data = {}) {
+  const methodId = normalizePaymentMethodId(data.methodId);
+  if (!methodId) return null;
+  return {
+    id: data.id || uuid(),
+    methodId,
+    label: normalizePaymentMethodLabel(data.label),
+    validFrom: normalizeDateKey(data.validFrom, '2000-01-01'),
+    archivedAt: normalizeOptionalDateKey(data.archivedAt),
+  };
+}
+
+function createPaymentMethodSettings(data = {}) {
+  const slotIds = Array.isArray(data.slotIds) && data.slotIds.length
+    ? data.slotIds.map(normalizePaymentMethodId).filter(isPaymentMethodSlotId)
+    : PAYMENT_METHOD_SLOT_IDS.slice();
+  const history = Array.isArray(data.history)
+    ? data.history.map(createPaymentMethodHistoryEntry)
+      .filter(Boolean)
+    : [];
+
+  return {
+    slotIds: slotIds.length ? Array.from(new Set(slotIds)) : PAYMENT_METHOD_SLOT_IDS.slice(),
+    history,
+  };
+}
+
+function getPaymentMethodSettings() {
+  const settings = AppState.settings || {};
+  const paymentMethods = settings.paymentMethods;
+  if (paymentMethods && typeof paymentMethods === 'object') {
+    return paymentMethods;
+  }
+  return createPaymentMethodSettings({});
+}
+
+function getPaymentMethodSlotIds() {
+  const settings = getPaymentMethodSettings();
+  const slotIds = Array.isArray(settings.slotIds) ? settings.slotIds : [];
+  const normalized = slotIds.map(normalizePaymentMethodId).filter(isPaymentMethodSlotId);
+  return normalized.length ? Array.from(new Set(normalized)) : PAYMENT_METHOD_SLOT_IDS.slice();
+}
+
+function getPaymentMethodHistory(methodId) {
+  const normalizedMethodId = normalizePaymentMethodId(methodId);
+  if (!normalizedMethodId) return [];
+
+  return getPaymentMethodSettings().history
+    .filter((entry) => normalizePaymentMethodId(entry.methodId) === normalizedMethodId)
+    .sort((a, b) => b.validFrom.localeCompare(a.validFrom));
+}
+
+function getPaymentMethodHistoryEntryForDate(methodId, referenceDate) {
+  const normalizedMethodId = normalizePaymentMethodId(methodId);
+  if (!normalizedMethodId) return null;
+
+  const dateKey = normalizeDateKey(referenceDate, new Date().toISOString().slice(0, 10));
+  const matches = getPaymentMethodHistory(normalizedMethodId).filter((entry) => {
+    if (entry.validFrom > dateKey) return false;
+    if (entry.archivedAt && entry.archivedAt <= dateKey) return false;
+    return true;
+  });
+
+  if (!matches.length) return null;
+  return matches.sort((a, b) => b.validFrom.localeCompare(a.validFrom))[0] || null;
+}
+
+function getPaymentMethodLabelForDate(methodId, referenceDate) {
+  const entry = getPaymentMethodHistoryEntryForDate(methodId, referenceDate);
+  return entry && entry.label ? entry.label : null;
+}
+
+function getCurrentPaymentMethodLabel(methodId) {
+  return getPaymentMethodLabelForDate(methodId, new Date());
+}
+
+function isPaymentMethodActive(methodId, referenceDate = new Date()) {
+  return !!getPaymentMethodLabelForDate(methodId, referenceDate);
+}
+
+function getActivePaymentMethodOptions(referenceDate = new Date()) {
+  return getPaymentMethodSlotIds()
+    .map((methodId) => ({
+      id: methodId,
+      label: getPaymentMethodLabelForDate(methodId, referenceDate),
+    }))
+    .filter((option) => isValidPaymentMethodLabel(option.label));
+}
+
+function getAllUsedPaymentMethodOptions(referenceDate = new Date()) {
+  return getPaymentMethodSlotIds()
+    .map((methodId) => ({
+      id: methodId,
+      currentLabel: getCurrentPaymentMethodLabel(methodId),
+      historicalLabel: getPaymentMethodLabelForDate(methodId, referenceDate),
+      isActive: isPaymentMethodActive(methodId, referenceDate),
+    }))
+    .filter((option) => option.currentLabel || option.historicalLabel);
+}
+
+function getPaymentMethodRecentHistory(methodId, limit = 3) {
+  return getPaymentMethodHistory(methodId)
+    .filter((entry) => entry.label && !!entry.archivedAt)
+    .slice(0, limit);
+}
+
+function getPaymentMethodCurrentEntry(methodId, referenceDate = new Date()) {
+  return getPaymentMethodHistoryEntryForDate(methodId, referenceDate);
+}
+
+function getPaymentMethodCurrentLabel(methodId, referenceDate = new Date()) {
+  const entry = getPaymentMethodCurrentEntry(methodId, referenceDate);
+  return entry && entry.label ? entry.label : '';
+}
+
+function getPaymentMethodDefaultLabel(methodId) {
+  const normalizedMethodId = normalizePaymentMethodId(methodId);
+  return normalizedMethodId ? (DEFAULT_PAYMENT_METHOD_LABELS[normalizedMethodId] || '') : '';
+}
+
+function findPaymentMethodLabelConflict(label, options = {}) {
+  const normalizedLabel = normalizePaymentMethodLabel(label);
+  if (!normalizedLabel) return null;
+
+  const excludeEntryId = options.excludeEntryId || null;
+  const normalizedNeedle = normalizedLabel.toLocaleLowerCase('pl-PL');
+
+  return getPaymentMethodSettings().history.find((entry) => {
+    if (excludeEntryId && entry.id === excludeEntryId) return false;
+    return normalizePaymentMethodLabel(entry.label).toLocaleLowerCase('pl-PL') === normalizedNeedle;
+  }) || null;
+}
+
+function hasPaymentMethodLabelConflict(label, options = {}) {
+  return !!findPaymentMethodLabelConflict(label, options);
+}
+
+function getPaymentMethodFallbackLabel() {
+  return PAYMENT_METHOD_MIGRATION_FALLBACK_LABEL;
+}
+
+function getResolvedPaymentMethodLabelForDate(methodId, referenceDate) {
+  return getPaymentMethodLabelForDate(methodId, referenceDate) || getPaymentMethodFallbackLabel();
+}
+
+function validatePaymentMethodDrafts(rawDrafts = {}, referenceDate = new Date()) {
+  const dateKey = normalizeDateKey(referenceDate, new Date().toISOString().slice(0, 10));
+  const slotIds = getPaymentMethodSlotIds();
+  const errors = {};
+  const normalizedDrafts = {};
+  const draftNameOwners = new Map();
+
+  slotIds.forEach((methodId) => {
+    const rawValue = Object.prototype.hasOwnProperty.call(rawDrafts, methodId)
+      ? rawDrafts[methodId]
+      : getPaymentMethodCurrentLabel(methodId, dateKey);
+    const stringValue = rawValue === undefined || rawValue === null ? '' : String(rawValue);
+    const normalizedLabel = normalizePaymentMethodLabel(stringValue);
+    const currentEntry = getPaymentMethodCurrentEntry(methodId, dateKey);
+    const currentLabel = currentEntry && currentEntry.label ? currentEntry.label : '';
+    const currentKey = normalizePaymentMethodLabel(currentLabel).toLocaleLowerCase('pl-PL');
+
+    normalizedDrafts[methodId] = normalizedLabel;
+
+    if (!normalizedLabel) {
+      if (stringValue.length > 0) {
+        errors[methodId] = 'Wpisz nazwe albo zostaw pole calkiem puste.';
+      }
+      return;
+    }
+
+    if (!hasLetterOrDigit(normalizedLabel)) {
+      errors[methodId] = 'Nazwa musi zawierac litery lub cyfry.';
+      return;
+    }
+
+    const draftKey = normalizedLabel.toLocaleLowerCase('pl-PL');
+    const existingDraftOwner = draftNameOwners.get(draftKey);
+    if (existingDraftOwner && existingDraftOwner !== methodId) {
+      errors[methodId] = 'Ta nazwa jest juz uzyta w innym polu.';
+      if (!errors[existingDraftOwner]) {
+        errors[existingDraftOwner] = 'Ta nazwa jest juz uzyta w innym polu.';
+      }
+      return;
+    }
+    draftNameOwners.set(draftKey, methodId);
+
+    const conflict = findPaymentMethodLabelConflict(normalizedLabel, {
+      excludeEntryId: currentEntry ? currentEntry.id : null,
+    });
+    if (conflict && draftKey !== currentKey) {
+      errors[methodId] = 'Ta nazwa byla juz uzyta. Uzyj innej, np. z numerem.';
+    }
+  });
+
+  return {
+    isValid: Object.keys(errors).length === 0,
+    errors,
+    normalizedDrafts,
+    referenceDate: dateKey,
+  };
+}
+
+function applyPaymentMethodDrafts(rawDrafts = {}, referenceDate = new Date()) {
+  const validation = validatePaymentMethodDrafts(rawDrafts, referenceDate);
+  if (!validation.isValid) {
+    const firstErrorKey = Object.keys(validation.errors)[0];
+    throw new Error(validation.errors[firstErrorKey] || 'Nieprawidlowe metody platnosci.');
+  }
+
+  const dateKey = validation.referenceDate;
+  const settings = AppState.settings || {};
+  settings.paymentMethods = createPaymentMethodSettings(settings.paymentMethods || {});
+  AppState.settings = settings;
+
+  const history = settings.paymentMethods.history;
+  const summary = [];
+
+  getPaymentMethodSlotIds().forEach((methodId) => {
+    const nextLabel = validation.normalizedDrafts[methodId] || '';
+    const currentEntry = getPaymentMethodCurrentEntry(methodId, dateKey);
+    const currentLabel = currentEntry && currentEntry.label ? currentEntry.label : '';
+
+    if (nextLabel === currentLabel) return;
+
+    if (!nextLabel) {
+      if (!currentEntry) return;
+
+      if (currentEntry.validFrom === dateKey) {
+        const index = history.findIndex((entry) => entry.id === currentEntry.id);
+        if (index !== -1) history.splice(index, 1);
+      } else {
+        currentEntry.archivedAt = dateKey;
+      }
+
+      summary.push({
+        methodId,
+        action: 'deactivate',
+        previousLabel: currentLabel,
+        nextLabel: '',
+      });
+      return;
+    }
+
+    if (currentEntry && currentEntry.validFrom === dateKey) {
+      currentEntry.label = nextLabel;
+      currentEntry.archivedAt = null;
+      summary.push({
+        methodId,
+        action: currentLabel ? 'rename' : 'activate',
+        previousLabel: currentLabel,
+        nextLabel,
+      });
+      return;
+    }
+
+    if (currentEntry) {
+      currentEntry.archivedAt = dateKey;
+    }
+
+    history.push(createPaymentMethodHistoryEntry({
+      methodId,
+      label: nextLabel,
+      validFrom: dateKey,
+      archivedAt: null,
+    }));
+
+    summary.push({
+      methodId,
+      action: currentLabel ? 'rename' : 'activate',
+      previousLabel: currentLabel,
+      nextLabel,
+    });
+  });
+
+  settings.paymentMethods.history = history
+    .filter(Boolean)
+    .sort((a, b) => {
+      if (a.methodId === b.methodId) return b.validFrom.localeCompare(a.validFrom);
+      return a.methodId.localeCompare(b.methodId);
+    });
+
+  return {
+    date: dateKey,
+    summary,
+  };
+}
+
+function getPaymentMethodSettingsSnapshot(referenceDate = new Date()) {
+  const dateKey = normalizeDateKey(referenceDate, new Date().toISOString().slice(0, 10));
+  return getPaymentMethodSlotIds().map((methodId) => ({
+    id: methodId,
+    currentLabel: getPaymentMethodCurrentLabel(methodId, dateKey),
+    history: getPaymentMethodRecentHistory(methodId, 3),
+    isActive: isPaymentMethodActive(methodId, dateKey),
+  }));
+}
+
+function parseStoredPaymentMethod(rawMethod, explicitSplitMethod) {
+  const primaryRaw = typeof rawMethod === 'string' && rawMethod ? rawMethod : null;
+  const hasCompound = isCompoundMethod(primaryRaw);
+  const parts = hasCompound ? primaryRaw.split('+') : [primaryRaw];
+  const primary = parts[0] || null;
+  const secondary = explicitSplitMethod || parts[1] || null;
+
+  return {
+    primaryRaw: primary,
+    secondaryRaw: secondary,
+    primaryId: normalizePaymentMethodId(primary),
+    secondaryId: normalizePaymentMethodId(secondary),
+  };
+}
+
+function collectInvalidPaymentMethodHistoryEntries(rawHistory = []) {
+  if (!Array.isArray(rawHistory)) return;
+
+  rawHistory.forEach((entry, index) => {
+    const rawMethodId = entry && typeof entry === 'object' ? entry.methodId : null;
+    if (normalizePaymentMethodId(rawMethodId)) return;
+
+    registerMigrationIssue({
+      type: 'invalid-payment-method-history-entry',
+      historyIndex: index,
+      rawMethodId,
+      fallbackLabel: getPaymentMethodFallbackLabel(),
+    });
+  });
+}
+
+function registerMigrationIssue(issue) {
+  if (!issue || typeof issue !== 'object' || !issue.type) return;
+  const key = JSON.stringify(issue);
+  const exists = AppState.migrationIssues.some((entry) => JSON.stringify(entry) === key);
+  if (!exists) AppState.migrationIssues.push(issue);
+}
+
+function getEarliestPaymentMethodReferenceDate() {
+  const dates = [];
+
+  (AppState.payments || []).forEach((payment) => {
+    if (payment && payment.date) dates.push(normalizeOptionalDateKey(payment.date));
+  });
+
+  (AppState.sessions || []).forEach((session) => {
+    if (session && session.paymentDate) {
+      dates.push(normalizeOptionalDateKey(session.paymentDate));
+      return;
+    }
+    if (session && session.paymentMethod && session.date) {
+      dates.push(normalizeOptionalDateKey(session.date));
+    }
+  });
+
+  const filtered = dates.filter(Boolean).sort();
+  return filtered[0] || '2000-01-01';
+}
+
+function getUsedCanonicalPaymentMethodIds() {
+  const used = new Set();
+
+  (AppState.payments || []).forEach((payment) => {
+    const primaryId = normalizePaymentMethodId(payment.methodId) || parseStoredPaymentMethod(payment.method, payment.splitMethod).primaryId;
+    const secondaryId = normalizePaymentMethodId(payment.splitMethodId) || parseStoredPaymentMethod(payment.method, payment.splitMethod).secondaryId;
+    if (primaryId) used.add(primaryId);
+    if (payment.isSplit && secondaryId) used.add(secondaryId);
+  });
+
+  (AppState.sessions || []).forEach((session) => {
+    if (!session.paymentMethod) return;
+    const parsed = parseStoredPaymentMethod(session.paymentMethod, null);
+    if (parsed.primaryId) used.add(parsed.primaryId);
+    if (parsed.secondaryId) used.add(parsed.secondaryId);
+  });
+
+  return Array.from(used);
+}
+
+function seedPaymentMethodHistoryFromExistingData() {
+  const settings = AppState.settings || {};
+  settings.paymentMethods = createPaymentMethodSettings(settings.paymentMethods || {});
+  AppState.settings = settings;
+
+  const history = settings.paymentMethods.history;
+  const earliestDate = getEarliestPaymentMethodReferenceDate();
+  const usedMethodIds = getUsedCanonicalPaymentMethodIds();
+
+  usedMethodIds.forEach((methodId) => {
+    const alreadyExists = history.some((entry) => entry.methodId === methodId && !!entry.label);
+    if (alreadyExists) return;
+
+    const label = getPaymentMethodDefaultLabel(methodId);
+    if (!label) return;
+
+    history.push(createPaymentMethodHistoryEntry({
+      methodId,
+      label,
+      validFrom: earliestDate,
+      archivedAt: null,
+    }));
+  });
+}
+
+function migratePaymentMethodReferences() {
+  (AppState.payments || []).forEach((payment) => {
+    const parsed = parseStoredPaymentMethod(payment.method, payment.splitMethod);
+    payment.methodId = parsed.primaryId;
+    payment.splitMethodId = payment.isSplit ? parsed.secondaryId : null;
+
+    if (!parsed.primaryId) {
+      registerMigrationIssue({
+        type: 'unknown-payment-method',
+        paymentId: payment.id,
+        rawMethod: parsed.primaryRaw,
+      });
+    }
+
+    if (payment.isSplit && !parsed.secondaryId) {
+      registerMigrationIssue({
+        type: 'unknown-split-payment-method',
+        paymentId: payment.id,
+        rawMethod: parsed.secondaryRaw,
+      });
+    }
+  });
+
+  (AppState.sessions || []).forEach((session) => {
+    if (!session.paymentMethod) return;
+    const parsed = parseStoredPaymentMethod(session.paymentMethod, null);
+
+    if (!parsed.primaryId) {
+      registerMigrationIssue({
+        type: 'unknown-session-payment-method',
+        sessionId: session.id,
+        rawMethod: parsed.primaryRaw,
+      });
+    }
+
+    if (parsed.secondaryRaw && !parsed.secondaryId) {
+      registerMigrationIssue({
+        type: 'unknown-session-split-payment-method',
+        sessionId: session.id,
+        rawMethod: parsed.secondaryRaw,
+      });
+    }
+  });
+}
+
+function validatePaymentMethodHistoryCoverage() {
+  (AppState.payments || []).forEach((payment) => {
+    const parsed = parseStoredPaymentMethod(payment.method, payment.splitMethod);
+    const primaryId = normalizePaymentMethodId(payment.methodId) || parsed.primaryId;
+    const secondaryId = normalizePaymentMethodId(payment.splitMethodId) || parsed.secondaryId;
+    const paymentDate = payment.date || new Date().toISOString();
+
+    if (primaryId && !getPaymentMethodLabelForDate(primaryId, paymentDate)) {
+      registerMigrationIssue({
+        type: 'missing-payment-method-history',
+        paymentId: payment.id,
+        methodId: primaryId,
+        date: normalizeOptionalDateKey(paymentDate),
+        fallbackLabel: getPaymentMethodFallbackLabel(),
+      });
+    }
+
+    if (payment.isSplit && secondaryId && !getPaymentMethodLabelForDate(secondaryId, paymentDate)) {
+      registerMigrationIssue({
+        type: 'missing-split-payment-method-history',
+        paymentId: payment.id,
+        methodId: secondaryId,
+        date: normalizeOptionalDateKey(paymentDate),
+        fallbackLabel: getPaymentMethodFallbackLabel(),
+      });
+    }
+  });
+
+  (AppState.sessions || []).forEach((session) => {
+    if (!session.paymentMethod) return;
+    const parsed = parseStoredPaymentMethod(session.paymentMethod, null);
+    const sessionDate = session.paymentDate || session.date || new Date().toISOString();
+
+    if (parsed.primaryId && !getPaymentMethodLabelForDate(parsed.primaryId, sessionDate)) {
+      registerMigrationIssue({
+        type: 'missing-session-payment-method-history',
+        sessionId: session.id,
+        methodId: parsed.primaryId,
+        date: normalizeOptionalDateKey(sessionDate),
+        fallbackLabel: getPaymentMethodFallbackLabel(),
+      });
+    }
+
+    if (parsed.secondaryId && !getPaymentMethodLabelForDate(parsed.secondaryId, sessionDate)) {
+      registerMigrationIssue({
+        type: 'missing-session-split-payment-method-history',
+        sessionId: session.id,
+        methodId: parsed.secondaryId,
+        date: normalizeOptionalDateKey(sessionDate),
+        fallbackLabel: getPaymentMethodFallbackLabel(),
+      });
+    }
+  });
+}
+
 // -----------------------------------------------------------------------------
 // MODEL FACTORY FUNCTIONS
 // -----------------------------------------------------------------------------
@@ -225,6 +805,10 @@ function createSession(data = {}) {
  */
 function createPayment(data = {}) {
   const isSplit = data.isSplit === true;
+  const method = typeof data.method === 'string' && data.method ? data.method : 'cash';
+  const splitMethod = isSplit ? (typeof data.splitMethod === 'string' && data.splitMethod ? data.splitMethod : 'cash') : null;
+  const methodId = normalizePaymentMethodId(data.methodId || method);
+  const splitMethodId = isSplit ? normalizePaymentMethodId(data.splitMethodId || splitMethod) : null;
   return {
     ...data,
     id:            data.id            || uuid(),
@@ -232,10 +816,12 @@ function createPayment(data = {}) {
     date:          data.date ? normalizeSessionDate(data.date) : new Date().toISOString(),
     amount:        normalizeNullableNumber(data.amount) ?? 0,
     // aliorBank | ingBank | cash
-    method:        data.method        || 'cash',
+    method,
+    methodId,
     // Split payment fields
     isSplit:       isSplit,
-    splitMethod:   isSplit ? (data.splitMethod || 'cash') : null,  // second method when isSplit=true
+    splitMethod,   // second method when isSplit=true
+    splitMethodId,
     splitAmounts:  isSplit && data.splitAmounts
       ? {
           primary: normalizeNullableNumber(data.splitAmounts.primary) ?? 0,
@@ -294,18 +880,13 @@ function createAppSettings(data = {}) {
     // ISO string of the last month that was auto-generated e.g. "2026-03"
     lastGeneratedMonth: data.lastGeneratedMonth || null,
     clinicalSecurity:   createClinicalSecuritySettings(data.clinicalSecurity || {}),
+    paymentMethods:     createPaymentMethodSettings(data.paymentMethods || {}),
   };
 }
 
 // -----------------------------------------------------------------------------
 // LOOKUP CONSTANTS
 // -----------------------------------------------------------------------------
-
-const PAYMENT_METHODS = {
-  aliorBank: { name: 'Alior Bank', icon: '🏦' },
-  ingBank:   { name: 'ING Bank',   icon: '🏦' },
-  cash:      { name: 'Gotówka',    icon: '💵' },
-};
 
 const GOAL_STATUS = {
   inProgress: { name: 'W trakcie',   color: 'blue'  },
@@ -386,6 +967,8 @@ function savePaymentRecord(data = {}) {
   const normalizedAmount = amount !== null ? amount : getPaymentTotalForSessions(uniqueSessionIds);
   const isSplit = data.isSplit === true;
   const splitMethod = isSplit ? (data.splitMethod || 'cash') : null;
+  const methodId = normalizePaymentMethodId(data.methodId || data.method);
+  const splitMethodId = isSplit ? normalizePaymentMethodId(data.splitMethodId || splitMethod) : null;
   const splitAmounts = isSplit && data.splitAmounts
     ? {
         primary: normalizeNullableNumber(data.splitAmounts.primary) ?? 0,
@@ -401,8 +984,10 @@ function savePaymentRecord(data = {}) {
       date: data.date || new Date().toISOString().slice(0, 10),
       amount: normalizedAmount,
       method: data.method || 'cash',
+      methodId,
       isSplit,
       splitMethod,
+      splitMethodId,
       splitAmounts,
       sessionIds: uniqueSessionIds,
       sessionsCount: uniqueSessionIds.length,
@@ -414,8 +999,10 @@ function savePaymentRecord(data = {}) {
     paymentRecord.date = data.date ? normalizeSessionDate(data.date) : paymentRecord.date;
     paymentRecord.amount = normalizedAmount;
     paymentRecord.method = data.method || 'cash';
+    paymentRecord.methodId = methodId;
     paymentRecord.isSplit = isSplit;
     paymentRecord.splitMethod = splitMethod;
+    paymentRecord.splitMethodId = splitMethodId;
     paymentRecord.splitAmounts = splitAmounts;
     paymentRecord.sessionIds = uniqueSessionIds;
     paymentRecord.sessionsCount = uniqueSessionIds.length;
@@ -772,7 +1359,7 @@ function recalculateSessionNumbers(patient) {
  */
 async function serializeAppData() {
   const data = {
-    version:         3,
+    version:         4,
     exportedAt:      new Date().toISOString(),
     patients:        AppState.patients,
     sessions:        AppState.sessions,
@@ -869,11 +1456,25 @@ function deserializeAppData(json) {
   AppState.sessions        = (data.sessions       || []).map(_migrateSession).map(createSession);
   AppState.payments        = (data.payments       || []).map(createPayment);
   AppState.blockedPeriods  = (data.blockedPeriods || []).map(createBlockedPeriod);
+  collectInvalidPaymentMethodHistoryEntries(
+    data && data.settings && data.settings.paymentMethods && data.settings.paymentMethods.history
+      ? data.settings.paymentMethods.history
+      : []
+  );
   AppState.settings        = createAppSettings(data.settings || {});
   AppState.generatedMonths = Array.isArray(data.generatedMonths) ? data.generatedMonths : [];
 
-  // Always reconcile payment flags so sessions stay in sync with payment records
+  // Migrate legacy paid sessions before bootstrapping history, so synthetic
+  // payment records are also reflected in the new payment-method registry.
   migrateLegacyPaidSessionsToPayments();
+
+  // Build initial history entries for already-used legacy methods and collect
+  // migration issues before the UI starts reading payment labels by date.
+  seedPaymentMethodHistoryFromExistingData();
+  migratePaymentMethodReferences();
+  validatePaymentMethodHistoryCoverage();
+
+  // Always reconcile payment flags so sessions stay in sync with payment records
   reconcilePaymentStatus();
 
   AppState.sessions.forEach((session) => {
@@ -904,9 +1505,9 @@ function migrateLegacyPaidSessionsToPayments() {
     if (session.paymentId && getPaymentById(session.paymentId)) return;
 
     const rawMethod = session.paymentMethod || 'cash';
-    const methodParts = isCompoundMethod(rawMethod) ? rawMethod.split('+') : [rawMethod];
-    const method = methodParts[0] || 'cash';
-    const splitMethod = methodParts[1] || null;
+    const parsed = parseStoredPaymentMethod(rawMethod, null);
+    const method = parsed.primaryRaw || 'cash';
+    const splitMethod = parsed.secondaryRaw || null;
 
     const paymentRecord = createPayment({
       id: session.paymentId || uuid(),
@@ -923,6 +1524,22 @@ function migrateLegacyPaidSessionsToPayments() {
 
     AppState.payments.push(paymentRecord);
     session.paymentId = paymentRecord.id;
+
+    if (!parsed.primaryId) {
+      registerMigrationIssue({
+        type: 'unknown-legacy-session-payment-method',
+        sessionId: session.id,
+        rawMethod: parsed.primaryRaw,
+      });
+    }
+
+    if (splitMethod && !parsed.secondaryId) {
+      registerMigrationIssue({
+        type: 'unknown-legacy-session-split-payment-method',
+        sessionId: session.id,
+        rawMethod: parsed.secondaryRaw,
+      });
+    }
   });
 }
 
