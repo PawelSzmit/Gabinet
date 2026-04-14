@@ -1547,12 +1547,13 @@ function migrateLegacyPaidSessionsToPayments() {
  * Reconciles isPaid / isPartiallyPaid / paymentId / paymentMethod / paymentDate
  * on every session based on the authoritative Payment records.
  *
- * This is a data-integrity repair that runs after every load. It fixes
- * inconsistencies caused by rescheduling, duplicate-session bugs, etc.
+ * Handles partial payments correctly: a session can be covered by multiple
+ * payments (e.g. 100 zł in March, 150 zł top-up in April). Each payment
+ * only "uses up" the portion of the session rate that hasn't been paid yet.
  */
 function reconcilePaymentStatus() {
-  // Step 1 — clear payment flags on sessions touched by any payment
-  // or still carrying stale payment state from an older link.
+  // Step 1 — clear payment flags on all sessions that are referenced by
+  // any payment or still carry stale payment state.
   const referenced = new Set();
   AppState.payments.forEach(p => (p.sessionIds || []).forEach(id => referenced.add(id)));
   AppState.sessions.forEach(s => {
@@ -1561,37 +1562,67 @@ function reconcilePaymentStatus() {
     clearSessionPaymentState(s);
   });
 
-  // Step 2 — re-apply each payment using oldest-session-first distribution.
-  AppState.payments.forEach(payment => {
+  // Step 2 — process payments in chronological order (oldest first) so that
+  // an earlier partial payment is always applied before a later top-up.
+  // alreadyPaid tracks how much has been credited to each session so far.
+  const alreadyPaid = {};   // sessionId → number (cumulative amount paid)
+
+  const sortedPayments = AppState.payments.slice().sort((a, b) => {
+    const da = new Date(a.date);
+    const db = new Date(b.date);
+    if (da - db !== 0) return da - db;
+    // secondary sort by createdAt to make ordering deterministic
+    return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
+  });
+
+  sortedPayments.forEach(payment => {
     const sessions = (payment.sessionIds || [])
       .map(id => getSessionById(id))
       .filter(Boolean)
       .sort((a, b) => new Date(a.date) - new Date(b.date));
 
     let remaining = Number(payment.amount) || 0;
-    sessions.forEach(session => {
-      const rate = getSessionAmount(session);
 
+    sessions.forEach(session => {
+      const fullRate  = getSessionAmount(session);
+      const paidSoFar = alreadyPaid[session.id] || 0;
+      const stillOwed = Math.max(0, fullRate - paidSoFar);
+
+      // Stamp the payment reference on the session (last payment wins for
+      // paymentId/Method/Date — which will be the most recent top-up).
       session.paymentId     = payment.id;
       session.paymentMethod = payment.isSplit
         ? payment.method + '+' + payment.splitMethod
         : payment.method;
       session.paymentDate   = payment.date;
 
-      if (remaining >= rate) {
+      if (stillOwed === 0) {
+        // Session was already fully paid by a previous payment — nothing to do.
         session.isPaid              = true;
         session.isPartiallyPaid     = false;
         session.partialPaymentAmount = null;
-        remaining -= rate;
-      } else if (remaining > 0) {
-        session.isPaid              = false;
-        session.isPartiallyPaid     = true;
-        session.partialPaymentAmount = remaining;
-        remaining = 0;
-      } else {
-        session.isPaid              = false;
+        return;
+      }
+
+      if (remaining >= stillOwed) {
+        // This payment covers the remaining balance for this session.
+        alreadyPaid[session.id] = fullRate;
+        remaining -= stillOwed;
+        session.isPaid              = true;
         session.isPartiallyPaid     = false;
         session.partialPaymentAmount = null;
+      } else if (remaining > 0) {
+        // This payment partially covers the remaining balance.
+        alreadyPaid[session.id] = paidSoFar + remaining;
+        session.isPaid              = false;
+        session.isPartiallyPaid     = true;
+        session.partialPaymentAmount = paidSoFar + remaining;
+        remaining = 0;
+      } else {
+        // No money left in this payment — session stays unpaid by this record.
+        session.isPaid              = false;
+        session.isPartiallyPaid     = paidSoFar > 0;
+        session.partialPaymentAmount = paidSoFar > 0 ? paidSoFar : null;
         session.paymentId            = null;
         session.paymentMethod        = null;
         session.paymentDate          = null;
