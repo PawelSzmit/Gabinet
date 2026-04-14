@@ -113,6 +113,10 @@ const FinanceViews = (() => {
       '.fin-balance-info{margin-top:8px;padding:10px 14px;border-radius:14px;font-size:.84rem;line-height:1.55}',
       '.fin-balance-info--over{background:rgba(107,144,115,.12);color:#3a5c42}',
       '.fin-balance-info--under{background:rgba(204,139,86,.14);color:#8a5a1a}',
+      '.fin-session-group-header{padding:8px 4px 6px;font-size:.72rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--text-secondary,rgba(36,49,38,.68));border-bottom:1px solid var(--border,rgba(73,102,79,.12));margin-bottom:4px}',
+      '.fin-session-group-header--overdue{color:var(--orange,#cc8b56)}',
+      '.fin-session-check--overdue{background:rgba(204,139,86,.07);border-radius:12px;padding:10px;margin:0 -4px}',
+      '.fin-overdue-badge{display:inline-block;font-size:.7rem;font-weight:800;padding:2px 8px;border-radius:999px;background:rgba(204,139,86,.18);color:var(--orange,#cc8b56);margin-left:6px;vertical-align:middle}',
       '.fin-sheet-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}',
       '.fin-detail-stack{display:grid;gap:12px}',
       '.fin-detail-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-radius:20px;background:rgba(255,255,255,.62);border:1px solid var(--border,rgba(73,102,79,.1))}',
@@ -165,6 +169,15 @@ const FinanceViews = (() => {
     return session.paymentAmount !== null && session.paymentAmount !== undefined
       ? session.paymentAmount
       : (patient ? patient.sessionRate : 0);
+  }
+
+  // Returns only the amount still owed (full rate minus any partial payment already made).
+  function sessionOwed(session) {
+    const full = sessionAmount(session);
+    if (session.isPartiallyPaid && session.partialPaymentAmount) {
+      return Math.max(0, full - session.partialPaymentAmount);
+    }
+    return full;
   }
 
   function normalizeFinanceMethodId(methodId) {
@@ -350,8 +363,16 @@ const FinanceViews = (() => {
     for (let index = limit - 1; index >= 0; index -= 1) {
       const monthDate = new Date(now.getFullYear(), now.getMonth() - index, 1);
       const key = monthKey(monthDate);
-      const total = paymentsForMonth(key)
-        .reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
+      // Revenue attributed to the month the SESSION took place, not when payment was registered.
+      const total = getSessions()
+        .filter((session) => monthKey(session.date) === key && session.isPaymentRequired)
+        .reduce((sum, session) => {
+          if (session.isPaid) return sum + sessionAmount(session);
+          if (session.isPartiallyPaid && session.partialPaymentAmount) {
+            return sum + session.partialPaymentAmount;
+          }
+          return sum;
+        }, 0);
       points.push({
         label: monthDate.toLocaleDateString('pl-PL', { month: 'short' }),
         value: total,
@@ -382,8 +403,17 @@ const FinanceViews = (() => {
     const monthPayments = currentMonthPayments();
     const completed = monthSessions.filter((session) => session.status === 'completed').length;
     const coveredSessions = monthPayments.reduce((sum, payment) => sum + ((payment.sessionIds || []).length), 0);
-    const monthRevenue = monthPayments
-      .reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
+    // Revenue = factually received money for sessions that took place this month.
+    // Attributed to session month regardless of when payment was registered.
+    const monthRevenue = monthSessions
+      .filter((session) => session.isPaymentRequired)
+      .reduce((sum, session) => {
+        if (session.isPaid) return sum + sessionAmount(session);
+        if (session.isPartiallyPaid && session.partialPaymentAmount) {
+          return sum + session.partialPaymentAmount;
+        }
+        return sum;
+      }, 0);
     const outstanding = outstandingSessions();
     const outstandingTotal = outstanding.reduce((sum, session) => {
       const full = sessionAmount(session);
@@ -649,8 +679,12 @@ const FinanceViews = (() => {
       .filter((session) => {
         if (session.patientId !== patientId) return false;
         if (!session.isPaymentRequired) return false;
-        if (session.isPaid && !selected.has(session.id)) return false;
-        return session.status === 'completed' || session.status === 'cancelled' || session.status === 'scheduled';
+        if (selected.has(session.id)) return true;
+        if (!session.isPaid && !session.isPartiallyPaid) {
+          return session.status === 'completed' || session.status === 'cancelled' || session.status === 'scheduled';
+        }
+        if (session.isPartiallyPaid && session.partialPaymentAmount) return true;
+        return false;
       })
       .sort((a, b) => new Date(a.date) - new Date(b.date));
   }
@@ -661,21 +695,46 @@ const FinanceViews = (() => {
       return '<p class="fin-empty">Brak sesji do rozliczenia dla tego pacjenta.</p>';
     }
     const selected = new Set(selectedIds);
-    return sessions.map((session) => {
-      const patient = getPatient(session.patientId);
-      const amount = sessionAmount(session);
-      const display = patient ? (patient.pseudonym || patient.firstName || 'Pacjent') : 'Pacjent';
-      const checked = selected.has(session.id) ? ' checked' : '';
+    const currentMk = monthKey(new Date());
+    const overdue = sessions.filter((s) => monthKey(s.date) < currentMk);
+    const current = sessions.filter((s) => monthKey(s.date) >= currentMk);
+
+    function renderRow(session) {
+      const patient   = getPatient(session.patientId);
+      const fullAmt   = sessionAmount(session);
+      const owedAmt   = sessionOwed(session);
+      const isPartial = session.isPartiallyPaid && session.partialPaymentAmount;
+      const isOld     = monthKey(session.date) < currentMk;
+      const checked   = selected.has(session.id) ? ' checked' : '';
+      const display   = patient ? (patient.pseudonym || patient.firstName || 'Pacjent') : 'Pacjent';
+      const monthLabel = isOld
+        ? new Date(session.date).toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' })
+        : null;
+      const amountLabel = isPartial
+        ? formatCurrency(owedAmt) + ' z ' + formatCurrency(fullAmt) + ' (dopłata)'
+        : formatCurrency(owedAmt);
       return (
-        '<label class="fin-session-check">' +
+        '<label class="fin-session-check' + (isOld ? ' fin-session-check--overdue' : '') + '">' +
           '<input type="checkbox" class="fin-session-cb" value="' + escHtml(session.id) + '"' + checked + '>' +
           '<span class="fin-session-check-label">' +
             escHtml(display) + ' • ' + escHtml(formatDateMedium(session.date)) + ' • ' + escHtml(formatTime(session.date)) +
-            '<small>' + escHtml(formatCurrency(amount)) + ' • ' + escHtml(session.status === 'completed' ? 'odbyta' : session.status === 'cancelled' ? 'odwołana' : 'zaplanowana') + '</small>' +
+            (monthLabel ? '<span class="fin-overdue-badge">' + escHtml(monthLabel) + '</span>' : '') +
+            '<small>' + escHtml(amountLabel) + ' • ' + escHtml(session.status === 'completed' ? 'odbyta' : session.status === 'cancelled' ? 'odwołana' : 'zaplanowana') + '</small>' +
           '</span>' +
         '</label>'
       );
-    }).join('');
+    }
+
+    let html = '';
+    if (overdue.length) {
+      html += '<div class="fin-session-group-header fin-session-group-header--overdue">⚠ Zaległości z poprzednich miesięcy</div>';
+      html += overdue.map(renderRow).join('');
+    }
+    if (current.length) {
+      if (overdue.length) html += '<div class="fin-session-group-header" style="margin-top:10px">Sesje bieżące</div>';
+      html += current.map(renderRow).join('');
+    }
+    return html;
   }
 
   function selectedSessionIds(sheet) {
@@ -685,7 +744,7 @@ const FinanceViews = (() => {
   function selectedTotal(sheet) {
     return selectedSessionIds(sheet).reduce((sum, sessionId) => {
       const session = getSessions().find((item) => item.id === sessionId);
-      return sum + (session ? sessionAmount(session) : 0);
+      return sum + (session ? sessionOwed(session) : 0);
     }, 0);
   }
 
