@@ -519,22 +519,41 @@ const App = {
     const now = new Date();
     const yearMonth = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
 
-    if (typeof AppState !== 'undefined' && AppState.generatedMonths) {
-      if (AppState.generatedMonths.includes(yearMonth)) return;
-    }
+    let generatedNew = false;
 
-    if (typeof AppState !== 'undefined' && AppState.patients) {
+    if (typeof AppState !== 'undefined' && AppState.generatedMonths) {
+      if (!AppState.generatedMonths.includes(yearMonth)) {
+        if (typeof AppState.patients !== 'undefined') {
+          AppState.patients
+            .filter((p) => !p.isArchived && p.isActive)
+            .forEach((p) => { generateCurrentMonthSessions(p); });
+        }
+        AppState.generatedMonths.push(yearMonth);
+        generatedNew = true;
+      }
+    } else if (typeof AppState !== 'undefined' && AppState.patients) {
       AppState.patients
         .filter((p) => !p.isArchived && p.isActive)
         .forEach((p) => { generateCurrentMonthSessions(p); });
-    }
-
-    if (typeof AppState !== 'undefined') {
       AppState.generatedMonths = AppState.generatedMonths || [];
       AppState.generatedMonths.push(yearMonth);
+      generatedNew = true;
     }
 
-    persistData();
+    // Always repair vacation cancellations — handles sessions that existed before
+    // a vacation was added, and sessions generated in previous months for future dates.
+    if (typeof repairVacationCancellations === 'function') {
+      const fixed = repairVacationCancellations();
+      if (fixed > 0 && generatedNew === false) {
+        // Only need to save if we fixed something but didn't already save from generation
+        persistData();
+        return;
+      }
+    }
+
+    if (generatedNew) {
+      persistData();
+    }
   },
 
   _show(id) {

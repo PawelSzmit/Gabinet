@@ -1264,6 +1264,57 @@ function generateCurrentMonthSessions(patient) {
 }
 
 /**
+ * Cancels all scheduled sessions for a patient that fall within a given vacation period.
+ * Used both when adding a new vacation and during startup repair.
+ *
+ * @param {Patient} patient
+ * @param {{ startDate: string, endDate: string }} vacationPeriod
+ * @returns {number} — number of sessions cancelled
+ */
+function applyVacationCancellations(patient, vacationPeriod) {
+  const vpStart = new Date(vacationPeriod.startDate);
+  const vpEnd   = new Date(vacationPeriod.endDate);
+  vpStart.setHours(0, 0, 0, 0);
+  vpEnd.setHours(23, 59, 59, 999);
+
+  let cancelled = 0;
+  AppState.sessions.forEach(s => {
+    if (s.patientId !== patient.id) return;
+    if (s.status !== 'scheduled') return;
+    const sd = new Date(s.date);
+    if (sd >= vpStart && sd <= vpEnd) {
+      s.status = 'cancelled';
+      s.cancellationReason = 'patient_vacation';
+      s.isPaymentRequired = false;
+      cancelled++;
+    }
+  });
+  return cancelled;
+}
+
+/**
+ * Startup repair: scans all active patients and ensures every scheduled session
+ * that falls within a recorded vacation period is properly cancelled.
+ * Safe to run multiple times — only touches sessions still in 'scheduled' state.
+ *
+ * @returns {number} — total number of sessions fixed
+ */
+function repairVacationCancellations() {
+  let total = 0;
+  AppState.patients
+    .filter(p => !p.isArchived && p.isActive)
+    .forEach(patient => {
+      (patient.vacationPeriods || []).forEach(vp => {
+        total += applyVacationCancellations(patient, vp);
+      });
+    });
+  if (total > 0) {
+    console.info('[Data] repairVacationCancellations: fixed ' + total + ' session(s).');
+  }
+  return total;
+}
+
+/**
  * Deletes all future scheduled (non-completed, non-cancelled) sessions for a patient
  * and regenerates the current month from the patient's sessionDayConfigs.
  *

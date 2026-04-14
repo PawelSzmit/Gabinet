@@ -1371,25 +1371,31 @@ const PatientViews = {
         vpStart.setHours(0, 0, 0, 0);
         vpEnd.setHours(23, 59, 59, 999);
 
-        patient.vacationPeriods.push({
+        const newVacation = {
           id: uuid(),
           startDate: vpStart.toISOString(),
           endDate:   vpEnd.toISOString()
-        });
+        };
+        patient.vacationPeriods.push(newVacation);
+
 
         // Cancel existing scheduled sessions within vacation range
         let cancelled = 0;
-        getSessions().forEach(s => {
-          if (s.patientId !== patient.id) return;
-          if (s.status !== 'scheduled') return;
-          const sd = new Date(s.date);
-          if (sd >= vpStart && sd <= vpEnd) {
-            s.status = 'cancelled';
-            s.cancellationReason = 'patient_vacation';
-            s.isPaymentRequired = false;
-            cancelled++;
-          }
-        });
+        if (typeof applyVacationCancellations === 'function') {
+          cancelled = applyVacationCancellations(patient, newVacation);
+        } else {
+          AppState.sessions.forEach(s => {
+            if (s.patientId !== patient.id) return;
+            if (s.status !== 'scheduled') return;
+            const sd = new Date(s.date);
+            if (sd >= vpStart && sd <= vpEnd) {
+              s.status = 'cancelled';
+              s.cancellationReason = 'patient_vacation';
+              s.isPaymentRequired = false;
+              cancelled++;
+            }
+          });
+        }
 
         persistData();
         if (modal) modal.classList.add('hidden');

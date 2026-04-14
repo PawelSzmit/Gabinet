@@ -364,6 +364,7 @@ const FinanceViews = (() => {
       const monthDate = new Date(now.getFullYear(), now.getMonth() - index, 1);
       const key = monthKey(monthDate);
       // Revenue attributed to the month the SESSION took place, not when payment was registered.
+      // Partially paid sessions count only the amount actually received so far.
       const total = getSessions()
         .filter((session) => monthKey(session.date) === key && session.isPaymentRequired)
         .reduce((sum, session) => {
