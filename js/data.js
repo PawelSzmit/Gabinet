@@ -1206,6 +1206,45 @@ function _isPatientOnVacation(patient, date) {
 }
 
 /**
+ * Returns true if the given date falls in a "session week" for the patient,
+ * based on their sessionFrequencyWeeks interval and sessionFrequencyAnchorDate.
+ * Week is defined as Mon–Sun (ISO). Anchor week is always a session week.
+ */
+function _isSessionWeek(patient, date) {
+  const freqWeeks = patient.sessionFrequencyWeeks || 1;
+  if (freqWeeks === 1) return true;
+
+  const anchorRaw = patient.sessionFrequencyAnchorDate || patient.therapyStartDate;
+  if (!anchorRaw) return true;
+
+  const anchor = new Date(anchorRaw);
+  anchor.setHours(0, 0, 0, 0);
+
+  // Guard: if anchor date is invalid, treat every week as session week
+  if (isNaN(anchor.getTime())) return true;
+
+  // Monday of anchor's week
+  const anchorDay = anchor.getDay() || 7; // getDay: 0=Sun → treat as 7
+  const anchorMonday = new Date(anchor);
+  anchorMonday.setDate(anchor.getDate() - (anchorDay - 1));
+
+  // Monday of candidate date's week
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  const candidateDay = d.getDay() || 7;
+  const candidateMonday = new Date(d);
+  candidateMonday.setDate(d.getDate() - (candidateDay - 1));
+
+  const msPerWeek = 7 * 24 * 60 * 60 * 1000;
+  const weeksDiff = Math.round((candidateMonday - anchorMonday) / msPerWeek);
+
+  // Weeks before anchor are never session weeks
+  if (weeksDiff < 0) return false;
+
+  return weeksDiff % freqWeeks === 0;
+}
+
+/**
  * Generates sessions for a patient for a given month based on sessionDayConfigs.
  * Skips blocked periods and patient vacation periods.
  * Does NOT create duplicate sessions where one already exists at the same date+time.
@@ -1229,6 +1268,7 @@ function generateSessionsForMonth(patient, year, month) {
 
     for (const config of patient.sessionDayConfigs) {
       if (config.weekday !== isoWeekday) continue;
+      if (!_isSessionWeek(patient, date)) continue;
 
       // Parse session time
       const [hours, minutes] = (config.sessionTime || '00:00').split(':').map(Number);
