@@ -682,6 +682,7 @@ function createPatient(data = {}) {
     isActive:           data.isActive         !== false,
     isArchived:         data.isArchived       || false,
     archivedDate:       data.archivedDate     || null,
+    isIrregular:        data.isIrregular      || false,
     sessionsPerWeek:    normalizePositiveInteger(data.sessionsPerWeek, 1),
     sessionFrequencyWeeks: [1, 2, 4, 6, 8].includes(data.sessionFrequencyWeeks)
       ? data.sessionFrequencyWeeks
@@ -1255,7 +1256,10 @@ function _isSessionWeek(patient, date) {
  * @returns {Session[]}  — newly created sessions (already pushed into AppState.sessions)
  */
 function generateSessionsForMonth(patient, year, month) {
-  if (!patient || !Array.isArray(patient.sessionDayConfigs) || patient.sessionDayConfigs.length === 0) {
+  if (!patient || patient.isIrregular) {
+    return [];
+  }
+  if (!Array.isArray(patient.sessionDayConfigs) || patient.sessionDayConfigs.length === 0) {
     return [];
   }
 
