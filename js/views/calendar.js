@@ -1305,7 +1305,7 @@ const CalendarViews = {
       '.cal-seg-btn{border:none;background:transparent;padding:8px 12px;border-radius:999px;font-size:.76rem;font-weight:800;cursor:pointer;color:var(--text-secondary,rgba(36,49,38,.68));transition:background .15s,color .15s}',
       '.cal-seg-btn.active{background:#fff;color:var(--blue,#49664f);font-weight:800;box-shadow:0 8px 18px rgba(31,43,35,.08)}',
       '.cal-add-menu-wrap{position:relative}',
-      '.cal-add-menu{position:absolute;right:0;top:calc(100% + 6px);background:var(--surface,#fff);border-radius:16px;box-shadow:0 14px 30px rgba(0,0,0,.25);overflow:hidden;z-index:200;min-width:200px;border:1px solid var(--border,rgba(73,102,79,.2))}',
+      '.cal-add-menu{position:absolute;right:0;top:calc(100% + 6px);background:color-mix(in srgb,var(--surface,#fff) 88%,transparent);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,.45);overflow:hidden;z-index:200;min-width:200px;border:1px solid var(--border,rgba(73,102,79,.3))}',
       '.cal-add-menu.hidden{display:none}',
       '.cal-add-menu-item{display:block;width:100%;padding:14px 16px;border:none;background:transparent;text-align:left;font-size:.9rem;cursor:pointer;color:var(--text,#1c1c1e);border-bottom:1px solid var(--border,rgba(73,102,79,.12))}',
       '.cal-add-menu-item:last-child{border-bottom:none}.cal-add-menu-item:active{background:var(--bg,#f2f2f7)}',
