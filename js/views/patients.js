@@ -1679,7 +1679,7 @@ const PatientViews = {
     if (!startDateRaw) setErr('therapyStartDate', 'Data jest wymagana.');
     if (isNaN(sessionRate) || sessionRate < 0) setErr('sessionRate', 'Podaj prawid\u0142ow\u0105 stawk\u0119.');
 
-    if (sessionFrequencyWeeks > 1 && !sessionFrequencyAnchorRaw) {
+    if (!isIrregular && sessionFrequencyWeeks > 1 && !sessionFrequencyAnchorRaw) {
       setErr('anchorDate', 'Podaj dat\u0119 pocz\u0105tku interwa\u0142u.');
     }
 
