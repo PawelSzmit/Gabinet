@@ -785,6 +785,9 @@ const PatientViews = {
 
     const anchorHidden = (p.sessionFrequencyWeeks || 1) === 1 ? ' hidden' : '';
 
+    const isIrregular    = p.isIrregular || false;
+    const scheduleHidden = isIrregular ? ' hidden' : '';
+
     const startDate = p.therapyStartDate
       ? new Date(p.therapyStartDate).toISOString().split('T')[0]
       : new Date().toISOString().split('T')[0];
@@ -849,6 +852,11 @@ const PatientViews = {
                 ' value="' + escHtml(startDate) + '" required>' +
               '<span class="pv-form-error" id="err-therapyStartDate"></span>' +
             '</label>' +
+            '<label class="pv-form-label pv-form-label--checkbox">' +
+              '<input type="checkbox" name="isIrregular" id="pv-irregular-check"' +
+                (isIrregular ? ' checked' : '') + '>' +
+              '<span>Pacjent o nieregularnym terminarzu</span>' +
+            '</label>' +
           '</section>' +
 
           '<section class="pv-form-section">' +
@@ -862,7 +870,7 @@ const PatientViews = {
             '</label>' +
           '</section>' +
 
-          '<section class="pv-form-section">' +
+          '<section class="pv-form-section' + scheduleHidden + '" id="pv-schedule-section">' +
             '<h3 class="pv-form-section-title">Harmonogram</h3>' +
             '<label class="pv-form-label">' +
               '<span>Sesje w tygodniu</span>' +
@@ -1545,6 +1553,15 @@ const PatientViews = {
           anchorRow.classList.toggle('hidden', isWeekly);
         });
       }
+
+      // Irregular patient toggle: show/hide schedule section
+      const irregularCheck  = container.querySelector('#pv-irregular-check');
+      const scheduleSection = container.querySelector('#pv-schedule-section');
+      if (irregularCheck && scheduleSection) {
+        irregularCheck.addEventListener('change', () => {
+          scheduleSection.classList.toggle('hidden', irregularCheck.checked);
+        });
+      }
     }
 
     // Previous therapies count → generate / remove rows
@@ -1642,6 +1659,7 @@ const PatientViews = {
     const sessionsPerWeek = parseInt(formData.get('sessionsPerWeek'), 10) || 1;
     const sessionFrequencyWeeks = parseInt(formData.get('sessionFrequencyWeeks'), 10) || 1;
     const sessionFrequencyAnchorRaw = formData.get('sessionFrequencyAnchorDate') || '';
+    const isIrregular     = formData.get('isIrregular') === 'on' || false;
 
     // Clear errors
     ['firstName', 'lastName', 'therapyStartDate', 'sessionRate', 'days', 'anchorDate'].forEach(field => {
@@ -1715,6 +1733,7 @@ const PatientViews = {
       patient.sessionFrequencyAnchorDate = sessionFrequencyWeeks > 1 && sessionFrequencyAnchorRaw
         ? new Date(sessionFrequencyAnchorRaw).toISOString()
         : null;
+      patient.isIrregular = isIrregular;
       persistData();
       toast('Pacjent zaktualizowany.', 'success');
       Router.navigate('patients', { patientId: id });
@@ -1733,6 +1752,7 @@ const PatientViews = {
           : null,
         sessionDayConfigs,
         previousTherapies,
+        isIrregular,
       });
 
       // Create the initial therapy cycle
@@ -1980,6 +2000,9 @@ const PatientViews = {
       '.pv-prev-therapy-row{border:1.5px solid var(--border,rgba(73,102,79,.14));border-radius:16px;padding:12px 14px;margin-bottom:10px;background:rgba(255,255,255,.5)}',
       '.pv-prev-therapy-fields{display:grid;grid-template-columns:1fr 1fr 80px;gap:.6rem;align-items:end}',
       '.pv-form-label--inline{margin-bottom:0}',
+      '.pv-form-label--checkbox{flex-direction:row;align-items:center;gap:.6rem}',
+      '.pv-form-label--checkbox input[type=checkbox]{width:1.1rem;height:1.1rem;accent-color:var(--blue,#49664f);cursor:pointer;flex-shrink:0;margin:0}',
+      '.pv-form-label--checkbox span{margin:0;color:var(--text,#243126)}',
       '@media (max-width:520px){.pv-prev-therapy-fields{grid-template-columns:1fr 1fr;}.pv-prev-therapy-fields .pv-form-label--inline:last-child{grid-column:1 / -1}}',
       '.pv-modal{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;background:rgba(14,18,15,.4);padding:1rem}',
       '.pv-modal.hidden{display:none}',
