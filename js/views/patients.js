@@ -769,6 +769,22 @@ const PatientViews = {
       '<option value="' + n + '"' + ((p.sessionsPerWeek || 1) === n ? ' selected' : '') + '>' + n + ' \xd7 w tygodniu</option>'
     ).join('');
 
+    const freqOptions = [
+      [1, 'Co tydzie\u0144'],
+      [2, 'Co 2 tygodnie'],
+      [4, 'Co 4 tygodnie'],
+      [6, 'Co 6 tygodni'],
+      [8, 'Co 8 tygodni'],
+    ].map(([val, label]) =>
+      '<option value="' + val + '"' + ((p.sessionFrequencyWeeks || 1) === val ? ' selected' : '') + '>' + label + '</option>'
+    ).join('');
+
+    const anchorDateVal = p.sessionFrequencyAnchorDate
+      ? new Date(p.sessionFrequencyAnchorDate).toISOString().split('T')[0]
+      : (p.therapyStartDate ? new Date(p.therapyStartDate).toISOString().split('T')[0] : '');
+
+    const anchorHidden = (p.sessionFrequencyWeeks || 1) === 1 ? ' hidden' : '';
+
     const startDate = p.therapyStartDate
       ? new Date(p.therapyStartDate).toISOString().split('T')[0]
       : new Date().toISOString().split('T')[0];
@@ -853,6 +869,18 @@ const PatientViews = {
               '<select name="sessionsPerWeek" class="pv-form-input pv-form-select">' +
                 spwOptions +
               '</select>' +
+            '</label>' +
+            '<label class="pv-form-label">' +
+              '<span>Cz\u0119stotliwo\u015b\u0107 spotka\u0144</span>' +
+              '<select name="sessionFrequencyWeeks" id="pv-freq-select" class="pv-form-input pv-form-select">' +
+                freqOptions +
+              '</select>' +
+            '</label>' +
+            '<label class="pv-form-label' + anchorHidden + '" id="pv-anchor-date-row">' +
+              '<span>Od jakiego dnia liczy\u0107 interwa\u0142? <span class="pv-required">*</span></span>' +
+              '<input type="date" name="sessionFrequencyAnchorDate" id="pv-anchor-date"' +
+                ' class="pv-form-input" value="' + escHtml(anchorDateVal) + '">' +
+              '<span class="pv-form-error" id="err-anchorDate"></span>' +
             '</label>' +
             '<div class="pv-form-label">' +
               '<span>Dni sesji</span>' +
