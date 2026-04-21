@@ -1659,7 +1659,7 @@ const PatientViews = {
     const sessionsPerWeek = parseInt(formData.get('sessionsPerWeek'), 10) || 1;
     const sessionFrequencyWeeks = parseInt(formData.get('sessionFrequencyWeeks'), 10) || 1;
     const sessionFrequencyAnchorRaw = formData.get('sessionFrequencyAnchorDate') || '';
-    const isIrregular     = formData.get('isIrregular') === 'on' || false;
+    const isIrregular     = formData.get('isIrregular') === 'on';
 
     // Clear errors
     ['firstName', 'lastName', 'therapyStartDate', 'sessionRate', 'days', 'anchorDate'].forEach(field => {
@@ -1679,7 +1679,7 @@ const PatientViews = {
     if (!startDateRaw) setErr('therapyStartDate', 'Data jest wymagana.');
     if (isNaN(sessionRate) || sessionRate < 0) setErr('sessionRate', 'Podaj prawid\u0142ow\u0105 stawk\u0119.');
 
-    if (sessionFrequencyWeeks > 1 && !sessionFrequencyAnchorRaw) {
+    if (!isIrregular && sessionFrequencyWeeks > 1 && !sessionFrequencyAnchorRaw) {
       setErr('anchorDate', 'Podaj dat\u0119 pocz\u0105tku interwa\u0142u.');
     }
 
@@ -1694,7 +1694,7 @@ const PatientViews = {
         sessionDayConfigs.push({ weekday: dayId, sessionTime: time });
       });
     }
-    if (sessionDayConfigs.length === 0) setErr('days', 'Wybierz co najmniej jeden dzie\u0144.');
+    if (!isIrregular && sessionDayConfigs.length === 0) setErr('days', 'Wybierz co najmniej jeden dzie\u0144.');
 
     if (!valid) return;
 
@@ -1765,8 +1765,9 @@ const PatientViews = {
 
       AppState.patients.push(patient);
 
-      // Generate sessions for the current month
-      generateCurrentMonthSessions(patient);
+      if (!isIrregular) {
+        generateCurrentMonthSessions(patient);
+      }
 
       persistData();
       toast('Pacjent dodany.', 'success');
