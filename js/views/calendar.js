@@ -115,6 +115,7 @@ const CalendarViews = {
         + '</div>'
       + '</div>'
       + '<div class="cal-toolbar-right">'
+        + '<button class="cal-btn cal-btn-primary" id="btn-add-session-direct">Dodaj sesję</button>'
         + '<div class="cal-segment" id="cal-segment">'
           + '<button class="cal-seg-btn' + dA + '" data-view="daily">Dzień</button>'
           + '<button class="cal-seg-btn' + wA + '" data-view="weekly">Tydzień</button>'
@@ -440,35 +441,23 @@ const CalendarViews = {
         + '<div class="cal-form-group">'
           + '<label class="cal-form-label">Godzina</label>'
           + '<input class="cal-form-control" type="time" id="add-session-time" value="10:00">'
-        + '</div>'
-        + '<div class="cal-form-group cal-form-row">'
-          + '<label class="cal-form-label">Niestandardowa kwota</label>'
-          + '<label class="cal-toggle">'
-            + '<input type="checkbox" id="add-custom-amount-toggle">'
-            + '<span class="cal-toggle-slider"></span>'
-          + '</label>'
-        + '</div>'
-        + '<div class="cal-form-group hidden" id="add-custom-amount-group">'
-          + '<label class="cal-form-label">Kwota (zł)</label>'
-          + '<input class="cal-form-control" type="number" id="add-custom-amount" min="0" step="10" placeholder="np. 200">'
-        + '</div>'
-        + '<div class="cal-form-group cal-form-row">'
-          + '<label class="cal-form-label">Wymagana płatność</label>'
-          + '<label class="cal-toggle">'
-            + '<input type="checkbox" id="add-payment-required" checked>'
-            + '<span class="cal-toggle-slider"></span>'
-          + '</label>'
+          + '<p class="cal-detail-muted" style="margin-top:8px">Po wyborze pacjenta godzina podpowie się automatycznie z harmonogramu (jeśli dostępny).</p>'
         + '</div>'
         + '<div id="add-form-error" class="cal-form-error hidden"></div>'
       + '</div>'
       + '</div>'
     );
     document.body.appendChild(modal);
-    const toggleEl    = modal.querySelector('#add-custom-amount-toggle');
-    const customGroup = modal.querySelector('#add-custom-amount-group');
-    toggleEl.addEventListener('change', () => {
-      customGroup.classList.toggle('hidden', !toggleEl.checked);
-    });
+    const patientSelect = modal.querySelector('#add-patient-select');
+    const dateInput = modal.querySelector('#add-session-date');
+    const timeInput = modal.querySelector('#add-session-time');
+    const syncSuggestedTime = () => {
+      const patientId = patientSelect.value;
+      const patient = patientId ? getPatient(patientId) : null;
+      timeInput.value = this._defaultSessionTimeForPatient(patient, dateInput.value);
+    };
+    patientSelect.addEventListener('change', syncSuggestedTime);
+    dateInput.addEventListener('change', syncSuggestedTime);
     modal.querySelector('#modal-add-cancel').addEventListener('click', () => modal.remove());
     modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
     modal.querySelector('#modal-add-save').addEventListener('click', () => {
@@ -479,22 +468,18 @@ const CalendarViews = {
       if (!patientId) { this._showFormError(errorEl, 'Wybierz pacjenta.'); return; }
       if (!dateVal)   { this._showFormError(errorEl, 'Podaj datę sesji.'); return; }
       if (!timeVal)   { this._showFormError(errorEl, 'Podaj godzinę sesji.'); return; }
+      const patient = getPatient(patientId);
       const tp = timeVal.split(':').map(Number);
       const dp = dateVal.split('-').map(Number);
       const sessionDate = new Date(dp[0], dp[1] - 1, dp[2], tp[0], tp[1], 0, 0);
-      const isCustom    = toggleEl.checked;
-      const customAmt   = isCustom ? parseFloat(modal.querySelector('#add-custom-amount').value) : null;
-      const paymentReq  = modal.querySelector('#add-payment-required').checked;
       const session = createSession({
         date:              sessionDate.toISOString(),
         patientId:         patientId,
         status:            'scheduled',
         isManuallyCreated: true,
-        isPaymentRequired: paymentReq,
-        paymentAmount:     isCustom ? (isNaN(customAmt) ? null : customAmt) : null,
+        isPaymentRequired: true,
       });
       AppState.sessions.push(session);
-      const patient = getPatient(patientId);
       if (patient) recalculateSessionNumbers(patient);
       if (typeof persistData === 'function') persistData();
       modal.remove();
@@ -503,6 +488,21 @@ const CalendarViews = {
       this._refresh();
       toast('Sesja została dodana.', 'success');
     });
+  },
+
+  _defaultSessionTimeForPatient(patient, dateVal) {
+    const DEFAULT_TIME = '10:00';
+    if (!patient || !Array.isArray(patient.sessionDayConfigs) || !patient.sessionDayConfigs.length) {
+      return DEFAULT_TIME;
+    }
+    if (!dateVal) return patient.sessionDayConfigs[0].sessionTime || DEFAULT_TIME;
+    const parsed = dateVal.split('-').map(Number);
+    if (parsed.length !== 3 || parsed.some((n) => Number.isNaN(n))) return DEFAULT_TIME;
+    const date = new Date(parsed[0], parsed[1] - 1, parsed[2], 12, 0, 0, 0);
+    const isoWeekday = ((date.getDay() + 6) % 7) + 1;
+    const match = patient.sessionDayConfigs.find((config) => config.weekday === isoWeekday && config.sessionTime);
+    if (match) return match.sessionTime;
+    return patient.sessionDayConfigs[0].sessionTime || DEFAULT_TIME;
   },
 
   showBlockPeriodModal() {
@@ -1040,6 +1040,7 @@ const CalendarViews = {
         this._refresh();
       });
     }
+    safeClick('btn-add-session-direct', this.showAddSessionModal);
     const addMenuBtn = document.getElementById('btn-add-menu');
     const addMenu    = document.getElementById('cal-add-menu');
     if (addMenuBtn && addMenu) {
@@ -1295,6 +1296,7 @@ const CalendarViews = {
       '.cal-title{font-size:1rem;font-weight:700;min-width:160px;text-align:center;color:var(--text,#243126);text-transform:capitalize}',
       '.cal-btn{border:none;border-radius:999px;padding:10px 14px;font-size:.82rem;font-weight:800;cursor:pointer;background:rgba(255,255,255,.7);color:var(--text,#243126);transition:background .15s,color .15s,transform .15s}',
       '.cal-btn:hover{background:rgba(255,255,255,.95);transform:translateY(-1px)}',
+      '.cal-btn-primary{background:linear-gradient(135deg,var(--blue,#49664f),#617f68);color:var(--text-inverse,#f6f0e6)}.cal-btn-primary:hover{background:linear-gradient(135deg,var(--blue,#49664f),#6b8b72)}',
       '.cal-btn-today{background:linear-gradient(135deg,var(--blue,#49664f),#617f68);color:var(--text-inverse,#f6f0e6)}.cal-btn-today:hover{background:linear-gradient(135deg,var(--blue,#49664f),#6b8b72)}',
       '.cal-btn-icon{width:38px;height:38px;padding:0;font-size:1.1rem;line-height:1;display:flex;align-items:center;justify-content:center}',
       '.cal-btn-add{width:38px;height:38px;padding:0;font-size:1.2rem;background:linear-gradient(135deg,var(--blue,#49664f),#617f68);color:var(--text-inverse,#f6f0e6);border-radius:50%;display:flex;align-items:center;justify-content:center;border:none;cursor:pointer}',
