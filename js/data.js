@@ -683,6 +683,12 @@ function createPatient(data = {}) {
     isArchived:         data.isArchived       || false,
     archivedDate:       data.archivedDate     || null,
     sessionsPerWeek:    normalizePositiveInteger(data.sessionsPerWeek, 1),
+    sessionFrequencyWeeks: [1, 2, 4, 6, 8].includes(data.sessionFrequencyWeeks)
+      ? data.sessionFrequencyWeeks
+      : 1,
+    sessionFrequencyAnchorDate: data.sessionFrequencyAnchorDate
+      ? normalizeSessionDate(data.sessionFrequencyAnchorDate)
+      : null,
     sessionRate:        normalizeNullableNumber(data.sessionRate) ?? 200,
     therapyStartDate:   normalizeSessionDate(data.therapyStartDate),
     dateAdded:          data.dateAdded        || new Date().toISOString(),
