@@ -1535,6 +1535,16 @@ const PatientViews = {
           if (timeEl) timeEl.disabled = !chk.checked;
         });
       });
+
+      // Frequency toggle: show/hide anchor date field
+      const freqSelect = container.querySelector('#pv-freq-select');
+      const anchorRow  = container.querySelector('#pv-anchor-date-row');
+      if (freqSelect && anchorRow) {
+        freqSelect.addEventListener('change', () => {
+          const isWeekly = parseInt(freqSelect.value, 10) === 1;
+          anchorRow.classList.toggle('hidden', isWeekly);
+        });
+      }
     }
 
     // Previous therapies count → generate / remove rows
@@ -1630,9 +1640,11 @@ const PatientViews = {
     const startDateRaw    = formData.get('therapyStartDate') || '';
     const sessionRate     = parseFloat(formData.get('sessionRate')) || 0;
     const sessionsPerWeek = parseInt(formData.get('sessionsPerWeek'), 10) || 1;
+    const sessionFrequencyWeeks = parseInt(formData.get('sessionFrequencyWeeks'), 10) || 1;
+    const sessionFrequencyAnchorRaw = formData.get('sessionFrequencyAnchorDate') || '';
 
     // Clear errors
-    ['firstName', 'lastName', 'therapyStartDate', 'sessionRate', 'days'].forEach(field => {
+    ['firstName', 'lastName', 'therapyStartDate', 'sessionRate', 'days', 'anchorDate'].forEach(field => {
       const el = document.getElementById('err-' + field);
       if (el) el.textContent = '';
     });
@@ -1648,6 +1660,10 @@ const PatientViews = {
     if (!lastName)   setErr('lastName',        'Nazwisko jest wymagane.');
     if (!startDateRaw) setErr('therapyStartDate', 'Data jest wymagana.');
     if (isNaN(sessionRate) || sessionRate < 0) setErr('sessionRate', 'Podaj prawid\u0142ow\u0105 stawk\u0119.');
+
+    if (sessionFrequencyWeeks > 1 && !sessionFrequencyAnchorRaw) {
+      setErr('anchorDate', 'Podaj dat\u0119 pocz\u0105tku interwa\u0142u.');
+    }
 
     // Collect selected session days
     const container = document.getElementById('view-container');
@@ -1695,6 +1711,10 @@ const PatientViews = {
       patient.sessionsPerWeek    = sessionsPerWeek;
       patient.sessionDayConfigs  = sessionDayConfigs;
       patient.previousTherapies  = previousTherapies;
+      patient.sessionFrequencyWeeks      = sessionFrequencyWeeks;
+      patient.sessionFrequencyAnchorDate = sessionFrequencyWeeks > 1 && sessionFrequencyAnchorRaw
+        ? new Date(sessionFrequencyAnchorRaw).toISOString()
+        : null;
       persistData();
       toast('Pacjent zaktualizowany.', 'success');
       Router.navigate('patients', { patientId: id });
@@ -1707,6 +1727,10 @@ const PatientViews = {
         therapyStartDate,
         sessionRate,
         sessionsPerWeek,
+        sessionFrequencyWeeks,
+        sessionFrequencyAnchorDate: sessionFrequencyWeeks > 1 && sessionFrequencyAnchorRaw
+          ? new Date(sessionFrequencyAnchorRaw).toISOString()
+          : null,
         sessionDayConfigs,
         previousTherapies,
       });
