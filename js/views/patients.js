@@ -1659,7 +1659,7 @@ const PatientViews = {
     const sessionsPerWeek = parseInt(formData.get('sessionsPerWeek'), 10) || 1;
     const sessionFrequencyWeeks = parseInt(formData.get('sessionFrequencyWeeks'), 10) || 1;
     const sessionFrequencyAnchorRaw = formData.get('sessionFrequencyAnchorDate') || '';
-    const isIrregular     = formData.get('isIrregular') === 'on' || false;
+    const isIrregular     = formData.get('isIrregular') === 'on';
 
     // Clear errors
     ['firstName', 'lastName', 'therapyStartDate', 'sessionRate', 'days', 'anchorDate'].forEach(field => {
@@ -1694,7 +1694,7 @@ const PatientViews = {
         sessionDayConfigs.push({ weekday: dayId, sessionTime: time });
       });
     }
-    if (sessionDayConfigs.length === 0) setErr('days', 'Wybierz co najmniej jeden dzie\u0144.');
+    if (!isIrregular && sessionDayConfigs.length === 0) setErr('days', 'Wybierz co najmniej jeden dzie\u0144.');
 
     if (!valid) return;
 
@@ -1765,8 +1765,9 @@ const PatientViews = {
 
       AppState.patients.push(patient);
 
-      // Generate sessions for the current month
-      generateCurrentMonthSessions(patient);
+      if (!isIrregular) {
+        generateCurrentMonthSessions(patient);
+      }
 
       persistData();
       toast('Pacjent dodany.', 'success');
