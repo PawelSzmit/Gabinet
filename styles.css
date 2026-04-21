@@ -1222,6 +1222,142 @@ img {
 }
 
 /* ============================================================
+   15b. CALENDAR MODALS (cal-modal-*, cal-form-*)
+   ============================================================ */
+
+.cal-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--surface-overlay);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 1000;
+  animation: fade-in var(--transition-base) ease;
+}
+
+.cal-modal-sheet {
+  background: var(--surface);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  width: 100%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  animation: slide-up var(--transition-base) ease;
+  overflow: hidden;
+}
+
+.cal-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.cal-modal-title {
+  font-size: var(--font-md);
+  font-weight: 700;
+  color: var(--text);
+}
+
+.cal-modal-cancel,
+.cal-modal-save {
+  background: none;
+  border: none;
+  font-size: var(--font-md);
+  color: var(--blue);
+  cursor: pointer;
+  padding: 4px 0;
+  min-width: 56px;
+}
+
+.cal-modal-save {
+  font-weight: 600;
+  text-align: right;
+}
+
+.cal-modal-cancel {
+  text-align: left;
+}
+
+.cal-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cal-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cal-form-label {
+  font-size: var(--font-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.cal-form-control {
+  width: 100%;
+  padding: 11px 12px;
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text);
+  font-size: var(--font-md);
+  font-family: inherit;
+  appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.cal-form-control:focus {
+  border-color: var(--blue);
+}
+
+.cal-form-control option {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.cal-form-error {
+  font-size: var(--font-sm);
+  color: var(--red);
+  padding: 4px 0;
+}
+
+.cal-form-error.hidden { display: none; }
+
+.cal-detail-muted {
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+@media (min-width: 600px) {
+  .cal-modal-overlay {
+    align-items: center;
+  }
+
+  .cal-modal-sheet {
+    border-radius: var(--radius-xl);
+    max-width: 420px;
+    max-height: 80vh;
+  }
+}
+
+/* ============================================================
    16. STATUS BADGES
    ============================================================ */
 
