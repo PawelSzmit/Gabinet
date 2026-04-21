@@ -769,6 +769,22 @@ const PatientViews = {
       '<option value="' + n + '"' + ((p.sessionsPerWeek || 1) === n ? ' selected' : '') + '>' + n + ' \xd7 w tygodniu</option>'
     ).join('');
 
+    const freqOptions = [
+      [1, 'Co tydzie\u0144'],
+      [2, 'Co 2 tygodnie'],
+      [4, 'Co 4 tygodnie'],
+      [6, 'Co 6 tygodni'],
+      [8, 'Co 8 tygodni'],
+    ].map(([val, label]) =>
+      '<option value="' + val + '"' + ((p.sessionFrequencyWeeks || 1) === val ? ' selected' : '') + '>' + label + '</option>'
+    ).join('');
+
+    const anchorDateVal = p.sessionFrequencyAnchorDate
+      ? new Date(p.sessionFrequencyAnchorDate).toISOString().split('T')[0]
+      : (p.therapyStartDate ? new Date(p.therapyStartDate).toISOString().split('T')[0] : '');
+
+    const anchorHidden = (p.sessionFrequencyWeeks || 1) === 1 ? ' hidden' : '';
+
     const startDate = p.therapyStartDate
       ? new Date(p.therapyStartDate).toISOString().split('T')[0]
       : new Date().toISOString().split('T')[0];
@@ -853,6 +869,18 @@ const PatientViews = {
               '<select name="sessionsPerWeek" class="pv-form-input pv-form-select">' +
                 spwOptions +
               '</select>' +
+            '</label>' +
+            '<label class="pv-form-label">' +
+              '<span>Cz\u0119stotliwo\u015b\u0107 spotka\u0144</span>' +
+              '<select name="sessionFrequencyWeeks" id="pv-freq-select" class="pv-form-input pv-form-select">' +
+                freqOptions +
+              '</select>' +
+            '</label>' +
+            '<label class="pv-form-label' + anchorHidden + '" id="pv-anchor-date-row">' +
+              '<span>Od jakiego dnia liczy\u0107 interwa\u0142? <span class="pv-required">*</span></span>' +
+              '<input type="date" name="sessionFrequencyAnchorDate" id="pv-anchor-date"' +
+                ' class="pv-form-input" value="' + escHtml(anchorDateVal) + '">' +
+              '<span class="pv-form-error" id="err-anchorDate"></span>' +
             '</label>' +
             '<div class="pv-form-label">' +
               '<span>Dni sesji</span>' +
@@ -1507,6 +1535,16 @@ const PatientViews = {
           if (timeEl) timeEl.disabled = !chk.checked;
         });
       });
+
+      // Frequency toggle: show/hide anchor date field
+      const freqSelect = container.querySelector('#pv-freq-select');
+      const anchorRow  = container.querySelector('#pv-anchor-date-row');
+      if (freqSelect && anchorRow) {
+        freqSelect.addEventListener('change', () => {
+          const isWeekly = parseInt(freqSelect.value, 10) === 1;
+          anchorRow.classList.toggle('hidden', isWeekly);
+        });
+      }
     }
 
     // Previous therapies count → generate / remove rows
@@ -1602,9 +1640,11 @@ const PatientViews = {
     const startDateRaw    = formData.get('therapyStartDate') || '';
     const sessionRate     = parseFloat(formData.get('sessionRate')) || 0;
     const sessionsPerWeek = parseInt(formData.get('sessionsPerWeek'), 10) || 1;
+    const sessionFrequencyWeeks = parseInt(formData.get('sessionFrequencyWeeks'), 10) || 1;
+    const sessionFrequencyAnchorRaw = formData.get('sessionFrequencyAnchorDate') || '';
 
     // Clear errors
-    ['firstName', 'lastName', 'therapyStartDate', 'sessionRate', 'days'].forEach(field => {
+    ['firstName', 'lastName', 'therapyStartDate', 'sessionRate', 'days', 'anchorDate'].forEach(field => {
       const el = document.getElementById('err-' + field);
       if (el) el.textContent = '';
     });
@@ -1620,6 +1660,10 @@ const PatientViews = {
     if (!lastName)   setErr('lastName',        'Nazwisko jest wymagane.');
     if (!startDateRaw) setErr('therapyStartDate', 'Data jest wymagana.');
     if (isNaN(sessionRate) || sessionRate < 0) setErr('sessionRate', 'Podaj prawid\u0142ow\u0105 stawk\u0119.');
+
+    if (sessionFrequencyWeeks > 1 && !sessionFrequencyAnchorRaw) {
+      setErr('anchorDate', 'Podaj dat\u0119 pocz\u0105tku interwa\u0142u.');
+    }
 
     // Collect selected session days
     const container = document.getElementById('view-container');
@@ -1667,6 +1711,10 @@ const PatientViews = {
       patient.sessionsPerWeek    = sessionsPerWeek;
       patient.sessionDayConfigs  = sessionDayConfigs;
       patient.previousTherapies  = previousTherapies;
+      patient.sessionFrequencyWeeks      = sessionFrequencyWeeks;
+      patient.sessionFrequencyAnchorDate = sessionFrequencyWeeks > 1 && sessionFrequencyAnchorRaw
+        ? new Date(sessionFrequencyAnchorRaw).toISOString()
+        : null;
       persistData();
       toast('Pacjent zaktualizowany.', 'success');
       Router.navigate('patients', { patientId: id });
@@ -1679,6 +1727,10 @@ const PatientViews = {
         therapyStartDate,
         sessionRate,
         sessionsPerWeek,
+        sessionFrequencyWeeks,
+        sessionFrequencyAnchorDate: sessionFrequencyWeeks > 1 && sessionFrequencyAnchorRaw
+          ? new Date(sessionFrequencyAnchorRaw).toISOString()
+          : null,
         sessionDayConfigs,
         previousTherapies,
       });
