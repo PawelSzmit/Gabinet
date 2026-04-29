@@ -1734,6 +1734,9 @@ const PatientViews = {
         ? new Date(sessionFrequencyAnchorRaw).toISOString()
         : null;
       patient.isIrregular = isIrregular;
+      if (typeof regenerateCurrentMonth === 'function') {
+        regenerateCurrentMonth(patient);
+      }
       persistData();
       toast('Pacjent zaktualizowany.', 'success');
       Router.navigate('patients', { patientId: id });
