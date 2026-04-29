@@ -1274,6 +1274,13 @@ function generateSessionsForMonth(patient, year, month) {
       if (config.weekday !== isoWeekday) continue;
       if (!_isSessionWeek(patient, date)) continue;
 
+      // Skip sessions that fall before the therapy start date
+      if (patient.therapyStartDate) {
+        const start = new Date(patient.therapyStartDate);
+        start.setHours(0, 0, 0, 0);
+        if (date < start) continue;
+      }
+
       // Parse session time
       const [hours, minutes] = (config.sessionTime || '00:00').split(':').map(Number);
       const sessionDate = new Date(year, month, day, hours, minutes, 0, 0);
