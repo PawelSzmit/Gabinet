@@ -1439,14 +1439,16 @@ const Modal = {
 
     if (confirmBtn) {
       confirmBtn.onclick = () => {
+        const cb = this._confirmCallback;
         this.close();
-        this._confirmCallback && this._confirmCallback();
+        cb && cb();
       };
     }
     if (cancelBtn) {
       cancelBtn.onclick = () => {
+        const cb = this._cancelCallback;
         this.close();
-        this._cancelCallback && this._cancelCallback();
+        cb && cb();
       };
     }
 
