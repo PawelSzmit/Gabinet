@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gabinet-v57';
+const CACHE_NAME = 'gabinet-v58';
 const APP_SHELL = [
   './',
   './index.html',

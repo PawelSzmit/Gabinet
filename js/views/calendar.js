@@ -624,13 +624,13 @@ const CalendarViews = {
         + '<div class="cal-detail-actions">'
           + (session.status !== 'completed'
               ? '<button class="cal-action-btn cal-action-complete" id="detail-btn-complete">Oznacz jako odbyła się</button>'
-              : '<button class="cal-action-btn cal-action-complete cal-action-btn--active" id="detail-btn-complete">✓ Odbyła się — zmień</button>')
+              : '<span class="cal-action-btn cal-action-complete cal-action-btn--active" aria-disabled="true">✓ Odbyła się</span>')
           + (session.status !== 'cancelled'
               ? '<button class="cal-action-btn cal-action-absent" id="detail-btn-absent">Nie odbyła się</button>'
-              : '<button class="cal-action-btn cal-action-absent cal-action-btn--active" id="detail-btn-absent">✕ Odwołana — zmień</button>')
+              : '<button class="cal-action-btn cal-action-absent cal-action-btn--active" id="detail-btn-absent">✕ Odwołana — zmień powód</button>')
           + (session.status === 'scheduled'
               ? '<button class="cal-action-btn cal-action-reschedule" id="detail-btn-reschedule">Przełóż sesję</button>'
-              : '')
+              : '<button class="cal-action-btn cal-action-reset" id="detail-btn-reset">Zresetuj stan sesji</button>')
           + '<button class="cal-action-btn cal-action-delete" id="detail-btn-delete">Usuń sesję</button>'
         + '</div>'
       + '</div>'
@@ -801,6 +801,20 @@ const CalendarViews = {
     if (btnReschedule) btnReschedule.addEventListener('click', () => this._showRescheduleDialog(session, modal));
     const btnDelete = modal.querySelector('#detail-btn-delete');
     if (btnDelete) btnDelete.addEventListener('click', () => this._showDeleteSessionDialog(session, modal));
+    const btnReset = modal.querySelector('#detail-btn-reset');
+    if (btnReset) {
+      btnReset.addEventListener('click', () => {
+        session.status             = 'scheduled';
+        session.cancellationReason = null;
+        session.isPaymentRequired  = true;
+        const patient = getPatient(session.patientId);
+        if (patient) recalculateSessionNumbers(patient);
+        if (typeof persistData === 'function') persistData();
+        modal.remove();
+        this._refresh();
+        toast('Stan sesji zresetowany do zaplanowanej.', 'success');
+      });
+    }
     const btnPaymentMenu = modal.querySelector('#detail-btn-payment-menu');
     if (btnPaymentMenu) btnPaymentMenu.addEventListener('click', () => this._showPaymentMenuDialog(session, modal));
   },
@@ -1430,8 +1444,11 @@ const CalendarViews = {
       '.cal-action-absent{background:#FF3B30;color:#fff}',
       '.cal-action-reschedule{background:#FF9500;color:#fff}',
       '.cal-action-delete{background:transparent;color:#FF3B30;border:1.5px solid #FF3B30}',
+      '.cal-action-reset{background:transparent;color:#1c1c1e;border:1.5px solid #8e8e93}',
       '.cal-modal-save--danger{background:#FF3B30;color:#fff}',
       '.cal-action-btn--active{opacity:.55;font-style:italic}',
+      '.cal-action-btn[aria-disabled="true"]{cursor:default}',
+      '.cal-action-btn[aria-disabled="true"]:hover{opacity:.55}',
       '.cal-edit-notes-btn{border:none;background:transparent;color:#007AFF;font-size:.85rem;font-weight:600;cursor:pointer;padding:0}',
       '@media (max-width: 880px){.cal-wrapper{padding:14px 14px calc(var(--tab-bar-height) + 24px)}.cal-focus-stats{grid-template-columns:repeat(2,1fr)}}',
       '@media (max-width: 600px){.cal-focus-top{grid-template-columns:1fr}.cal-focus-stats{grid-template-columns:repeat(2,1fr)}}',
